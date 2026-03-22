@@ -1,0 +1,657 @@
+// ignore_for_file: unused_import, unused_element
+part of 'main.dart';
+
+class SelfHealingMirror {
+  static final _rng = Random();
+  static const _uas = [
+    // FIX v3.0: нейтральные User-Agent — не раскрываем что это VPN клиент
+    // 'AuraVPN/5.6.0' идентифицировал трафик для систем мониторинга РКН
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  ];
+  static String get _ua => _uas[_rng.nextInt(_uas.length)];
+
+  static Future<List<String>> fetchNodes(void Function(String) log) async {
+    // Сначала пробуем основной API
+    try {
+      final res = await PinnedHttpClient.get(kNodesUrl, timeout: const Duration(seconds: 6));
+      if (res.statusCode == 200) {
+        final nodes = _validateNodes(res.body);
+        if (nodes.isNotEmpty) {
+          log('✅ Nodes from main API: ${nodes.length}');
+          return nodes;
+        }
+      }
+    } catch (_) { log('⚠ Main API unreachable'); }
+
+    // Dead Drop 1: GitHub/другие зеркала
+    for (final mirror in kDeadDropMirrors) {
+      try {
+        final res = await http.get(Uri.parse(mirror),
+            headers: {'User-Agent': _ua, 'Accept': 'application/json'})
+            .timeout(const Duration(seconds: 8));
+        if (res.statusCode == 200) {
+          final nodes = _validateNodes(res.body);
+          if (nodes.isNotEmpty) {
+            log('✅ Nodes from ${mirror.contains('github') ? 'GitHub' : 'Mirror'}: ${nodes.length}');
+            return nodes;
+          }
+        }
+      } catch (_) { log('⚠ Mirror failed: $mirror'); }
+    }
+
+    // Dead Drop 2: DNS TXT запись
+    try {
+      final nodes = await _fetchFromDnsTxt(log);
+      if (nodes.isNotEmpty) return nodes;
+    } catch (_) {}
+
+    log('⚠ All Dead Drops exhausted');
+    return [];
+  }
+
+  // Валидация нод: только известные протоколы, защита от инъекций
+  static const _validProtos = ['vless://','vmess://','trojan://','ss://','hy2://','hysteria2://'];
+  static List<String> _validateNodes(String body) {
+    try {
+      final j = jsonDecode(body) as Map<String, dynamic>;
+      return List<String>.from(j['nodes'] ?? []).where((n) =>
+        _validProtos.any((p) => n.startsWith(p)) &&
+        n.length < 2048 &&        // защита от огромных строк
+        !n.contains('\n') &&       // нет инъекции переносов
+        !n.contains('\r')
+      ).toList();
+    } catch (_) { return []; }
+  }
+
+  // Читаем ноды из DNS TXT записи (base64 закодированный JSON)
+  static Future<List<String>> _fetchFromDnsTxt(void Function(String) log) async {
+    try {
+      // Используем IP Cloudflare напрямую — провайдер не перехватит
+      const dohUrl = 'https://1.1.1.1/dns-query';
+      final res = await http.get(
+        Uri.parse('$dohUrl?name=$kDeadDropDnsTxt&type=TXT'),
+        headers: {
+          'Accept': 'application/dns-json',
+          'User-Agent': kStealthUA,
+        },
+      ).timeout(const Duration(seconds: 6));
+
+      if (res.statusCode == 200) {
+        final j       = jsonDecode(res.body) as Map<String, dynamic>;
+        final answers = j['Answer'] as List? ?? [];
+        for (final a in answers) {
+          final data = (a['data'] as String? ?? '').replaceAll('"', '');
+          if (data.isEmpty) continue;
+          try {
+            final decoded = utf8.decode(base64.decode(
+                data.length % 4 == 0 ? data : data + '=' * (4 - data.length % 4)));
+            final parsed  = jsonDecode(decoded) as Map<String, dynamic>;
+            final nodes   = List<String>.from(parsed['nodes'] ?? []);
+            if (nodes.isNotEmpty) {
+              log('✅ DNS TXT nodes: ${nodes.length}');
+              return nodes;
+            }
+          } catch (e) {
+            log('⚠ DNS TXT parse error: $e');
+          }
+        }
+      }
+    } catch (e) {
+      log('⚠ DNS TXT fetch error: $e');
+    }
+    return [];
+  }
+}
+
+
+enum BlockType {
+  none,
+  tcpReset,
+  dnsPoisoning,
+  ipBlocked,
+  portBlocked,
+  tlsFingerprint,
+  serviceBlocked,
+  timeout,
+}
+
+class BlockDetector {
+  static const _t = Duration(seconds: 5);
+
+  static Future<BlockType> detect(VpnConfig cfg) async {
+    String host = ''; int port = 443;
+    try {
+      final uri = Uri.parse(cfg.link.contains('@')
+          ? 'dummy://${cfg.link.split('@').last.split('#').first}' : cfg.link);
+      host = uri.host; port = uri.port > 0 ? uri.port : 443;
+    } catch (_) { return BlockType.timeout; }
+    if (host.isEmpty) return BlockType.timeout;
+
+    // Шаг 1: DNS — провайдер отравляет DNS для заблокированных IP
+    if (!await _dns(host)) return BlockType.dnsPoisoning;
+
+    // Шаг 2: TCP — RST значит активная блокировка ТСПУ
+    final tcp = await _tcp(host, port);
+    if (tcp == _TR.reset)   return BlockType.tcpReset;
+    if (tcp == _TR.closed)  return BlockType.portBlocked;
+    if (tcp == _TR.timeout) return BlockType.timeout;
+
+    // Шаг 3: TLS handshake к VPN серверу
+    // FIX v3.0: убран вызов _httpLevel(host, port) к VPN серверу —
+    // VPN серверы не отвечают на HTTP HEAD '/' → всегда false negative.
+    // Вместо этого проверяем достижимость нейтрального домена через тот же IP-маршрут.
+    if (!await _tls(host, port)) return BlockType.tlsFingerprint;
+
+    // Шаг 4: проверяем не подменён ли трафик — сверяем доступность контрольного домена
+    // Если Google недоступен — значит провайдер режет исходящий HTTPS (serviceBlocked)
+    if (!await _reachabilityProbe()) return BlockType.serviceBlocked;
+
+    return BlockType.none;
+  }
+
+  // FIX v3.0: circuit breaker — если Google недоступен, не проверяем каждый раз
+  // Без этого каждый коннект при заблокированном Google тратит 5 сек зря
+  static bool _probeCircuitOpen = false;
+  static DateTime? _probeCircuitOpenedAt;
+  static const _probeCircuitResetAfter = Duration(minutes: 5);
+
+  static Future<bool> _reachabilityProbe() async {
+    // Circuit open → пропускаем проверку
+    if (_probeCircuitOpen && _probeCircuitOpenedAt != null) {
+      if (DateTime.now().difference(_probeCircuitOpenedAt!) < _probeCircuitResetAfter) {
+        return true; // предполагаем что ок — не блокируем подключение
+      } else {
+        _probeCircuitOpen = false; // пробуем снова после сброса
+      }
+    }
+    try {
+      final client = HttpClient()..connectionTimeout = _t;
+      final req    = await client.getUrl(
+          Uri.parse('https://connectivitycheck.gstatic.com/generate_204'));
+      req.headers.set('User-Agent', 'Mozilla/5.0 Chrome/124.0.0.0');
+      final resp = await req.close().timeout(_t);
+      await resp.drain<void>();
+      client.close();
+      _probeCircuitOpen = false; // успех — circuit закрыт
+      return resp.statusCode == 204 || resp.statusCode == 200;
+    } catch (_) {
+      // Ошибка — открываем circuit чтобы не тратить время следующие 5 мин
+      _probeCircuitOpen = true;
+      _probeCircuitOpenedAt = DateTime.now();
+      return true; // не блокируем VPN подключение из-за недоступности Google
+    }
+  }
+
+  // FIX: используем DoH вместо системного DNS
+  // InternetAddress.lookup() = OS resolver = РКН отравляет его
+  // Cloudflare DoH по прямому IP — не зависит от DNS провайдера
+  static Future<bool> _dns(String h) async {
+    // Сначала пробуем DoH через Cloudflare (прямой IP, не DNS-имя)
+    try {
+      final res = await http.get(
+        Uri.parse('https://1.1.1.1/dns-query?name=${Uri.encodeComponent(h)}&type=A'),
+        headers: {'Accept': 'application/dns-json', 'User-Agent': kStealthUA},
+      ).timeout(_t);
+      if (res.statusCode == 200) {
+        final j = jsonDecode(res.body) as Map<String, dynamic>;
+        final answers = j['Answer'] as List? ?? [];
+        return answers.isNotEmpty;
+      }
+    } catch (_) {}
+    // Fallback: системный DNS если DoH недоступен
+    try { return (await InternetAddress.lookup(h).timeout(_t)).isNotEmpty; }
+    catch (_) { return false; }
+  }
+
+  static Future<_TR> _tcp(String h, int p) async {
+    try {
+      final s = await Socket.connect(h, p, timeout: _t);
+      await s.close(); return _TR.ok;
+    } on SocketException catch (e) {
+      final m = e.message.toLowerCase();
+      if (m.contains('reset')) return _TR.reset;
+      if (m.contains('refused') || m.contains('no route')) return _TR.closed;
+      return _TR.timeout;
+    } on TimeoutException { return _TR.timeout; }
+    catch (_) { return _TR.timeout; }
+  }
+
+  static Future<bool> _tls(String h, int p) async {
+    try {
+      // Только TLS handshake — не отправляем HTTP
+      // HEAD запрос создавал паттерн который РКН мог детектировать
+      // Для нас важно что TLS соединение устанавливается, не HTTP ответ
+      final s = await SecureSocket.connect(h, p,
+          timeout: _t, onBadCertificate: (_) => true);
+      await s.close();
+      return true;
+    } catch (_) { return false; }
+  }
+}
+
+enum _TR { ok, reset, closed, timeout }
+
+class BypassRulesEngine {
+  List<Map<String, dynamic>> _rules = [];
+  int _version = kLocalRulesVersion;
+  List<String> _blockedDomains = [];
+  DateTime? _lastDomainSync;
+
+  // Dev Dashboard getters
+  int       get devVersion      => _version;
+  int       get devRulesCount   => _rules.length;
+  int       get devDomainsCount => _blockedDomains.length;
+  DateTime? get devLastSync     => _lastDomainSync;
+
+  static const _builtin = [
+    // TCP reset / TLS fingerprint — самое частое у РКН
+    {'id': 'tcp_reset', 'triggers': ['tcpReset', 'tlsFingerprint'], 'strategies': [
+      {'priority': 1, 'type': 'rotate_reality_sni',  'params': {}},
+      {'priority': 2, 'type': 'change_transport',    'params': {'transport': 'ws',   'path': '/'}},
+      {'priority': 3, 'type': 'change_transport',    'params': {'transport': 'grpc', 'service': 'gun'}},
+      {'priority': 4, 'type': 'change_port',         'params': {'port': 443}},
+      {'priority': 5, 'type': 'change_port',         'params': {'port': 8443}},
+      {'priority': 6, 'type': 'change_port',         'params': {'port': 80}},
+      {'priority': 7, 'type': 'add_reality_sni',     'params': {'sni': 'dl.google.com'}},
+      {'priority': 8, 'type': 'add_reality_sni',     'params': {'sni': 'update.microsoft.com'}},
+      {'priority': 9, 'type': 'trojan_ws_fallback',  'params': {'port': 443, 'path': '/api/v1'}},
+      {'priority': 10,'type': 'cdn_fallback',         'params': {'url': 'aura-vpn.workers.dev'}},
+    ]},
+    // DNS отравление
+    {'id': 'dns', 'triggers': ['dnsPoisoning'], 'strategies': [
+      {'priority': 1, 'type': 'set_doh', 'params': {'url': 'https://1.1.1.1/dns-query'}},
+      {'priority': 2, 'type': 'set_doh', 'params': {'url': 'https://dns.google/dns-query'}},
+      {'priority': 3, 'type': 'set_doh', 'params': {'url': 'https://dns.quad9.net/dns-query'}},
+      {'priority': 4, 'type': 'set_doh', 'params': {'url': 'https://8.8.8.8/dns-query'}},
+    ]},
+    // Порт заблокирован
+    {'id': 'port', 'triggers': ['portBlocked'], 'strategies': [
+      {'priority': 1, 'type': 'change_port', 'params': {'port': 443}},
+      {'priority': 2, 'type': 'change_port', 'params': {'port': 8443}},
+      {'priority': 3, 'type': 'change_port', 'params': {'port': 2053}},
+      {'priority': 4, 'type': 'change_port', 'params': {'port': 2083}},
+      {'priority': 5, 'type': 'change_port', 'params': {'port': 2087}},
+      {'priority': 6, 'type': 'change_port', 'params': {'port': 2096}},
+      {'priority': 7, 'type': 'change_port', 'params': {'port': 80}},
+    ]},
+    // Полная блокировка IP / timeout
+    {'id': 'full', 'triggers': ['ipBlocked', 'timeout', 'serviceBlocked'], 'strategies': [
+      {'priority': 1, 'type': 'switch_node',          'params': {}},
+      {'priority': 2, 'type': 'rotate_reality_sni',   'params': {}},
+      {'priority': 3, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/cdn'}},
+      {'priority': 4, 'type': 'change_transport',     'params': {'transport': 'grpc', 'service': 'gun'}},
+      {'priority': 5, 'type': 'cdn_fallback',          'params': {'url': 'aura-vpn.workers.dev'}},
+      {'priority': 6, 'type': 'cdn_fallback',          'params': {'url': 'aura-cdn.pages.dev'}},
+      {'priority': 7, 'type': 'shadow_fallback',       'params': {}},
+    ]},
+    // Stealth: TLS fingerprint / сервисная блокировка
+    {'id': 'stealth_tls', 'triggers': ['tlsFingerprint', 'serviceBlocked'], 'strategies': [
+      {'priority': 1, 'type': 'rotate_reality_sni',   'params': {}},
+      {'priority': 2, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/'}},
+      {'priority': 3, 'type': 'add_reality_sni',      'params': {'sni': 'dl.google.com'}},
+      {'priority': 4, 'type': 'add_reality_sni',      'params': {'sni': 'fonts.googleapis.com'}},
+      {'priority': 5, 'type': 'add_reality_sni',      'params': {'sni': 'update.microsoft.com'}},
+      {'priority': 6, 'type': 'add_reality_sni',      'params': {'sni': 'gateway.icloud.com'}},
+      {'priority': 7, 'type': 'add_reality_sni',      'params': {'sni': 'mask.icloud.com'}},
+      {'priority': 8, 'type': 'trojan_ws_fallback',   'params': {'port': 443, 'path': '/stream'}},
+      {'priority': 9, 'type': 'cdn_fallback',          'params': {'url': 'aura-vpn.workers.dev'}},
+    ]},
+    // Stealth: TCP reset (активная блокировка ТСПУ)
+    {'id': 'stealth_reset', 'triggers': ['tcpReset'], 'strategies': [
+      {'priority': 1, 'type': 'rotate_reality_sni',   'params': {}},
+      {'priority': 2, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/'}},
+      {'priority': 3, 'type': 'change_transport',     'params': {'transport': 'grpc', 'service': 'gun'}},
+      {'priority': 4, 'type': 'change_port',          'params': {'port': 443}},
+      {'priority': 5, 'type': 'change_port',          'params': {'port': 2053}},
+      {'priority': 6, 'type': 'trojan_ws_fallback',   'params': {'port': 443, 'path': '/trojan'}},
+      {'priority': 7, 'type': 'shadow_fallback',       'params': {}},
+    ]},
+  ];
+
+  // Живые источники — используются syncFromServer (URL передаётся параметром)
+
+  // URL-схемы обновления домен-листов (antifilter.download)
+  static const _domainListUrl = 'https://community.antifilter.download/list/domains.lst';
+  static const _domainListMirror = 'https://raw.githubusercontent.com/nickspaargaren/no-google/master/blocked.txt';
+
+  Future<void> syncFromServer(void Function(String) log) async {
+    await _loadCache();
+
+    // 1. Основные bypass-правила (стратегии)
+    try {
+      final res = await PinnedHttpClient.get(kBypassRulesUrl, timeout: const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final j  = jsonDecode(res.body) as Map<String, dynamic>;
+        final sv = j['version'] as int? ?? 0;
+        if (sv > _version) {
+          _rules   = List<Map<String,dynamic>>.from(j['rules'] ?? []);
+          _version = sv;
+          await _saveCache(res.body);
+          log('✔ Bypass rules updated v$_version');
+        }
+      }
+    } catch (e) { log('⚠ Rules sync: $e'); }
+
+    // 2. Синк списка заблокированных доменов (раз в 6 часов)
+    final now = DateTime.now();
+    if (_lastDomainSync == null ||
+        now.difference(_lastDomainSync!) > const Duration(hours: 6)) {
+      await _syncDomainList(log);
+    }
+  }
+
+  Future<void> _syncDomainList(void Function(String) log) async {
+    final sources = [_domainListUrl, _domainListMirror];
+    for (final url in sources) {
+      try {
+        final res = await http.get(Uri.parse(url),
+            headers: {'User-Agent': kStealthUA})
+            .timeout(const Duration(seconds: 15));
+        if (res.statusCode == 200) {
+          final lines = res.body
+              .split('\n')
+              .map((l) => l.trim().toLowerCase())
+              .where((l) => l.isNotEmpty && !l.startsWith('#') && l.contains('.'))
+              .toList();
+          if (lines.length > 100) {
+            _blockedDomains = lines;
+            _lastDomainSync = DateTime.now();
+            // Кэшируем первые 5000 доменов (остальное слишком много для SharedPrefs)
+            final p = await SharedPreferences.getInstance();
+            await p.setString('blocked_domains_cache',
+                jsonEncode(lines.take(5000).toList()));
+            await p.setString('blocked_domains_ts', DateTime.now().toIso8601String());
+            log('✔ Domain list updated: ${lines.length} domains');
+            return;
+          }
+        }
+      } catch (_) {}
+    }
+    log('⚠ Domain list sync failed — using cache');
+  }
+
+  Future<void> _loadCache() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final c = p.getString('bypass_rules_cache');
+      if (c != null) {
+        final j = jsonDecode(c);
+        _rules   = List<Map<String,dynamic>>.from(j['rules'] ?? []);
+        _version = j['version'] ?? 0;
+      }
+      // Загружаем кэш доменов
+      final dc  = p.getString('blocked_domains_cache');
+      final dts = p.getString('blocked_domains_ts');
+      if (dc != null) {
+        _blockedDomains = List<String>.from(jsonDecode(dc));
+        if (dts != null) _lastDomainSync = DateTime.tryParse(dts);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveCache(String raw) async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString('bypass_rules_cache', raw);
+    } catch (_) {}
+  }
+
+  // Проверяем, заблокирован ли домен в РФ
+  bool isBlocked(String domain) {
+    final d = domain.toLowerCase();
+    // Сначала проверяем захардкоженный список актуальных блокировок
+    if (_hardcodedBlocked.any((b) => d == b || d.endsWith('.$b'))) return true;
+    // Затем динамический список
+    return _blockedDomains.any((b) => d == b || d.endsWith('.$b'));
+  }
+
+  // Захардкоженные актуальные блокировки (РКН, март 2026)
+  // Источник: postium.ru, gogov.ru — обновлено 19.03.2026
+  static const List<String> _hardcodedBlocked = [
+    // Социальные сети
+    'instagram.com', 'facebook.com', 'fb.com', 'fbcdn.net',
+    'twitter.com', 'x.com', 't.co',
+    'tiktok.com', 'tiktokv.com', 'byteoversea.com',
+    'linkedin.com',
+    // Мессенджеры (частично)
+    'discord.com', 'discord.gg', 'discordapp.com',
+    // Новости и медиа
+    'meduza.io', 'novayagazeta.ru', 'echo.msk.ru',
+    'dw.com', 'bbc.com', 'bbc.co.uk',
+    'voiceofamerica.com', 'voanews.com', 'rferl.org',
+    'currenttime.tv', 'svoboda.org',
+    // YouTube (замедление, не блок)
+    // 'youtube.com', // не полностью заблокирован
+    // VPN сервисы (сами сайты)
+    'nordvpn.com', 'expressvpn.com', 'ipvanish.com',
+    'purevpn.com', 'cyberghostvpn.com', 'privateinternetaccess.com',
+    'hidemyass.com', 'hotspotshield.com', 'tunnelbear.com',
+    'windscribe.com', 'protonvpn.com',
+    // Прокси
+    'hideme.ru', 'anonymox.net',
+    // Прочее заблокированное
+    'canary.discord.com', 'ptb.discord.com',
+    'whatsapp.net', // звонки WhatsApp
+  ];
+
+  // Строим v2ray routing rules для умного обхода:
+  // заблокированные домены → через VPN, российские → напрямую
+  Map<String, dynamic> buildRussiaRoutingRules() {
+    return {
+      'domainStrategy': 'IPIfNonMatch',
+      'rules': [
+        // Локальные адреса — напрямую (без VPN)
+        {'type': 'field', 'ip':     ['geoip:private'], 'outboundTag': 'direct'},
+        {'type': 'field', 'domain': ['geosite:private'], 'outboundTag': 'direct'},
+
+        // Российские домены — напрямую (для производительности)
+        {'type': 'field', 'domain': ['geosite:ru'], 'outboundTag': 'direct'},
+        {'type': 'field', 'ip':     ['geoip:ru'],   'outboundTag': 'direct'},
+
+        // Telegram — через VPN (блокируется в РФ)
+        {'type': 'field', 'domain': [
+          'domain:telegram.org', 'domain:t.me', 'domain:tlgr.org',
+          'ip:149.154.160.0/20', 'ip:91.108.4.0/22', 'ip:91.108.56.0/24',
+        ], 'outboundTag': 'proxy'},
+
+        // Заблокированные платформы — через VPN
+        {'type': 'field', 'domain': [
+          'geosite:instagram', 'geosite:facebook', 'geosite:twitter',
+          'geosite:tiktok', 'geosite:discord', 'geosite:youtube',
+          ..._hardcodedBlocked.map((d) => 'domain:$d'),
+        ], 'outboundTag': 'proxy'},
+
+        // OpenAI/AI сервисы — через VPN
+        {'type': 'field', 'domain': [
+          'domain:openai.com', 'domain:chatgpt.com', 'domain:anthropic.com',
+          'domain:claude.ai', 'domain:gemini.google.com',
+        ], 'outboundTag': 'proxy'},
+
+        // IPv6 — блокируем (leak prevention)
+        {'type': 'field', 'ip': ['::/0'], 'outboundTag': 'block'},
+      ],
+    };
+  }
+
+
+  List<BypassStrategy> getStrategies(BlockType type) {
+    final tn = type.name; final all = <BypassStrategy>[];
+    for (final r in [..._rules, ..._builtin]) {
+      if (List<String>.from((r['triggers'] as List?) ?? []).contains(tn)) {
+        for (final s in List<Map<String,dynamic>>.from((r['strategies'] as List?) ?? [])) {
+          all.add(BypassStrategy.fromJson(s));
+        }
+      }
+    }
+    all.sort((a, b) => a.priority.compareTo(b.priority));
+    return all;
+  }
+
+  VpnConfig applyStrategy(VpnConfig orig, BypassStrategy s) {
+    String link = orig.link; final p = s.params;
+    switch (s.type) {
+      case 'change_port':
+        final np = p['port'] as int;
+        try {
+          final ai = link.indexOf('@'); if (ai == -1) break;
+          final qi = link.contains('?') ? link.indexOf('?')
+              : (link.contains('#') ? link.lastIndexOf('#') : link.length);
+          final hp = link.substring(ai + 1, qi);
+          final lc = hp.lastIndexOf(':'); if (lc == -1) break;
+          link = link.substring(0, ai+1) + hp.substring(0, lc) + ':$np' + link.substring(qi);
+        } catch (_) {}
+        break;
+      case 'change_transport':
+        if (link.startsWith('vmess://')) {
+          try {
+            final clean = link.replaceFirst('vmess://', '');
+            final pad = clean.length % 4;
+            final dec = utf8.decode(base64.decode(pad == 0 ? clean : clean + '=' * (4 - pad)));
+            final j = jsonDecode(dec) as Map<String, dynamic>;
+            j['net'] = p['transport'];
+            if (p['transport'] == 'ws') j['path'] = p['path'] ?? '/';
+            link = 'vmess://' + base64.encode(utf8.encode(jsonEncode(j)));
+          } catch (_) {}
+        } else if (link.startsWith('vless://') || link.startsWith('trojan://')) {
+          try {
+            final uri = Uri.parse(link);
+            final q = Map<String, String>.from(uri.queryParameters);
+            q['type'] = p['transport'];
+            if (p['transport'] == 'ws')   q['path']        = p['path']    ?? '/';
+            if (p['transport'] == 'grpc') q['serviceName'] = p['service'] ?? 'gun';
+            link = uri.replace(queryParameters: q).toString();
+          } catch (_) {}
+        }
+        break;
+      case 'add_reality_sni':
+        try {
+          final uri = Uri.parse(link);
+          final q = Map<String, String>.from(uri.queryParameters);
+          q['security'] = 'reality';
+          q['sni']      = p['sni'] as String;
+          // Используем детерминированный fp на основе SNI для воспроизводимости
+          q['fp']       = StealthEngine.randomFingerprint();
+          q['serverName'] = p['sni'] as String;
+          link = uri.replace(queryParameters: q).toString();
+        } catch (_) {}
+        break;
+
+      // set_doh: для DNS poisoning — метка в конфиг, реальный DoH пробрасывается в patchConfig
+      // Здесь мы просто отмечаем в параметрах ноды что нужен DoH
+      case 'set_doh':
+        // DoH применяется глобально через patchConfig — стратегия лишь форсирует применение
+        // Ничего менять в link не нужно, patchConfig сам проставит DoH при следующем connect
+        break;
+
+      // Stealth 3.0: ротация SNI из пула авторитетных доменов
+      // FIX v3.0: сохраняем pbk/sid — они привязаны к серверу, не к SNI
+      case 'rotate_reality_sni':
+        try {
+          final uri = Uri.parse(link);
+          final q   = Map<String, String>.from(uri.queryParameters);
+          q['security']   = 'reality';
+          q['sni']        = StealthEngine.nextSni();
+          q['serverName'] = q['sni']!;
+          q['fp']         = StealthEngine.randomFingerprint();
+          // pbk/sid не трогаем — берутся из оригинала если были
+          link = uri.replace(queryParameters: q).toString();
+        } catch (_) {}
+        break;
+
+      // Trojan-WS+TLS fallback: если VLESS упал 3 раза → маскируем под HTTPS
+      // Trojan через WebSocket выглядит как обычный HTTPS браузера
+      case 'trojan_ws_fallback':
+        try {
+          if (link.startsWith('vless://') || link.startsWith('vmess://')) {
+            final uri  = Uri.parse(link);
+            final q    = Map<String, String>.from(uri.queryParameters);
+            // Меняем транспорт на WS с TLS — максимальная маскировка
+            q['type']     = 'ws';
+            q['path']     = p['path'] as String? ?? '/';
+            q['security'] = 'tls';
+            q['sni']      = StealthEngine.nextSni();
+            q['fp']       = StealthEngine.nextUTlsProfile();
+            final port    = (p['port'] as int? ?? 443).toString();
+            // Меняем порт на целевой
+            final host    = uri.host;
+            link = uri.replace(
+              host: host,
+              port: int.parse(port),
+              queryParameters: q).toString();
+          }
+        } catch (_) {}
+        break;
+
+      // CDN Workers fallback — финальный рубеж
+      case 'cdn_fallback':
+        try {
+          final uri    = Uri.parse(link);
+          final q      = Map<String, String>.from(uri.queryParameters);
+          final cdnUrl = p['url'] as String? ?? 'aura-vpn.workers.dev';
+          q['type']       = 'ws';
+          q['path']       = '/aura-vpn-cdn';
+          q['host']       = cdnUrl;
+          q['security']   = 'tls';
+          q['sni']        = cdnUrl;
+          q['serverName'] = cdnUrl;   // FIX: required by some v2ray versions
+          q['fp']         = StealthEngine.nextUTlsProfile();
+          link = uri.replace(queryParameters: q).toString();
+        } catch (_) {}
+        break;
+
+      // Shadow fallback — WebSocket+CDN транспорт через живой SNI
+      case 'shadow_fallback':
+        try {
+          final uri = Uri.parse(link);
+          final q   = Map<String, String>.from(uri.queryParameters);
+          final sni = StealthEngine.nextSni();
+          q['type']       = 'ws';
+          q['path']       = '/cdn-fallback';
+          q['security']   = 'tls';
+          q['sni']        = sni;
+          q['serverName'] = sni;       // FIX: required by some v2ray versions
+          q['fp']         = StealthEngine.nextUTlsProfile();
+          link = uri.replace(queryParameters: q).toString();
+        } catch (_) {}
+        break;
+    }
+    return VpnConfig(
+      name: '${orig.name} [AI]', link: link,
+      groupName: orig.groupName, sourceUrl: orig.sourceUrl,
+      isManual: orig.isManual, isAiPatched: true,
+      isFavourite: orig.isFavourite,
+    );
+  }
+}
+
+class BypassProber {
+  // Проверяем через полный TLS handshake, не просто TCP
+  // РКН/Роскомнадзор пропускает TCP но режет на TLS уровне
+  static Future<bool> probe(VpnConfig cfg) async {
+    String host = ''; int port = 443;
+    try {
+      final uri = Uri.parse(cfg.link.contains('@')
+          ? 'dummy://${cfg.link.split('@').last.split('#').first}' : cfg.link);
+      host = uri.host; port = uri.port > 0 ? uri.port : 443;
+    } catch (_) { return false; }
+    if (host.isEmpty) return false;
+    // Сначала быстрый TCP (1.5 сек) — если упал, TLS не нужен
+    try {
+      final s = await Socket.connect(host, port, timeout: const Duration(milliseconds: 1500));
+      await s.close();
+    } catch (_) { return false; }
+    // Затем TLS handshake — реальная проверка прохождения трафика
+    try {
+      final s = await SecureSocket.connect(
+        host, port,
+        timeout: const Duration(seconds: 3),
+        onBadCertificate: (_) => true,
+      );
+      await s.close();
+      return true;
+    } catch (_) { return false; }
+  }
+}
+

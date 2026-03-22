@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    network_security_config.xml
+    Путь: android/app/src/main/res/xml/network_security_config.xml
+
+    Разрешаем:
+    1. Пользовательские CA сертификаты (нужно для некоторых корпоративных сетей)
+    2. Cleartext только для DoH IP адресов (1.1.1.1, 8.8.8.8, 162.159.36.1)
+    3. Pinning НЕ используем — Reality SNI меняет домены динамически
+-->
+<network-security-config>
+
+    <!-- Базовая конфигурация: принимаем системные + пользовательские CA -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- DoH серверы — разрешаем TLS напрямую по IP (без cleartext) -->
+    <!-- Это позволяет HttpClient делать HTTPS к IP-адресам без SNI -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">1.1.1.1</domain>
+        <domain includeSubdomains="false">1.0.0.1</domain>
+        <domain includeSubdomains="false">8.8.8.8</domain>
+        <domain includeSubdomains="false">8.8.4.4</domain>
+        <domain includeSubdomains="false">162.159.36.1</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Warm-up домены — только HTTPS, без cleartext -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">gstatic.com</domain>
+        <domain includeSubdomains="true">microsoft.com</domain>
+        <domain includeSubdomains="true">apple.com</domain>
+        <domain includeSubdomains="true">mozilla.org</domain>
+        <domain includeSubdomains="true">cloudflare.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+
+</network-security-config>

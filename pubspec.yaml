@@ -1,0 +1,39 @@
+name: vpn_new
+description: "Aura VPN — Smart bypass, always on"
+publish_to: 'none'
+version: 6.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ── Core ──────────────────────────────────────────────────────────────
+  provider: ^6.1.2
+  flutter_v2ray: 1.0.10
+
+  # ── Network ───────────────────────────────────────────────────────────
+  http: ^1.2.2
+
+  # ── Storage ───────────────────────────────────────────────────────────
+  shared_preferences: ^2.3.2
+
+  # ── QR Scanner ────────────────────────────────────────────────────────
+  mobile_scanner: ^5.2.3
+
+  # ── UI ────────────────────────────────────────────────────────────────
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/aura_icon.png
+    - assets/images/aura_logo.png

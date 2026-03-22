@@ -1,0 +1,506 @@
+// ignore_for_file: unused_import, unused_element
+part of 'main.dart';
+
+class StealthEngine {
+  static final _rng = Random();
+  static int sniIndex = 0; // публичный для UI
+
+  // Кэш живого SNI — не проверяем TLS каждое подключение
+  static String? _cachedSni;
+  static DateTime? _sniCacheTime;
+  // TTL 3 минуты — РКН блокировки появляются быстро, 5 мин слишком долго
+  static const _sniCacheTtl = Duration(minutes: 3);
+
+  // ── 1. TLS Фрагментация — "Ghost Handshake" ────────────────────────────────
+  // Разбиваем TLS ClientHello на несколько пакетов.
+  // DPI видит фрагменты, не видит полный fingerprint.
+  // Работает через sockopt.dialerProxy + fragment в v2ray конфиге.
+  static Map<String, dynamic> buildFragmentConfig(Map<String, dynamic> base) {
+    final outbounds = base['outbounds'] as List? ?? [];
+
+    // Guard: не добавлять fragment-out дважды
+    if (outbounds.any((ob) => ob is Map && ob['tag'] == 'fragment-out')) {
+      return base; // уже есть — возвращаем без изменений
+    }
+    // Определяем заранее: есть ли целевые протоколы для фрагментации
+    final hasFragmentTarget = outbounds.any((ob) =>
+        ob is Map && (ob['tag'] == 'proxy' || ob['protocol'] == 'vless' ||
+            ob['protocol'] == 'vmess' || ob['protocol'] == 'trojan'));
+    for (final ob in outbounds) {
+      if (ob is Map && (ob['tag'] == 'proxy' || ob['protocol'] == 'vless' ||
+          ob['protocol'] == 'vmess' || ob['protocol'] == 'trojan')) {
+        final ss = ob['streamSettings'] as Map<String, dynamic>? ?? {};
+        final so = ss['sockopt'] as Map<String, dynamic>? ?? {};
+
+        // Fragment — разбиваем пакет на 1-3 части с задержкой 15-25ms
+        so['dialerProxy'] = 'fragment-out';
+        ss['sockopt'] = so;
+        ob['streamSettings'] = ss;
+      }
+    }
+
+    if (!hasFragmentTarget) return base;
+
+    // Профили фрагментации — 22.03.2026: ТСПУ AI анализирует статистику пакетов
+    // Ключ: НЕ фиксированные паттерны, вариативность похожа на реальный браузер
+    // Источник: ntc.party + net4people/bbs анализ март 2026
+    final fragProfiles = [
+      {'length': '25-55',  'interval': '7-17'},    // Chrome 136 профиль
+      {'length': '35-90',  'interval': '12-25'},   // Firefox 134 профиль
+      {'length': '18-42',  'interval': '5-14'},    // Safari 18/iOS профиль
+      {'length': '50-120', 'interval': '15-30'},   // Edge 134/Windows профиль
+      {'length': '15-35',  'interval': '3-10'},    // Мобильный Chrome (плохая сеть)
+    ];
+    final prof = fragProfiles[_rng.nextInt(fragProfiles.length)];
+
+    (base['outbounds'] as List).add({
+      'tag': 'fragment-out',
+      'protocol': 'freedom',
+      'settings': {
+        'fragment': {
+          'packets':  'tlshello',
+          'length':   prof['length'],
+          'interval': prof['interval'],
+        },
+      },
+      'streamSettings': {
+        'sockopt': {
+          'tcpNoDelay': true,
+          'mark':       255,
+        },
+      },
+    });
+
+    return base;
+  }
+
+  // ── 2. Reality SNI Ротация ─────────────────────────────────────────────────
+  // Каждый раз берём следующий SNI из пула высокоавторитетных доменов.
+  // РКН видит трафик к dl.google.com — не блокирует.
+  static String nextSni() {
+    final sni = kRealitySniPool[sniIndex % kRealitySniPool.length];
+    sniIndex++;
+    return sni;
+  }
+
+  // Выбор живого SNI — с кэшем на 5 минут
+  // Без кэша каждое подключение тратит до 16 сек на проверку всех SNI
+  static Future<String> pickLiveSni() async {
+    // Проверяем кэш
+    if (_cachedSni != null && _sniCacheTime != null &&
+        DateTime.now().difference(_sniCacheTime!) < _sniCacheTtl) {
+      return _cachedSni!;
+    }
+
+    // Проверяем SNI параллельно — берём ПЕРВЫЙ успешный через Completer
+    // Future.wait ждёт ВСЕ — это теряет до 3 сек на мёртвых SNI
+    final completer = Completer<String>();
+    int pending = kRealitySniPool.length;
+
+    for (int i = 0; i < kRealitySniPool.length; i++) {
+      final sni = kRealitySniPool[i];
+      final idx = i;
+      Future(() async {
+        try {
+          // SecureSocket = полный TLS handshake (не просто TCP)
+          final sock = await SecureSocket.connect(
+            sni, 443,
+            timeout: const Duration(seconds: 3),
+            onBadCertificate: (_) => true, // cert не важен — важен сам handshake
+          );
+          await sock.close();
+          // Первый успешный SNI — сразу отдаём результат
+          if (!completer.isCompleted) {
+            _cachedSni    = sni;
+            _sniCacheTime = DateTime.now();
+            sniIndex      = idx + 1;
+            completer.complete(sni);
+          }
+        } catch (_) {
+          // TLS упал — SNI заблокирован
+        } finally {
+          pending--;
+          // Все провалились — возвращаем дефолт
+          if (pending == 0 && !completer.isCompleted) {
+            _cachedSni    = kRealitySniPool[0];
+            _sniCacheTime = DateTime.now();
+            completer.complete(_cachedSni!);
+          }
+        }
+      });
+    }
+
+    // Таймаут 4 сек — если никто не ответил → дефолт
+    return completer.future.timeout(
+      const Duration(seconds: 4),
+      onTimeout: () {
+        if (!completer.isCompleted) {
+          _cachedSni    = kRealitySniPool[0];
+          _sniCacheTime = DateTime.now();
+          completer.complete(_cachedSni!);
+        }
+        return _cachedSni!;
+      },
+    );
+  }
+
+  // Сбросить SNI кэш (при Connection Reset)
+  // Быстрый SNI из кэша без I/O — для горячего пути подключения
+  static String pickLiveSniFromCache() {
+    if (_cachedSni != null && _cachedSni!.isNotEmpty) return _cachedSni!;
+    // Рандомный из пула без проверки — лучше быстро чем идеально
+    return kRealitySniPool[_rng.nextInt(kRealitySniPool.length)];
+  }
+
+  static void invalidateSniCache() {
+    _cachedSni    = null;
+    _sniCacheTime = null;
+  }
+
+  // ── 3. Packet Jitter — обман AI/ML анализа (обновлено март 2026) ───────────
+  // ML-DPI ТСПУ 2026 обучен на поведенческих признаках: inter-arrival time,
+  // burst размер, соотношение up/down. Имитируем WebRTC/video call паттерн.
+  static Future<void> applyJitter() async {
+    // DNS lookup imitation: 20-60ms (типично для DoH через 1.1.1.1)
+    final dnsLike = 20 + _rng.nextInt(40);
+    await Future.delayed(Duration(milliseconds: dnsLike));
+
+    // TCP handshake RTT: 5-15ms (быстрый дата-центр)
+    final tcpRtt = 5 + _rng.nextInt(10);
+    await Future.delayed(Duration(milliseconds: tcpRtt));
+
+    // 35% шанс "mobile network jitter" — имитация 4G/5G нестабильности
+    if (_rng.nextDouble() < 0.35) {
+      // Mobile jitter: burst паузы характерны для 5G handoff
+      final mobileJitter = 40 + _rng.nextInt(180);
+      await Future.delayed(Duration(milliseconds: mobileJitter));
+    }
+
+    // 15% шанс "captive portal check" — браузер иногда делает connectivitycheck
+    if (_rng.nextDouble() < 0.15) {
+      final captiveCheck = 100 + _rng.nextInt(300);
+      await Future.delayed(Duration(milliseconds: captiveCheck));
+    }
+  }
+
+  // ── 4. Warm-up — "прогрев" соединения ─────────────────────────────────────
+  // Перед VPN-туннелем делаем реальный HTTP запрос к безопасному домену.
+  // Провайдер видит "нормальный" HTTPS трафик и не считает соединение подозрительным.
+  static Future<void> warmUp(void Function(String) log) async {
+    for (final url in kWarmupTargets) {
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 3)
+        ..userAgent = _randomUserAgent()
+        ..badCertificateCallback = (_, __, ___) => true;
+      try {
+        final req = await client.getUrl(Uri.parse(url))
+            .timeout(const Duration(seconds: 3));
+        req.headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+        req.headers.set('Accept-Language', 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7');
+        req.headers.set('Accept-Encoding', 'gzip, deflate, br');
+        req.headers.set('Connection', 'keep-alive');
+        final resp = await req.close().timeout(const Duration(seconds: 3));
+        await resp.drain<void>().timeout(const Duration(seconds: 2));
+        client.close();
+        log('🔥 Warm-up OK: ${Uri.parse(url).host}');
+        return;
+      } catch (_) {
+        client.close(force: true); // FIX v3.0: гарантированный cleanup сокета
+      }
+    }
+    log('⚠ Warm-up skipped (no connectivity)');
+  }
+
+  // ── 5. Инжект Reality параметров в конфиг ─────────────────────────────────
+  // FIX v3.0: сохраняем pbk (publicKey) и sid (shortId) из оригинала.
+  // Предыдущая версия их теряла → Reality ноды подключались, но шифрование ломалось.
+  static String injectReality(String link) {
+    if (!link.startsWith('vless://')) return link;
+    try {
+      final uri = Uri.parse(link);
+      final q   = Map<String, String>.from(uri.queryParameters);
+      if (q['security'] == 'reality') {
+        // Ротируем SNI, но pbk/sid/fp из оригинала — они привязаны к серверу
+        q['sni']        = nextSni();
+        q['serverName'] = q['sni']!;
+        q['fp']       ??= randomFingerprint(); // обновляем fp только если не задан
+      } else if (q['security'] == 'tls' || q['security'] == null) {
+        // Апгрейд до Reality — pbk/sid не нужны (не Reality нода изначально)
+        q['security']   = 'reality';
+        q['sni']        = nextSni();
+        q['serverName'] = q['sni']!;
+        q['fp']         = randomFingerprint();
+      }
+      return uri.replace(queryParameters: q).toString();
+    } catch (_) { return link; }
+  }
+
+  // ── 5b. Инжект Reality с конкретным live-SNI ──────────────────────────────
+  // FIX v3.0: сохраняем pbk/sid; не перезаписываем fp если уже задан
+  static String injectRealityWithSni(String link, String sni) {
+    if (!link.startsWith('vless://')) return link;
+    try {
+      final uri = Uri.parse(link);
+      final q   = Map<String, String>.from(uri.queryParameters);
+      if (q['security'] == 'reality') {
+        q['sni']        = sni;
+        q['serverName'] = sni;
+        q['fp']       ??= randomFingerprint(); // не перезаписываем fp сервера
+      } else if (q['security'] == 'tls' || q['security'] == null) {
+        q['security']   = 'reality';
+        q['sni']        = sni;
+        q['serverName'] = sni;
+        q['fp']         = randomFingerprint();
+      }
+      return uri.replace(queryParameters: q).toString();
+    } catch (_) { return link; }
+  }
+
+  // ── 6. Рандомный TLS fingerprint ──────────────────────────────────────────
+  // FIX v3.0: добавлены ios/android — более разнообразный пул.
+  // Публичный — используется в BypassRulesEngine.applyStrategy
+  static String randomFingerprint() {
+    const fps = ['chrome', 'safari', 'edge', 'ios', 'android'];
+    return fps[_rng.nextInt(fps.length)];
+  }
+
+  // ── 7. Рандомный User-Agent для warm-up ───────────────────────────────────
+  // Март 2026 — актуальные версии Chrome 136/Safari 18/Edge 134
+  // РКН и DPI блокируют запросы от Dart/2.x по умолчанию
+  static const _userAgents = [
+    // Android Chrome 136 — самый частый в РФ (40%+ трафика)
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 13; Redmi Note 12 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.111 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 14; POCO X6 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.135 Mobile Safari/537.36',
+    // Windows Chrome 136
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Safari/537.36',
+    // iOS Safari 18
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1',
+    // Edge 134
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
+  ];
+  static String _randomUserAgent() => _userAgents[_rng.nextInt(_userAgents.length)];
+
+  // uTLS fingerprints — актуализированы 22.03.2026
+  // ML-модель ТСПУ анализирует поведенческие паттерны TLS handshake
+  // 'random' = случайный из набора xray-core — максимально усложняет классификацию
+  static const List<String> _uTlsProfiles = [
+    'chrome',    // Chrome 136 — 62% рынка Android, самый надёжный
+    'edge',      // Edge 134 — Windows Update IP в whitelist ТСПУ
+    'safari',    // Safari 18.3 iOS — iPhone трафик
+    'ios',       // iOS native TLS stack — нативный мобильный
+    'firefox',   // Firefox 134 — desktop, другой ALPN паттерн
+    'android',   // Android TLS — базовый мобильный паттерн
+    'random',    // Случайный xray fingerprint — anti-ML behavioral analysis
+  ];
+  static int _uTlsIndex = 0;
+
+  static String nextUTlsProfile() {
+    final p = _uTlsProfiles[_uTlsIndex % _uTlsProfiles.length];
+    _uTlsIndex++;
+    return p;
+  }
+
+  static String patchConfig(String configJson, {bool fragment = true}) {
+    try {
+      final j = jsonDecode(configJson) as Map<String, dynamic>;
+
+      // 1. TLS фрагментация только ClientHello
+      if (fragment) buildFragmentConfig(j);
+
+      // 2. uTLS fingerprint — ТОЛЬКО если явно не задан сервером
+      // ВАЖНО: НЕ трогаем minVersion, alpn, allowInsecure — это ломает большинство серверов
+      // Сервер сам определяет допустимые параметры TLS — мы только маскируем fingerprint клиента
+      final outbounds = j['outbounds'] as List? ?? [];
+      final fp = nextUTlsProfile();
+      for (final ob in outbounds) {
+        if (ob is! Map) continue;
+        final proto = ob['protocol'] as String? ?? '';
+        if (!['vless','vmess','trojan'].contains(proto)) continue;
+        final ss  = ob['streamSettings'] as Map<String, dynamic>? ?? {};
+        final sec = ss['security'] as String? ?? '';
+        if (sec == 'tls' || sec == 'reality') {
+          final key = '${sec}Settings';
+          final tlsSettings = Map<String, dynamic>.from(
+              (ss[key] as Map<String, dynamic>?) ?? {});
+          // fingerprint — если не задан уже
+          if (tlsSettings['fingerprint'] == null ||
+              (tlsSettings['fingerprint'] as String).isEmpty) {
+            tlsSettings['fingerprint'] = fp;
+          }
+          ss[key] = tlsSettings;
+          ob['streamSettings'] = ss;
+
+          // XTLS-Vision flow: КРИТИЧНО для обхода ML-детектора ТСПУ (март 2026)
+          // Vision убирает двойное TLS-шифрование + добавляет padding случайного размера
+          // Применяем только для VLESS+Reality — самая эффективная комбинация
+          // НЕ применяем для VMess/Trojan — они используют другой механизм шифрования
+          if (proto == 'vless' && sec == 'reality') {
+            final currentFlow = ob['flow'] as String? ?? '';
+            if (currentFlow.isEmpty) {
+              ob['flow'] = 'xtls-rprx-vision';
+            }
+          }
+        }
+      }
+
+      // 3. DoH — только если DNS вообще не настроен
+      final existingDns   = j['dns'] as Map<String, dynamic>?;
+      final existingCount = (existingDns?['servers'] as List?)?.length ?? 0;
+      if (existingCount < 2) {
+        j['dns'] = {
+          'servers': [
+            {
+              'address':      'https://1.1.1.1/dns-query',
+              'domains':      ['geosite:geolocation-!cn'],
+              'skipFallback': true,
+            },
+            {
+              'address':      'https://8.8.8.8/dns-query',
+              'skipFallback': true,
+            },
+            {
+              'address': 'localhost',
+              'domains': ['geosite:cn', 'localhost'],
+            },
+          ],
+          'queryStrategy':   'UseIPv4',
+          'disableFallback': false,
+        };
+      }
+
+      // 4. Smart routing — российские сайты напрямую, заблокированные через VPN
+      // Используем актуальный список РКН-блокировок из BypassRulesEngine
+      // Это заменяет только IPv6 blackhole — маршрутизацию ставим целиком
+      final routing = j['routing'] as Map<String, dynamic>? ?? {};
+      final rules   = (routing['rules'] as List?)?.cast<dynamic>() ?? <dynamic>[];
+      final hasIpv6 = rules.any((r) =>
+          r is Map && (r['ip'] as List?)?.contains('::/0') == true);
+      if (!hasIpv6) {
+        rules.insert(0, {'type': 'field', 'ip': ['::/0'], 'outboundTag': 'block'});
+        routing['rules'] = rules;
+        j['routing'] = routing;
+      }
+      final obs = j['outbounds'] as List? ?? [];
+      if (!obs.any((o) => o is Map && o['tag'] == 'block')) {
+        obs.add({'tag': 'block', 'protocol': 'blackhole', 'settings': {}});
+      }
+      if (!obs.any((o) => o is Map && o['tag'] == 'direct')) {
+        obs.add({'tag': 'direct', 'protocol': 'freedom', 'settings': {}});
+      }
+
+      // 5. Mux — только vmess/trojan без Reality и без gRPC/QUIC
+      // VLESS+Reality несовместим с mux — никогда не включаем для vless
+      for (final ob in outbounds) {
+        if (ob is! Map) continue;
+        final proto = ob['protocol'] as String? ?? '';
+        if (!['vmess', 'trojan'].contains(proto)) continue;
+        final ss  = ob['streamSettings'] as Map<String, dynamic>? ?? {};
+        final net = ss['network'] as String? ?? 'tcp';
+        final sec = ss['security'] as String? ?? '';
+        if (sec == 'reality' || net == 'grpc' || net == 'quic') continue;
+        // Консервативный Mux concurrency=4: безопасно на 3G и перегруженном WiFi
+        if (ob['mux'] == null) {
+          ob['mux'] = {'enabled': true, 'concurrency': 4};
+        }
+      }
+
+      // 6. sockopt + MTU/tcpFastOpen (март 2026)
+      // tcpFastOpen: ускоряет переподключения — важно при частых ротациях от блокировок
+      // tcpNoDelay: отключает Nagle, уменьшает задержку первого пакета
+      for (final ob in outbounds) {
+        if (ob is! Map) continue;
+        final proto = ob['protocol'] as String? ?? '';
+        if (!['vless', 'vmess', 'trojan'].contains(proto)) continue;
+        final ss  = Map<String, dynamic>.from(ob['streamSettings'] as Map? ?? {});
+        final so  = Map<String, dynamic>.from(ss['sockopt'] as Map? ?? {});
+        so['tcpNoDelay']  = true;
+        so['tcpFastOpen'] = true;
+        ss['sockopt'] = so;
+        ob['streamSettings'] = ss;
+
+        // 6b. VLESS Vision flow control — антидетект TLS-in-TLS (март 2026)
+        // AI-DPI ТСПУ ищет вложенные TLS паттерны (packet length distribution).
+        // Vision применяет dynamic padding — пакеты выглядят как реальный HTTPS.
+        // Применяем ТОЛЬКО для VLESS+Reality без явного flow
+        if (proto == 'vless') {
+          final sec = (ss['security'] as String?) ?? '';
+          if (sec == 'reality') {
+            final settings = Map<String, dynamic>.from(ob['settings'] as Map? ?? {});
+            final vnext = settings['vnext'] as List?;
+            if (vnext != null) {
+              for (final srv in vnext) {
+                if (srv is! Map) continue;
+                final users = srv['users'] as List?;
+                if (users == null) continue;
+                for (final user in users) {
+                  if (user is! Map) continue;
+                  final flow = (user['flow'] as String?) ?? '';
+                  if (flow.isEmpty) {
+                    user['flow'] = 'xtls-rprx-vision';
+                  }
+                }
+              }
+              settings['vnext'] = vnext;
+              ob['settings'] = settings;
+            }
+          }
+        }
+      }
+
+      // 7. Policy — anti-TCP-freeze (новый метод ТСПУ март 2026)
+      // ТСПУ замораживает TCP когда server→client > ~15-20KB на "подозрительных" IP
+      // bufferSize 512KB + connIdle 300s форсирует правильный keepalive
+      try {
+        final policy = Map<String, dynamic>.from(j['policy'] as Map? ?? {});
+        final levels = Map<String, dynamic>.from(policy['levels'] as Map? ?? {});
+        if (!levels.containsKey('0')) {
+          levels['0'] = {
+            'handshake':    4,
+            'connIdle':     300,
+            'uplinkOnly':   2,
+            'downlinkOnly': 5,
+            'bufferSize':   512,
+          };
+          policy['levels'] = levels;
+          j['policy'] = policy;
+        }
+      } catch (_) {}
+
+      return jsonEncode(j);
+    } catch (e) {
+      return configJson; // при любой ошибке — оригинал без изменений
+    }
+  }
+
+  // ── 9. Connection Reset детектор ──────────────────────────────────────────
+  // Считает RST паттерны и предлагает ротацию SNI.
+  static int _rstCount = 0;
+  static DateTime? _lastRst;
+
+  static bool reportReset() {
+    final now = DateTime.now();
+    if (_lastRst != null && now.difference(_lastRst!).inMinutes < 5) {
+      _rstCount++;
+    } else {
+      _rstCount = 1;
+    }
+    _lastRst = now;
+    // 3+ RST за 5 минут = активная блокировка → ротируй SNI
+    return _rstCount >= 3;
+  }
+
+  static void resetCounter() { _rstCount = 0; _lastRst = null; }
+
+  // Геттеры для DevDashboard (приватные поля недоступны снаружи)
+  static int    get utlsIndexPublic => _uTlsIndex;
+  static int    get rstCountPublic  => _rstCount;
+  static String get cachedSniPublic => _cachedSni ?? '—';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SELF-HEALING MIRROR — Dead Drop система получения нод
+//  Если основной API недоступен, пробуем GitHub Gist → DNS TXT
+// ═══════════════════════════════════════════════════════════════════════════════
+

@@ -1,0 +1,1130 @@
+// ignore_for_file: unused_import, unused_element
+part of 'main.dart';
+
+
+// ═══════════════════════════════════════════════════════════════
+//  GLASSMORPHISM 2.0
+// ═══════════════════════════════════════════════════════════════
+
+class _Blob { double x, y, vx, vy, r; Color color; _Blob(this.x,this.y,this.vx,this.vy,this.r,this.color); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  FPS MONITOR — Production Performance Guard
+//  Если FPS < 45 → отключаем BackdropFilter и анимацию блобов
+//  Слабые телефоны работают плавно, сильные — красиво
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── AppProvider singleton ref для AuraBlobBg ─────────────────────────────────
+// AuraBlobBg не имеет доступа к Provider — используем глобальную ссылку
+class _AppProviderRef {
+  static AppProvider? instance;
+  static void register(AppProvider app) { instance = app; }
+}
+
+// ── Media Background Widget ───────────────────────────────────────────────────
+// Рендерит фото или GIF как фон с оптимизацией
+class _MediaBackground extends StatefulWidget {
+  final String path, type;
+  final double opacity;
+  const _MediaBackground({required this.path, required this.type, this.opacity = 0.35});
+  @override State<_MediaBackground> createState() => _MediaBackgroundState();
+}
+
+class _MediaBackgroundState extends State<_MediaBackground> {
+  // GIF: frames decoded via dart:ui codec
+  List<ui.Image>? _gifImages;
+  List<int>?      _gifDurations;
+  int             _frameIdx = 0;
+  Timer?          _gifTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.type == 'gif') _loadGif();
+    // video: rendered natively via TextureView in AuraVpnService
+    // We simply show a static poster frame for video type
+  }
+
+  Future<void> _loadGif() async {
+    try {
+      final bytes = await File(widget.path).readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes, targetWidth: 800);
+      final imgs = <ui.Image>[];
+      final durs = <int>[];
+      for (int i = 0; i < codec.frameCount; i++) {
+        final f = await codec.getNextFrame();
+        imgs.add(f.image);
+        durs.add(f.duration.inMilliseconds.clamp(16, 1000));
+      }
+      if (!mounted || imgs.isEmpty) return;
+      setState(() { _gifImages = imgs; _gifDurations = durs; });
+      _scheduleGifFrame(0);
+    } catch (_) {}
+  }
+
+  void _scheduleGifFrame(int idx) {
+    if (!mounted || _gifImages == null) return;
+    final dur = _gifDurations![idx % _gifDurations!.length];
+    _gifTimer = Timer(Duration(milliseconds: dur), () {
+      if (!mounted) return;
+      setState(() => _frameIdx = (idx + 1) % _gifImages!.length);
+      _scheduleGifFrame(_frameIdx);
+    });
+  }
+
+  @override
+  void dispose() {
+    _gifTimer?.cancel();
+    for (final img in _gifImages ?? []) img.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget child;
+    if (widget.type == 'gif' && _gifImages != null) {
+      child = RawImage(
+        image:  _gifImages![_frameIdx],
+        fit:    BoxFit.cover,
+        width:  double.infinity,
+        height: double.infinity,
+      );
+    } else if (widget.type == 'video') {
+      // Video background rendered via platform view
+      // Show photo thumbnail if available, otherwise dark overlay
+      child = Container(
+        color: Colors.black,
+        child: const Center(child: Icon(Icons.play_circle_fill_rounded,
+            color: Colors.white24, size: 64)),
+      );
+    } else {
+      child = Image.file(
+        File(widget.path),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        cacheWidth: (MediaQuery.of(context).size.width *
+            MediaQuery.of(context).devicePixelRatio).round().clamp(0, 2160),
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      );
+    }
+    return SizedBox.expand(child: Opacity(opacity: widget.opacity, child: child));
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CUSTOM THEME EDITOR  —  Редактор пользовательской темы
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _CustomThemeEditor extends StatefulWidget {
+  const _CustomThemeEditor();
+  @override State<_CustomThemeEditor> createState() => _CustomThemeEditorState();
+}
+
+class _CustomThemeEditorState extends State<_CustomThemeEditor> {
+  late Color _accent, _accent2, _bg, _blob1, _blob2;
+  String _mediaPath = '', _mediaType = '';
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final app = Provider.of<AppProvider>(context, listen: false);
+    _accent   = app.customAccent;
+    _accent2  = app.customAccent2;
+    _bg       = app.customBg;
+    _blob1    = app.customBlob1;
+    _blob2    = app.customBlob2;
+    _mediaPath = app.customMediaPath;
+    _mediaType = app.customMediaType;
+  }
+
+  // Медиа-пикер через MethodChannel (Android native file picker)
+  Future<void> _pickMedia() async {
+    // Показываем выбор типа
+    final choice = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('Фон приложения'),
+        message: const Text('Выбери тип медиа для фона'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(ctx, 'photo'),
+            child: const Text('📷 Фото или GIF из галереи')),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(ctx, 'path'),
+            child: const Text('📝 Ввести путь вручную')),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDestructiveAction: true,
+          onPressed: () => Navigator.pop(ctx, null),
+          child: Text(S.t('cancel'))),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    if (choice == 'path') { _showPathInput(); return; }
+
+    // Используем существующий MethodChannel для выбора файла
+    try {
+      final result = await VpnProvider.cmdChannel
+          .invokeMethod<String>('pickFile');
+      if (result != null && result.isNotEmpty && mounted) {
+        final ext  = result.split('.').last.toLowerCase();
+        final type = ext == 'gif' ? 'gif' : 'photo';
+        setState(() { _mediaPath = result; _mediaType = type; });
+      }
+    } catch (_) {
+      // MethodChannel не поддерживает pickFile — ручной ввод
+      if (mounted) _showPathInput();
+    }
+  }
+
+  void _showPathInput() {
+    final ctrl = TextEditingController(text: _mediaPath);
+    showCupertinoDialog(context: context, builder: (ctx) => CupertinoAlertDialog(
+      title: const Text('Путь к файлу'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        const SizedBox(height: 8),
+        const Text('Введи полный путь к фото или GIF', style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 8),
+        CupertinoTextField(controller: ctrl, placeholder: '/storage/emulated/0/...'),
+      ]),
+      actions: [
+        CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
+        CupertinoDialogAction(onPressed: () {
+          final path = ctrl.text.trim();
+          Navigator.pop(ctx);
+          if (path.isNotEmpty && File(path).existsSync()) {
+            final ext = path.split('.').last.toLowerCase();
+            setState(() { _mediaPath = path; _mediaType = ext == 'gif' ? 'gif' : 'photo'; });
+          }
+        }, child: const Text('OK')),
+      ],
+    ));
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    final app = Provider.of<AppProvider>(context, listen: false);
+    await app.saveCustomTheme(
+      accent: _accent, accent2: _accent2, bg: _bg,
+      blob1: _blob1, blob2: _blob2,
+      mediaPath: _mediaPath, mediaType: _mediaType,
+    );
+    if (mounted) {
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: const Text('Тема сохранена ✓'),
+        backgroundColor: Color(0xFF1B3A1B),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Live preview используя текущие цвета
+    // Preview uses _accent, _bg etc directly
+    return AuraScaffold(
+      title: 'Моя тема',
+      body: ListView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 60),
+        children: [
+
+          // ── Превью ──────────────────────────────────────────────────────────
+          _SubSection('ПРЕВЬЮ'),
+          Container(
+            height: 120,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              color: _bg,
+              boxShadow: [BoxShadow(color: _accent.withOpacity(0.3), blurRadius: 24)]),
+            child: Stack(children: [
+              // Блоб-превью
+              Positioned.fill(child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: CustomPaint(
+                  painter: _PreviewBlobPainter([_blob1, _blob2, _accent]),
+                  child: const SizedBox.expand()))),
+              // Медиа превью
+              if (_mediaPath.isNotEmpty && File(_mediaPath).existsSync())
+                Positioned.fill(child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Opacity(opacity: 0.45,
+                    child: _mediaType == 'video'
+                        ? Container(color: Colors.black54,
+                            child: Icon(Icons.play_circle_fill_rounded, color: _accent, size: 44))
+                        : Image.file(File(_mediaPath), fit: BoxFit.cover)))),
+              // Кнопка VPN превью
+              Center(child: Container(
+                width: 64, height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(colors: [
+                    _accent.withOpacity(0.4), _bg.withOpacity(0.6)]),
+                  border: Border.all(color: _accent.withOpacity(0.8), width: 2)),
+                child: Icon(Icons.vpn_key_rounded, color: _accent, size: 28))),
+            ]),
+          ),
+          const SizedBox(height: 20),
+
+          // ── Цвета ───────────────────────────────────────────────────────────
+          _SubSection('ЦВЕТА'),
+          _ColorRow('Акцент (основной)', _accent, (c) => setState(() => _accent = c)),
+          _ColorRow('Акцент (вторичный)', _accent2, (c) => setState(() => _accent2 = c)),
+          _ColorRow('Фон', _bg, (c) => setState(() => _bg = c)),
+          _ColorRow('Блоб 1', _blob1, (c) => setState(() => _blob1 = c)),
+          _ColorRow('Блоб 2', _blob2, (c) => setState(() => _blob2 = c)),
+
+          const SizedBox(height: 20),
+
+          // ── Фон (медиа) ─────────────────────────────────────────────────────
+          _SubSection('ФОН'),
+          GlassBox(
+            radius: 14, blur: 20,
+            tint: _accent, tintOpacity: 0.06,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                if (_mediaPath.isNotEmpty && File(_mediaPath).existsSync()) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: _mediaType == 'video'
+                        ? Container(
+                            height: 120, width: double.infinity,
+                            decoration: BoxDecoration(color: Colors.black87,
+                                borderRadius: BorderRadius.circular(10)),
+                            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Icon(Icons.play_circle_fill_rounded, color: _accent, size: 52),
+                              const SizedBox(height: 6),
+                              const Text('Видео выбрано',
+                                  style: TextStyle(fontSize: 11, color: Colors.white54)),
+                            ]))
+                        : Image.file(File(_mediaPath),
+                            height: 120, width: double.infinity, fit: BoxFit.cover)),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Expanded(child: Text(
+                      _mediaPath.split('/').last,
+                      style: const TextStyle(fontSize: 10, color: Colors.white54),
+                      overflow: TextOverflow.ellipsis)),
+                    GestureDetector(
+                      onTap: () {
+                        final app = Provider.of<AppProvider>(context, listen: false);
+                        app.clearCustomMedia();
+                        setState(() { _mediaPath = ''; _mediaType = ''; });
+                      },
+                      child: const Icon(Icons.close, size: 16, color: Colors.white38)),
+                  ]),
+                  const SizedBox(height: 8),
+                ] else
+                  const Text('Фото или GIF как фон приложения',
+                      style: TextStyle(fontSize: 12, color: Colors.white54)),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(child: _ActionBtn(
+                    icon: Icons.perm_media_outlined,
+                    label: 'Фото / GIF',
+                    color: _accent,
+                    onTap: _pickMedia)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _ActionBtn(
+                    icon: Icons.edit_outlined,
+                    label: 'Ввести путь',
+                    color: _accent2,
+                    onTap: _showPathInput)),
+                ]),
+                const SizedBox(height: 6),
+                Text(
+                  'Фото: JPEG, PNG, WebP · GIF: ~25fps анимация\n'
+                  'Видео: MP4, MKV, MOV · Фон без звука, зациклен\n'
+                  'Оптимизация: авто-даунскейл до 2160px',
+                  style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.25)),
+                ),
+              ]),
+            )),
+          const SizedBox(height: 20),
+
+          // ── Быстрые пресеты ─────────────────────────────────────────────────
+          _SubSection('БЫСТРЫЕ ПРЕСЕТЫ'),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            _PresetChip('Киберпанк', const Color(0xFFFF006E), const Color(0xFF00F5FF), const Color(0xFF000814),
+                (a, a2, bg) => setState(() { _accent=a; _accent2=a2; _bg=bg; _blob1=const Color(0xFF1A0030); _blob2=const Color(0xFF003040); })),
+            _PresetChip('Лес', const Color(0xFF00E676), const Color(0xFF69FF47), const Color(0xFF020A05),
+                (a, a2, bg) => setState(() { _accent=a; _accent2=a2; _bg=bg; _blob1=const Color(0xFF1B5E20); _blob2=const Color(0xFF2E7D32); })),
+            _PresetChip('Закат', const Color(0xFFFF6D00), const Color(0xFFFFAB40), const Color(0xFF0A0500),
+                (a, a2, bg) => setState(() { _accent=a; _accent2=a2; _bg=bg; _blob1=const Color(0xFF4A1800); _blob2=const Color(0xFF7B3300); })),
+            _PresetChip('Лёд', const Color(0xFF88C0D0), const Color(0xFF81A1C1), const Color(0xFF0D1117),
+                (a, a2, bg) => setState(() { _accent=a; _accent2=a2; _bg=bg; _blob1=const Color(0xFF1C2D3F); _blob2=const Color(0xFF243447); })),
+            _PresetChip('Розовый', const Color(0xFFFF4081), const Color(0xFFFF80AB), const Color(0xFF0A0308),
+                (a, a2, bg) => setState(() { _accent=a; _accent2=a2; _bg=bg; _blob1=const Color(0xFF4A0020); _blob2=const Color(0xFF880E4F); })),
+          ]),
+          const SizedBox(height: 24),
+
+          // ── Сохранить ────────────────────────────────────────────────────────
+          GestureDetector(
+            onTap: _saving ? null : _save,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [_accent, _accent2]),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: _accent.withOpacity(0.4), blurRadius: 20)]),
+              child: Center(child: _saving
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('ПРИМЕНИТЬ ТЕМУ',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)))),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Colour picker row ────────────────────────────────────────────────────────
+
+class _ColorRow extends StatelessWidget {
+  final String label;
+  final Color value;
+  final ValueChanged<Color> onChanged;
+  const _ColorRow(this.label, this.value, this.onChanged);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: GlassBox(radius: 12, blur: 16, child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(children: [
+          Expanded(child: Text(label,
+              style: const TextStyle(fontSize: 12, color: Colors.white70))),
+          GestureDetector(
+            onTap: () => _showPicker(context),
+            child: Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: value,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                boxShadow: [BoxShadow(color: value.withOpacity(0.4), blurRadius: 12)]),
+              child: Icon(Icons.colorize_outlined, color: Colors.white.withOpacity(0.7), size: 16),
+            )),
+        ]))));
+  }
+
+  void _showPicker(BuildContext ctx) {
+    showModalBottomSheet(
+      context: ctx,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _HexColorPicker(initial: value, onPicked: onChanged));
+  }
+}
+
+// ── Hex color picker bottom sheet ─────────────────────────────────────────────
+
+class _HexColorPicker extends StatefulWidget {
+  final Color initial;
+  final ValueChanged<Color> onPicked;
+  const _HexColorPicker({required this.initial, required this.onPicked});
+  @override State<_HexColorPicker> createState() => _HexColorPickerState();
+}
+
+class _HexColorPickerState extends State<_HexColorPicker> {
+  late double _h, _s, _v, _a;
+  late TextEditingController _hexCtrl;
+  bool _hexError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final hsv = HSVColor.fromColor(widget.initial);
+    _h = hsv.hue; _s = hsv.saturation; _v = hsv.value; _a = hsv.alpha;
+    _hexCtrl = TextEditingController(text: _toHex(widget.initial));
+  }
+
+  @override void dispose() { _hexCtrl.dispose(); super.dispose(); }
+
+  Color get _current => HSVColor.fromAHSV(_a, _h, _s, _v).toColor();
+
+  String _toHex(Color c) =>
+      '#${c.red.toRadixString(16).padLeft(2,'0')}${c.green.toRadixString(16).padLeft(2,'0')}${c.blue.toRadixString(16).padLeft(2,'0')}'.toUpperCase();
+
+  void _fromHex(String hex) {
+    try {
+      final clean = hex.replaceAll('#', '');
+      if (clean.length != 6) throw Exception();
+      final v = int.parse('FF$clean', radix: 16);
+      final c = Color(v);
+      final hsv = HSVColor.fromColor(c);
+      setState(() {
+        _h = hsv.hue; _s = hsv.saturation; _v = hsv.value;
+        _hexError = false;
+      });
+    } catch (_) { setState(() => _hexError = true); }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _current;
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1226),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border.all(color: Colors.white.withOpacity(0.08))),
+      padding: EdgeInsets.fromLTRB(20, 16, 20,
+          20 + MediaQuery.of(context).padding.bottom),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Drag handle
+        Container(width: 40, height: 4,
+            decoration: BoxDecoration(color: Colors.white24,
+                borderRadius: BorderRadius.circular(2))),
+        const SizedBox(height: 16),
+        // Превью цвета
+        Container(height: 52, decoration: BoxDecoration(
+            color: c, borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.15)),
+            boxShadow: [BoxShadow(color: c.withOpacity(0.5), blurRadius: 20)])),
+        const SizedBox(height: 16),
+        // HUE slider
+        _SliderRow('H', _h / 360, (v) => setState(() { _h = v * 360; _hexCtrl.text = _toHex(_current); }),
+            gradient: LinearGradient(colors: List.generate(7, (i) =>
+                HSVColor.fromAHSV(1, i * 60.0, 1, 1).toColor()))),
+        const SizedBox(height: 8),
+        // SATURATION slider
+        _SliderRow('S', _s, (v) => setState(() { _s = v; _hexCtrl.text = _toHex(_current); }),
+            gradient: LinearGradient(colors: [
+                HSVColor.fromAHSV(1, _h, 0, _v).toColor(),
+                HSVColor.fromAHSV(1, _h, 1, _v).toColor()])),
+        const SizedBox(height: 8),
+        // VALUE slider
+        _SliderRow('V', _v, (v) => setState(() { _v = v; _hexCtrl.text = _toHex(_current); }),
+            gradient: LinearGradient(colors: [Colors.black,
+                HSVColor.fromAHSV(1, _h, _s, 1).toColor()])),
+        const SizedBox(height: 8),
+        // ALPHA slider
+        _SliderRow('A', _a, (v) => setState(() { _a = v; _hexCtrl.text = _toHex(_current); }),
+            gradient: LinearGradient(colors: [Colors.transparent, c.withOpacity(1)])),
+        const SizedBox(height: 14),
+        // HEX input
+        Row(children: [
+          const Text('HEX', style: TextStyle(fontSize: 11, color: Colors.white38, letterSpacing: 1)),
+          const SizedBox(width: 12),
+          Expanded(child: TextField(
+            controller: _hexCtrl,
+            style: TextStyle(fontSize: 13, color: _hexError ? Colors.redAccent : Colors.white, fontFamily: 'monospace'),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              filled: true, fillColor: Colors.white.withOpacity(0.06),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: _hexError ? Colors.redAccent : Colors.white24)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: _hexError ? Colors.redAccent.withOpacity(0.5) : Colors.white12)),
+              hintText: '#RRGGBB', hintStyle: const TextStyle(color: Colors.white24, fontSize: 12)),
+            onChanged: _fromHex,
+            inputFormatters: [LengthLimitingTextInputFormatter(7)],
+          )),
+        ]),
+        const SizedBox(height: 14),
+        // Кнопки
+        Row(children: [
+          Expanded(child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(height: 44, decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white24)),
+              child: const Center(child: Text('Отмена',
+                  style: TextStyle(color: Colors.white54, fontSize: 13)))))),
+          const SizedBox(width: 10),
+          Expanded(child: GestureDetector(
+            onTap: () { widget.onPicked(_current); Navigator.pop(context); },
+            child: Container(height: 44, decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: LinearGradient(colors: [c, c.withOpacity(0.7)])),
+              child: const Center(child: Text('Применить',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)))))),
+        ]),
+      ]));
+  }
+}
+
+class _SliderRow extends StatelessWidget {
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+  final Gradient gradient;
+  const _SliderRow(this.label, this.value, this.onChanged, {required this.gradient});
+  @override
+  Widget build(BuildContext context) => Row(children: [
+    SizedBox(width: 16, child: Text(label,
+        style: const TextStyle(fontSize: 10, color: Colors.white38, fontWeight: FontWeight.w700))),
+    const SizedBox(width: 8),
+    Expanded(child: ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Stack(children: [
+        Container(height: 20, decoration: BoxDecoration(gradient: gradient)),
+        // Checkerboard для alpha
+        if (label == 'A') _Checkerboard(size: 10),
+        if (label == 'A') Container(height: 20, decoration: BoxDecoration(gradient: gradient)),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 20, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
+            trackShape: const RectangularSliderTrackShape(),
+            thumbColor: Colors.white, activeTrackColor: Colors.transparent,
+            inactiveTrackColor: Colors.transparent),
+          child: Slider(value: value.clamp(0.0, 1.0), onChanged: onChanged)),
+      ]))),
+  ]);
+}
+
+class _Checkerboard extends StatelessWidget {
+  final double size;
+  const _Checkerboard({required this.size});
+  @override
+  Widget build(BuildContext context) => SizedBox(height: 20, child: CustomPaint(
+    painter: _CheckerPainter(size)));
+}
+
+class _CheckerPainter extends CustomPainter {
+  final double size;
+  _CheckerPainter(this.size);
+  @override void paint(Canvas canvas, Size s) {
+    final p1 = Paint()..color = const Color(0xFFCCCCCC);
+    final p2 = Paint()..color = Colors.white;
+    for (double x = 0; x < s.width; x += size) {
+      for (double y = 0; y < s.height; y += size) {
+        canvas.drawRect(Rect.fromLTWH(x, y, size, size),
+            ((x / size + y / size).toInt() % 2 == 0) ? p1 : p2);
+      }
+    }
+  }
+  @override bool shouldRepaint(_) => false;
+}
+
+
+// ── Preview blob painter ───────────────────────────────────────────────────────
+class _PreviewBlobPainter extends CustomPainter {
+  final List<Color> colors;
+  const _PreviewBlobPainter(this.colors);
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (int i = 0; i < colors.length; i++) {
+      final x = size.width  * (0.3 + i * 0.25);
+      final y = size.height * (0.4 + (i % 2) * 0.3);
+      final r = size.width  * 0.35;
+      canvas.drawCircle(Offset(x, y), r, Paint()
+        ..shader = RadialGradient(
+          colors: [colors[i].withOpacity(0.5), Colors.transparent],
+        ).createShader(Rect.fromCircle(center: Offset(x, y), radius: r)));
+    }
+  }
+  @override bool shouldRepaint(_) => true;
+}
+
+// ── Preset chip ───────────────────────────────────────────────────────────────
+class _PresetChip extends StatelessWidget {
+  final String name;
+  final Color a, a2, bg;
+  final void Function(Color, Color, Color) onTap;
+  const _PresetChip(this.name, this.a, this.a2, this.bg, this.onTap);
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: () => onTap(a, a2, bg),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [a.withOpacity(0.2), a2.withOpacity(0.1)]),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: a.withOpacity(0.4))),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 10, height: 10, decoration: BoxDecoration(color: a, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Text(name, style: TextStyle(fontSize: 11, color: a, fontWeight: FontWeight.w600)),
+      ])));
+}
+
+class FpsMonitor {
+  static bool _lowPerfMode = false;
+  static double _fps       = 60.0;
+  static DateTime? _lastFrame;
+  static int _frameCount   = 0;
+  static double _sum       = 0;
+
+  static bool get lowPerfMode => _lowPerfMode;
+  static double get currentFps => _fps;
+
+  // Вызывается каждый кадр из SchedulerBinding
+  static void onFrame(Duration ts) {
+    final now = DateTime.now();
+    if (_lastFrame != null) {
+      final delta = now.difference(_lastFrame!).inMilliseconds;
+      if (delta > 0 && delta < 200) { // игнорируем аномальные кадры
+        _sum += 1000.0 / delta;
+        _frameCount++;
+      }
+    }
+    _lastFrame = now;
+
+    // Пересчитываем каждые 60 кадров (~1 секунда)
+    if (_frameCount >= 60) {
+      _fps = _sum / _frameCount;
+      _sum = 0; _frameCount = 0;
+
+      // Гистерезис: включаем Low Perf при < 45 fps, выключаем при > 55 fps
+      if (!_lowPerfMode && _fps < 45) {
+        _lowPerfMode = true;
+        _notifyListeners();
+      } else if (_lowPerfMode && _fps > 55) {
+        _lowPerfMode = false;
+        _notifyListeners();
+      }
+    }
+  }
+
+  static final List<VoidCallback> _listeners = [];
+  static void addListener(VoidCallback cb)    { _listeners.add(cb); }
+  static void removeListener(VoidCallback cb) { _listeners.remove(cb); }
+  static void _notifyListeners()              { for (final cb in _listeners) cb(); }
+}
+
+// Глобальный экземпляр — регистрируем frame callback в main()
+bool _fpsMonitorStarted = false;
+void startFpsMonitor() {
+  if (_fpsMonitorStarted) return;
+  _fpsMonitorStarted = true;
+  SchedulerBinding.instance.addPersistentFrameCallback(FpsMonitor.onFrame);
+}
+
+class AuraBlobBg extends StatefulWidget {
+  final Widget child;
+  final bool connected;
+  final bool isLight;
+  const AuraBlobBg({super.key, required this.child, this.connected = false, this.isLight = false});
+  @override State<AuraBlobBg> createState() => _AuraBlobBgState();
+}
+
+class _AuraBlobBgState extends State<AuraBlobBg> with SingleTickerProviderStateMixin {
+  late Ticker _ticker;
+  late final List<_Blob> _blobs;
+  bool _lowPerf = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lowPerf = FpsMonitor.lowPerfMode;
+    FpsMonitor.addListener(_onFpsChange);
+
+    final bc = widget.isLight ? _lightBlobs : _darkBlobs;
+    _blobs = [
+      _Blob(0.15, 0.20,  0.00022,  0.00015, 0.55, bc[0]),
+      _Blob(0.80, 0.15, -0.00018,  0.00020, 0.45, bc[1]),
+      _Blob(0.50, 0.65,  0.00015, -0.00018, 0.60, bc[2]),
+      _Blob(0.20, 0.80,  0.00020, -0.00012, 0.40, bc[3]),
+      _Blob(0.85, 0.75, -0.00016, -0.00014, 0.42, bc[4]),
+      _Blob(0.50, 0.30, -0.00012,  0.00016, 0.35, bc[5]),
+    ];
+    // FIX: используем Ticker напрямую вместо AnimationController+setState
+    // AnimationController вызывал setState на каждый кадр → BLASTBufferQueue overflow
+    // Ticker обновляет только CustomPainter через repaint notifier
+    _ticker = createTicker(_step)..start();
+  }
+
+  void _onFpsChange() {
+    if (!mounted) return;
+    final lp = FpsMonitor.lowPerfMode;
+    if (lp != _lowPerf) {
+      setState(() => _lowPerf = lp);
+      if (lp) { _ticker.stop(); }
+      else    { _ticker.start(); }
+    }
+  }
+
+  void _step(Duration _) {
+    if (_lowPerf || !mounted) return;
+    for (final b in _blobs) {
+      b.x += b.vx; b.y += b.vy;
+      if (b.x < -0.2 || b.x > 1.2) b.vx = -b.vx;
+      if (b.y < -0.2 || b.y > 1.2) b.vy = -b.vy;
+    }
+    _blobPainterKey.currentState?._repaint();
+  }
+
+  final _blobPainterKey = GlobalKey<_BlobPainterWidgetState>();
+
+  @override void dispose() {
+    FpsMonitor.removeListener(_onFpsChange);
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Светлая тема: тёплый белый (#F7F8FC) вместо холодного белого — не режет глаза
+    final bg = widget.isLight
+        ? (widget.connected ? const Color(0xFFEDF4FC) : const Color(0xFFF5F6FC))
+        : (widget.connected ? const Color(0xFF030810) : const Color(0xFF050610));
+
+    // Кастомный медиа-фон (фото / GIF / видео)
+    final app = _AppProviderRef.instance;
+    final hasMedia = app != null && app.hasCustomMedia;
+    // opacity медиа-фона — при видео чуть темнее для читаемости UI
+    final mediaOpacity = app?.customMediaType == 'video' ? 0.45 : 0.40;
+
+    return Stack(children: [
+      Container(color: bg),
+      // Медиа-фон поверх цвета
+      if (hasMedia && app != null)
+        Positioned.fill(child: _MediaBackground(
+          path: app.customMediaPath,
+          type: app.customMediaType,
+          opacity: mediaOpacity,
+        )),
+      // Блобы — уменьшаем при медиа чтобы не перегружать
+      if (!_lowPerf)
+        RepaintBoundary(
+          child: Opacity(
+            opacity: hasMedia ? 0.25 : 1.0,
+            child: _BlobPainterWidget(
+              key: _blobPainterKey,
+              blobs: _blobs,
+              connected: widget.connected,
+              isLight: widget.isLight,
+            ),
+          ),
+        ),
+      if (_lowPerf)
+        Opacity(
+          opacity: hasMedia ? 0.20 : 1.0,
+          child: CustomPaint(
+            painter: _BlobPainter(_blobs, widget.connected, widget.isLight),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      widget.child,
+    ]);
+  }
+}
+
+// FIX: отдельный StatefulWidget для CustomPainter — перерисовка только блобов,
+// не всего дерева виджетов
+class _BlobPainterWidget extends StatefulWidget {
+  final List<_Blob> blobs;
+  final bool connected, isLight;
+  const _BlobPainterWidget({super.key, required this.blobs,
+      required this.connected, required this.isLight});
+  @override State<_BlobPainterWidget> createState() => _BlobPainterWidgetState();
+}
+
+class _BlobPainterWidgetState extends State<_BlobPainterWidget> {
+  void _repaint() { if (mounted) setState(() {}); }
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    painter: _BlobPainter(widget.blobs, widget.connected, widget.isLight),
+    child: const SizedBox.expand(),
+  );
+}
+
+class _BlobPainter extends CustomPainter {
+  final List<_Blob> blobs; final bool connected, isLight;
+  _BlobPainter(this.blobs, this.connected, this.isLight);
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (final b in blobs) {
+      final cx = b.x * size.width; final cy = b.y * size.height;
+      final r  = b.r * (size.width > size.height ? size.width : size.height) * 0.65;
+      final op = isLight ? (connected ? 0.35 : 0.25) : (connected ? 0.72 : 0.58);
+      canvas.drawCircle(Offset(cx, cy), r, Paint()
+        ..shader = RadialGradient(
+          colors: [b.color.withOpacity(op), b.color.withOpacity(op * 0.38), Colors.transparent],
+          stops: const [0.0, 0.55, 1.0],
+        ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r)));
+    }
+  }
+  @override bool shouldRepaint(_BlobPainter o) =>
+      o.connected != connected || o.isLight != isLight ||
+      o.blobs.length != blobs.length; // перерисовывать только при реальных изменениях
+}
+
+class GlassBox extends StatelessWidget {
+  final Widget child;
+  final EdgeInsets? padding, margin;
+  final double radius, blur, tintOpacity;
+  final Color? borderColor, tint;
+  const GlassBox({super.key, required this.child, this.padding, this.margin,
+    this.radius = 20, this.borderColor, this.blur = 28, this.tint, this.tintOpacity = 0.10});
+
+  @override
+  Widget build(BuildContext context) {
+    final light = Theme.of(context).brightness == Brightness.light;
+    final bc = borderColor ?? (light ? Colors.white.withOpacity(0.70) : Colors.white.withOpacity(0.22));
+    final grad = light
+        ? LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [
+            Colors.white.withOpacity(0.55), Colors.white.withOpacity(0.30),
+            (tint ?? const Color(0xFF90CAF9)).withOpacity(tintOpacity)], stops: const [0,0.5,1])
+        : LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [
+            Colors.white.withOpacity(0.14), Colors.white.withOpacity(0.05),
+            (tint ?? const Color(0xFF1565C0)).withOpacity(tintOpacity)], stops: const [0,0.5,1]);
+    return Container(margin: margin, child: ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(filter: ui.ImageFilter.blur(
+          sigmaX: FpsMonitor.lowPerfMode ? 0 : blur,
+          sigmaY: FpsMonitor.lowPerfMode ? 0 : blur),
+        child: Container(padding: padding,
+          decoration: BoxDecoration(gradient: grad, borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: bc, width: 0.9),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(light ? 0.12 : 0.40), blurRadius: 24, spreadRadius: -6, offset: const Offset(0,4)),
+              BoxShadow(color: Colors.white.withOpacity(light ? 0.30 : 0.04), blurRadius: 1, spreadRadius: 0, offset: const Offset(0,-1)),
+            ]),
+          child: child))));
+  }
+}
+
+class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final Widget title; final List<Widget>? actions;
+  const GlassAppBar({super.key, required this.title, this.actions});
+
+  // preferredSize должен включать высоту статус-бара — иначе AppBar перекрывает контент
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+
+  @override
+  Widget build(BuildContext context) {
+    final mq    = MediaQuery.of(context);
+    final top   = mq.padding.top;   // высота статус-бара / челки / Dynamic Island
+    final light = Theme.of(context).brightness == Brightness.light;
+
+    // FIX: preferredSize = kToolbarHeight, Flutter добавляет top padding сам
+    // через Scaffold.appBar механизм. Нам нужно только добавить внутренний отступ.
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(
+          sigmaX: FpsMonitor.lowPerfMode ? 0 : 30,
+          sigmaY: FpsMonitor.lowPerfMode ? 0 : 30),
+        child: Container(
+          // Scaffold.appBar уже получает top padding от системы
+          // Наш Container занимает ровно kToolbarHeight
+          height: kToolbarHeight + top,
+          padding: EdgeInsets.only(top: top, left: 16, right: 8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter, end: Alignment.bottomCenter,
+              colors: light
+                  ? [Colors.white.withOpacity(0.70), Colors.white.withOpacity(0.40)]
+                  : [Colors.white.withOpacity(0.12), Colors.white.withOpacity(0.05)]),
+            border: Border(bottom: BorderSide(
+                color: light
+                    ? Colors.black.withOpacity(0.08)
+                    : Colors.white.withOpacity(0.10),
+                width: 0.6))),
+          child: Row(
+            children: [Expanded(child: title), if (actions != null) ...actions!]))));
+  }
+
+  // preferredSize с учётом статус-бара вычисляется динамически в build,
+  // поэтому передаём увеличенный размер через static helper
+  static double totalHeight(BuildContext context) =>
+      kToolbarHeight + MediaQuery.of(context).padding.top;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  AURA SCAFFOLD  —  Универсальная обёртка для ВСЕХ экранов
+//
+//  Решает сразу все проблемы с insets на любом устройстве:
+//  - Челки (Dynamic Island, punch-hole)
+//  - Навигационная полоска жестов Android
+//  - Складные экраны (Z Fold)
+//  - Landscape orientation
+//  - Планшеты с разным соотношением сторон
+//
+//  Используется в _SubPage и QrScanScreen.
+//  MainShell имеет свой SafeArea(bottom: false) + BottomNav со своим padding.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class AuraScaffold extends StatelessWidget {
+  final String title;
+  final Widget body;
+  final Widget? trailing;
+  final bool extendBehindAppBar;
+
+  const AuraScaffold({
+    super.key,
+    required this.title,
+    required this.body,
+    this.trailing,
+    this.extendBehindAppBar = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final light = Theme.of(context).brightness == Brightness.light;
+    final mq    = MediaQuery.of(context);
+
+    return AuraBlobBg(isLight: light, child: Scaffold(
+      backgroundColor: Colors.transparent,
+      // Scaffold сам применяет padding.top к AppBar — не дублируем
+      extendBodyBehindAppBar: extendBehindAppBar,
+      appBar: GlassAppBar(
+        title: Text(title, style: TextStyle(
+            fontSize: 14, fontWeight: FontWeight.w800,
+            letterSpacing: 1, color: _textColor(context))),
+        actions: [
+          if (trailing != null)
+            Padding(padding: const EdgeInsets.only(right: 16), child: trailing),
+        ],
+      ),
+      body: SafeArea(
+        // top: false — AppBar уже обрабатывает верхний inset
+        // left/right: true — боковые вырезы (Galaxy Z Fold, landscape)
+        // bottom: true — навигационная полоска жестов
+        top:    false,
+        left:   true,
+        right:  true,
+        bottom: true,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: context.contentMaxW),
+            child: body,
+          ),
+        ),
+      ),
+    ));
+  }
+}
+
+
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await S.init();
+  await _autoConnect.load();
+  startFpsMonitor(); // FPS мониторинг — авто-деградация на слабых устройствах
+  runApp(MultiProvider(providers: [
+    ChangeNotifierProvider(create: (_) => AppProvider()),
+    ChangeNotifierProvider(create: (_) => VpnProvider()),
+    ChangeNotifierProvider.value(value: _autoConnect),
+  ], child: const AuraApp()));
+}
+
+class AuraApp extends StatelessWidget {
+  const AuraApp({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final app = Provider.of<AppProvider>(context);
+    // Регистрируем singleton для AuraBlobBg (не имеет доступа к Provider)
+    _AppProviderRef.register(app);
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Aura VPN',
+      themeMode: app.themeMode,
+      theme: _buildLightTheme(),
+      darkTheme: _buildDarkTheme(app.skin.bgDark),
+      home: const MainShell(),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  HOME SCREEN
+// ═══════════════════════════════════════════════════════════════
+
+class MainShell extends StatefulWidget {
+  const MainShell({super.key});
+  @override State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell> {
+  int _tab = 0;
+
+  // Публичный метод для переключения таба из дочерних виджетов
+  void switchTab(int i) => setState(() => _tab = i);
+
+  @override
+  Widget build(BuildContext context) {
+    final light = Theme.of(context).brightness == Brightness.light;
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      // SafeArea НЕ нужен здесь — каждый дочерний Scaffold сам управляет insets:
+      // - GlassAppBar добавляет padding.top вручную (учитывает челку/Dynamic Island)
+      // - _AuraBottomNav добавляет padding.bottom (навигационная полоска)
+      // - Добавление SafeArea сюда вызовет двойной отступ сверху
+      body: IndexedStack(index: _tab, children: const [
+        HomeScreen(),
+        ServersScreen(),
+        SettingsScreen(),
+      ]),
+      bottomNavigationBar: _AuraBottomNav(
+        current: _tab,
+        onTap: (i) => setState(() => _tab = i),
+        light: light,
+      ),
+    );
+  }
+}
+
+// ── Bottom Navigation ─────────────────────────────────────────────────────────
+
+class _AuraBottomNav extends StatelessWidget {
+  final int current; final ValueChanged<int> onTap; final bool light;
+  const _AuraBottomNav({required this.current, required this.onTap, required this.light});
+
+  static const _items = [
+    (Icons.vpn_key_rounded,       Icons.vpn_key_outlined,       'VPN'),
+    (Icons.dns_rounded,           Icons.dns_outlined,            'Серверы'),
+    (Icons.settings_rounded,      Icons.settings_outlined,       'Настройки'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(child: BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+      child: Container(
+        height: 60 + MediaQuery.of(context).padding.bottom,
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+        decoration: BoxDecoration(
+          color: light
+              ? Colors.white.withOpacity(0.80)
+              : const Color(0xFF0A0814).withOpacity(0.90),
+          border: Border(top: BorderSide(
+              color: light
+                  ? Colors.black.withOpacity(0.08)
+                  : Colors.white.withOpacity(0.08),
+              width: 0.5))),
+        child: Row(children: _items.asMap().entries.map((e) {
+          final sel = current == e.key;
+          final item = e.value;
+          return Expanded(child: GestureDetector(
+            onTap: () => onTap(e.key),
+            behavior: HitTestBehavior.opaque,
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+                decoration: BoxDecoration(
+                  color: sel ? _accent.withOpacity(0.12) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  border: sel ? Border.all(
+                      color: _accent.withOpacity(0.25), width: 0.8) : null),
+                child: Icon(sel ? item.$1 : item.$2,
+                  size: 20,
+                  color: sel ? _accent : (light ? Colors.black38 : Colors.white30))),
+              const SizedBox(height: 2),
+              Text(item.$3, style: TextStyle(
+                fontSize: 9,
+                color: sel ? _accent : (light ? Colors.black38 : Colors.white30),
+                fontWeight: sel ? FontWeight.w700 : FontWeight.normal,
+                letterSpacing: 0.3)),
+            ])));
+        }).toList()),
+      )));
+  }
+}
+
+// ── Servers Screen (вкладка серверов) ─────────────────────────────────────────
+
