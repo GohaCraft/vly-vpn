@@ -1,4 +1,4 @@
-plugins {
+﻿plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
@@ -6,16 +6,16 @@ plugins {
 
 android {
     namespace    = "com.example.vpn_new"
-    compileSdk   = 34
+    compileSdk   = 35
     ndkVersion   = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
 
     defaultConfig {
@@ -28,14 +28,13 @@ android {
 
     buildTypes {
         release {
-            signingConfig   = signingConfigs.getByName("debug")
-            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
 
 flutter {
