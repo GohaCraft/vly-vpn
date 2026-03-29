@@ -497,10 +497,305 @@ class StealthEngine {
   static int    get utlsIndexPublic => _uTlsIndex;
   static int    get rstCountPublic  => _rstCount;
   static String get cachedSniPublic => _cachedSni ?? '—';
+
+  // ── 10. Hysteria2 конфиг builder ──────────────────────────────────────────
+  // Hysteria2 использует QUIC (UDP) — ТСПУ хуже справляется с UDP DPI.
+  // Salamander обфускация XOR-ит каждый QUIC пакет с паролем → fingerprint скрыт.
+  // Формат ноды: hy2://password@host:port?sni=...&obfs=salamander&obfs-password=...
+  static Map<String, dynamic> buildHysteria2Config(String nodeLink) {
+    // Парсим hy2:// URI
+    // hy2://password@host:port?sni=...&insecure=...&obfs=salamander&obfs-password=...
+    try {
+      final uri      = Uri.parse(nodeLink.replaceFirst('hy2://', 'https://'));
+      final auth     = uri.userInfo;            // password (Hysteria2 auth)
+      final host     = uri.host;
+      final port     = uri.port > 0 ? uri.port : 443;
+      final q        = uri.queryParameters;
+      final sni      = q['sni']?.isNotEmpty == true ? q['sni']! : pickLiveSniFromCache();
+      final insecure = q['insecure'] == '1' || q['insecure'] == 'true';
+      final obfs     = q['obfs'] ?? 'salamander';
+      final obfsPw   = q['obfs-password'] ?? q['obfsPassword'] ?? '';
+      final upMbps   = int.tryParse(q['up'] ?? '') ?? 50;
+      final downMbps = int.tryParse(q['down'] ?? '') ?? 200;
+
+      // Hysteria2 нативный JSON конфиг (hysteria2 клиент или sing-box)
+      final cfg = <String, dynamic>{
+        'server': '$host:$port',
+        'auth':   auth,
+        'tls': {
+          'sni':      sni,
+          'insecure': insecure,
+        },
+        'bandwidth': {
+          'up':   '${upMbps} mbps',
+          'down': '${downMbps} mbps',
+        },
+        'fastOpen': true,
+        // Salamander obfs — скрывает QUIC fingerprint от DPI
+        if (obfs == 'salamander' && obfsPw.isNotEmpty)
+          'obfs': {
+            'type':       'salamander',
+            'salamander': {'password': obfsPw},
+          },
+        // SOCKS5 прокси для приложений
+        'socks5': {'listen': '127.0.0.1:10808'},
+        'http':   {'listen': '127.0.0.1:10809'},
+        // Логирование — минимум в продакшне
+        'log': {'level': 'warn'},
+        // Quic параметры — адаптивные под российские сети
+        'quic': {
+          'initStreamReceiveWindow':     '8388608',   // 8 MB
+          'maxStreamReceiveWindow':      '8388608',
+          'initConnReceiveWindow':       '20971520',  // 20 MB
+          'maxConnReceiveWindow':        '20971520',
+          'maxIdleTimeout':              '30s',
+          'keepAlivePeriod':             '10s',
+          'disablePathMTUDiscovery':     false,
+        },
+      };
+
+      return cfg;
+    } catch (e) {
+      // Fallback: минимальный конфиг
+      return {
+        'server':    '127.0.0.1:443',
+        'auth':      '',
+        'tls':       {'insecure': false},
+        'bandwidth': {'up': '50 mbps', 'down': '200 mbps'},
+        'fastOpen':  true,
+        'socks5':    {'listen': '127.0.0.1:10808'},
+      };
+    }
+  }
+
+  // ── 11. VLESS+Vision полный конфиг builder ────────────────────────────────
+  // Vision = XTLS-rprx-vision: убирает TLS-in-TLS паттерн + добавляет рандомный padding.
+  // Без Vision ТСПУ ML видит "двойное TLS" → помечает как VPN.
+  // С Vision пакеты неотличимы от реального HTTPS браузера (март 2026 анализ).
+  //
+  // IMPORTANT: Vision требует flow=xtls-rprx-vision на обеих сторонах (клиент + сервер).
+  // Если сервер не поддерживает Vision — соединение не установится. Проверяй конфиг.
+  static Map<String, dynamic> buildVlessVisionConfig({
+    required String host,
+    required int    port,
+    required String uuid,
+    required String pbk,     // Reality publicKey (из конфига сервера)
+    required String sid,     // Reality shortId
+    String?         sni,
+    String?         fp,
+  }) {
+    final liveSni = sni ?? pickLiveSniFromCache();
+    final uTls    = fp   ?? nextUTlsProfile();
+
+    return {
+      'outbounds': [
+        {
+          'tag':      'proxy',
+          'protocol': 'vless',
+          'settings': {
+            'vnext': [
+              {
+                'address': host,
+                'port':    port,
+                'users':   [
+                  {
+                    'id':         uuid,
+                    'encryption': 'none',
+                    // XTLS-Vision flow — ключевой параметр обхода
+                    // xtls-rprx-vision-udp443: дополнительно маскирует UDP (QUIC) трафик
+                    'flow':       'xtls-rprx-vision',
+                    'level':      0,
+                  }
+                ],
+              }
+            ],
+          },
+          'streamSettings': {
+            'network':  'tcp',
+            'security': 'reality',
+            'realitySettings': {
+              'serverName':  liveSni,  // SNI = реальный авторитетный домен
+              'fingerprint': uTls,     // TLS fingerprint маскировка
+              'publicKey':   pbk,      // публичный ключ Reality сервера
+              'shortId':     sid,      // short ID для auth
+              'show':        false,
+            },
+            'sockopt': {
+              'tcpNoDelay':  true,
+              'tcpFastOpen': true,
+              // mark=255: нужен для exclude-self трафика на роутинге
+              'mark':        255,
+            },
+          },
+        },
+        // Прямой выход для российских IP (split tunneling)
+        {'tag': 'direct', 'protocol': 'freedom', 'settings': {}},
+        // Блокировка IPv6 (leak prevention)
+        {'tag': 'block',  'protocol': 'blackhole', 'settings': {}},
+      ],
+      'inbounds': [
+        {
+          'tag':      'socks',
+          'protocol': 'socks',
+          'listen':   '127.0.0.1',
+          'port':     10808,
+          'settings': {'auth': 'noauth', 'udp': true},
+        },
+        {
+          'tag':      'http',
+          'protocol': 'http',
+          'listen':   '127.0.0.1',
+          'port':     10809,
+        },
+      ],
+      'dns': {
+        'servers': [
+          // DoH — обходит DNS отравление РКН
+          {'address': 'https://1.1.1.1/dns-query', 'skipFallback': true,
+           'domains': ['geosite:geolocation-!cn']},
+          {'address': 'https://8.8.8.8/dns-query', 'skipFallback': true},
+          {'address': 'localhost', 'domains': ['geosite:cn', 'localhost']},
+        ],
+        'queryStrategy': 'UseIPv4',
+      },
+      'routing': {
+        'domainStrategy': 'IPIfNonMatch',
+        'rules': [
+          // IPv6 блок
+          {'type': 'field', 'ip': ['::/0'], 'outboundTag': 'block'},
+          // Российские сайты — напрямую (белый список)
+          {'type': 'field', 'domain': ['geosite:ru', 'domain:yandex.ru', 'domain:vk.com',
+            'domain:mail.ru', 'domain:ok.ru', 'domain:sber.ru', 'domain:gosuslugi.ru'],
+            'outboundTag': 'direct'},
+          // Российские IP — напрямую
+          {'type': 'field', 'ip': ['geoip:ru', 'geoip:private'], 'outboundTag': 'direct'},
+          // Остальное — через VPN
+          {'type': 'field', 'network': 'tcp,udp', 'outboundTag': 'proxy'},
+        ],
+      },
+      // Anti-TCP-freeze политика (ТСПУ март 2026)
+      'policy': {
+        'levels': {
+          '0': {
+            'handshake':    4,
+            'connIdle':     300,
+            'uplinkOnly':   2,
+            'downlinkOnly': 5,
+            'bufferSize':   512,
+          }
+        }
+      },
+    };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  SELF-HEALING MIRROR — Dead Drop система получения нод
-//  Если основной API недоступен, пробуем GitHub Gist → DNS TXT
+//  ZAPRET BRIDGE — интеграция с локальным Zapret DPI-bypass
+//  Zapret работает на сетевом уровне (nfqueue/windivert) — дополняет VPN.
+//  Использовать как fallback когда ТСПУ активно блокирует TLS handshake.
+//  GitHub: github.com/bol-van/zapret
 // ═══════════════════════════════════════════════════════════════════════════════
+class ZapretBridge {
+  static final _rng = Random();
+
+  // Проверяем доступность Zapret на локальном порту
+  // Zapret запускается отдельным процессом (windivert/nfqueue), нам нужен его SOCKS5/HTTP порт
+  static Future<bool> isAvailable() async {
+    final port = (kZapretConfig['httpPort'] as int? ?? 1080);
+    try {
+      final sock = await Socket.connect(
+        '127.0.0.1', port,
+        timeout: const Duration(milliseconds: 500),
+      );
+      await sock.close();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Возвращает прокси URL если Zapret доступен
+  static Future<String?> getProxyUrl() async {
+    if (!(kZapretConfig['enabled'] as bool? ?? false)) return null;
+    if (!await isAvailable()) return null;
+    final port = (kZapretConfig['httpPort'] as int? ?? 1080);
+    return 'http://127.0.0.1:$port';
+  }
+
+  // Патчим Xray конфиг чтобы трафик шёл через Zapret как промежуточный прокси.
+  // Схема: App → Xray SOCKS(10808) → Zapret(1080) → [DPI bypass] → VPN сервер
+  // Zapret применяет fake-SNI / disorder / TTL-trick на уровне пакетов.
+  static Map<String, dynamic> patchConfigForZapret(
+      Map<String, dynamic> config, {
+      String strategy = 'fake_sni',
+    }) {
+    if (!(kZapretConfig['enabled'] as bool? ?? false)) return config;
+
+    final port    = (kZapretConfig['httpPort'] as int? ?? 1080);
+    final fakeSni = kZapretConfig['fakeSniFallback'] as String? ?? 'www.yandex.ru';
+
+    // Добавляем Zapret как dialerProxy для VPN outbound
+    final outbounds = List<dynamic>.from(config['outbounds'] as List? ?? []);
+    for (final ob in outbounds) {
+      if (ob is! Map) continue;
+      final proto = ob['protocol'] as String? ?? '';
+      if (!['vless', 'vmess', 'trojan'].contains(proto)) continue;
+
+      final ss = Map<String, dynamic>.from(ob['streamSettings'] as Map? ?? {});
+      final so = Map<String, dynamic>.from(ss['sockopt'] as Map? ?? {});
+
+      // Направляем через Zapret SOCKS5 прокси
+      so['dialerProxy'] = 'zapret-out';
+      ss['sockopt'] = so;
+      ob['streamSettings'] = ss;
+    }
+
+    // Guard: не добавлять zapret-out дважды
+    if (!outbounds.any((ob) => ob is Map && ob['tag'] == 'zapret-out')) {
+      outbounds.add({
+        'tag':      'zapret-out',
+        'protocol': 'socks',
+        'settings': {
+          'servers': [
+            {
+              'address': '127.0.0.1',
+              'port':    port,
+            }
+          ],
+        },
+        'streamSettings': {
+          'network': 'tcp',
+          'sockopt': {
+            'tcpNoDelay': true,
+          },
+        },
+      });
+    }
+
+    config['outbounds'] = outbounds;
+
+    // Логируем активацию стратегии
+    config['_zapretStrategy'] = strategy;
+    config['_zapretFakeSni']  = fakeSni;
+
+    return config;
+  }
+
+  // Рекомендует стратегию на основе типа блокировки
+  static String recommendStrategy(BlockType blockType) {
+    switch (blockType) {
+      case BlockType.tlsFingerprint:
+        // ТСПУ видит TLS fingerprint → подменяем SNI + disorder
+        return 'fake_sni';
+      case BlockType.tcpReset:
+        // Активный RST → disorder пакеты + TTL trick
+        return 'disorder';
+      case BlockType.timeout:
+        // Тихая блокировка → split + TTL trick
+        return 'ttl_trick';
+      default:
+        return 'fake_sni';
+    }
+  }
+}
 

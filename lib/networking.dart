@@ -6,11 +6,25 @@ class SelfHealingMirror {
   static const _uas = [
     // FIX v3.0: нейтральные User-Agent — не раскрываем что это VPN клиент
     // 'AuraVPN/5.6.0' идентифицировал трафик для систем мониторинга РКН
-    'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    // Актуализировано 28.03.2026: Chrome 136 / Safari 18.3 / Edge 134
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 13; Redmi Note 12 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.111 Mobile Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
   ];
   static String get _ua => _uas[_rng.nextInt(_uas.length)];
+
+  // Метка источника для логирования
+  static String _mirrorLabel(String url) {
+    if (url.contains('yandex'))    return 'Yandex';
+    if (url.contains('vk.com') || url.contains('userapi')) return 'VK';
+    if (url.contains('github'))    return 'GitHub';
+    if (url.contains('jsdelivr'))  return 'jsDelivr';
+    if (url.contains('gist'))      return 'Gist';
+    return Uri.parse(url).host;
+  }
 
   static Future<List<String>> fetchNodes(void Function(String) log) async {
     // Сначала пробуем основной API
@@ -34,7 +48,7 @@ class SelfHealingMirror {
         if (res.statusCode == 200) {
           final nodes = _validateNodes(res.body);
           if (nodes.isNotEmpty) {
-            log('✅ Nodes from ${mirror.contains('github') ? 'GitHub' : 'Mirror'}: ${nodes.length}');
+            log('✅ Nodes from ${_mirrorLabel(mirror)}: ${nodes.length}');
             return nodes;
           }
         }
@@ -249,15 +263,21 @@ class BypassRulesEngine {
     // TCP reset / TLS fingerprint — самое частое у РКН
     {'id': 'tcp_reset', 'triggers': ['tcpReset', 'tlsFingerprint'], 'strategies': [
       {'priority': 1, 'type': 'rotate_reality_sni',  'params': {}},
-      {'priority': 2, 'type': 'change_transport',    'params': {'transport': 'ws',   'path': '/'}},
-      {'priority': 3, 'type': 'change_transport',    'params': {'transport': 'grpc', 'service': 'gun'}},
-      {'priority': 4, 'type': 'change_port',         'params': {'port': 443}},
-      {'priority': 5, 'type': 'change_port',         'params': {'port': 8443}},
-      {'priority': 6, 'type': 'change_port',         'params': {'port': 80}},
-      {'priority': 7, 'type': 'add_reality_sni',     'params': {'sni': 'dl.google.com'}},
-      {'priority': 8, 'type': 'add_reality_sni',     'params': {'sni': 'update.microsoft.com'}},
-      {'priority': 9, 'type': 'trojan_ws_fallback',  'params': {'port': 443, 'path': '/api/v1'}},
-      {'priority': 10,'type': 'cdn_fallback',         'params': {'url': 'aura-vpn.workers.dev'}},
+      {'priority': 2, 'type': 'add_reality_sni',     'params': {'sni': 'www.yandex.ru'}},    // Яндекс — Tier 0
+      {'priority': 3, 'type': 'add_reality_sni',     'params': {'sni': 'vk.com'}},            // VK — Tier 1
+      {'priority': 4, 'type': 'change_transport',    'params': {'transport': 'ws',   'path': '/'}},
+      {'priority': 5, 'type': 'change_transport',    'params': {'transport': 'grpc', 'service': 'gun'}},
+      {'priority': 6, 'type': 'change_port',         'params': {'port': 443}},
+      {'priority': 7, 'type': 'change_port',         'params': {'port': 8443}},
+      {'priority': 8, 'type': 'change_port',         'params': {'port': 80}},
+      {'priority': 9, 'type': 'add_reality_sni',     'params': {'sni': 'dl.google.com'}},
+      {'priority': 10,'type': 'add_reality_sni',     'params': {'sni': 'update.microsoft.com'}},
+      {'priority': 11,'type': 'trojan_ws_fallback',  'params': {'port': 443, 'path': '/api/v1'}},
+      // Hysteria2 fallback: UDP/QUIC обходит TCP-блокировки ТСПУ
+      {'priority': 12,'type': 'hysteria2_fallback',  'params': {'obfs': 'salamander'}},
+      // Zapret: локальный DPI bypass как последний рубеж перед CDN
+      {'priority': 13,'type': 'zapret_bypass',       'params': {'strategy': 'disorder'}},
+      {'priority': 14,'type': 'cdn_fallback',         'params': {'url': 'aura-vpn.workers.dev'}},
     ]},
     // DNS отравление
     {'id': 'dns', 'triggers': ['dnsPoisoning'], 'strategies': [
@@ -280,23 +300,33 @@ class BypassRulesEngine {
     {'id': 'full', 'triggers': ['ipBlocked', 'timeout', 'serviceBlocked'], 'strategies': [
       {'priority': 1, 'type': 'switch_node',          'params': {}},
       {'priority': 2, 'type': 'rotate_reality_sni',   'params': {}},
-      {'priority': 3, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/cdn'}},
-      {'priority': 4, 'type': 'change_transport',     'params': {'transport': 'grpc', 'service': 'gun'}},
-      {'priority': 5, 'type': 'cdn_fallback',          'params': {'url': 'aura-vpn.workers.dev'}},
-      {'priority': 6, 'type': 'cdn_fallback',          'params': {'url': 'aura-cdn.pages.dev'}},
-      {'priority': 7, 'type': 'shadow_fallback',       'params': {}},
+      {'priority': 3, 'type': 'add_reality_sni',      'params': {'sni': 'www.yandex.ru'}},   // Яндекс
+      {'priority': 4, 'type': 'add_reality_sni',      'params': {'sni': 'vk.com'}},           // VK
+      {'priority': 5, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/cdn'}},
+      {'priority': 6, 'type': 'change_transport',     'params': {'transport': 'grpc', 'service': 'gun'}},
+      // Hysteria2 — QUIC/UDP обходит IP-блокировки лучше TCP
+      {'priority': 7, 'type': 'hysteria2_fallback',   'params': {'obfs': 'salamander'}},
+      // Zapret DPI bypass перед CDN
+      {'priority': 8, 'type': 'zapret_bypass',        'params': {'strategy': 'fake_sni'}},
+      {'priority': 9, 'type': 'cdn_fallback',          'params': {'url': 'aura-vpn.workers.dev'}},
+      {'priority': 10,'type': 'cdn_fallback',          'params': {'url': 'aura-cdn.pages.dev'}},
+      {'priority': 11,'type': 'shadow_fallback',       'params': {}},
     ]},
     // Stealth: TLS fingerprint / сервисная блокировка
     {'id': 'stealth_tls', 'triggers': ['tlsFingerprint', 'serviceBlocked'], 'strategies': [
       {'priority': 1, 'type': 'rotate_reality_sni',   'params': {}},
-      {'priority': 2, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/'}},
-      {'priority': 3, 'type': 'add_reality_sni',      'params': {'sni': 'dl.google.com'}},
-      {'priority': 4, 'type': 'add_reality_sni',      'params': {'sni': 'fonts.googleapis.com'}},
-      {'priority': 5, 'type': 'add_reality_sni',      'params': {'sni': 'update.microsoft.com'}},
-      {'priority': 6, 'type': 'add_reality_sni',      'params': {'sni': 'gateway.icloud.com'}},
-      {'priority': 7, 'type': 'add_reality_sni',      'params': {'sni': 'mask.icloud.com'}},
-      {'priority': 8, 'type': 'trojan_ws_fallback',   'params': {'port': 443, 'path': '/stream'}},
-      {'priority': 9, 'type': 'cdn_fallback',          'params': {'url': 'aura-vpn.workers.dev'}},
+      {'priority': 2, 'type': 'add_reality_sni',      'params': {'sni': 'www.yandex.ru'}},   // Tier 0
+      {'priority': 3, 'type': 'add_reality_sni',      'params': {'sni': 'vk.com'}},           // Tier 1
+      {'priority': 4, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/'}},
+      {'priority': 5, 'type': 'add_reality_sni',      'params': {'sni': 'dl.google.com'}},
+      {'priority': 6, 'type': 'add_reality_sni',      'params': {'sni': 'fonts.googleapis.com'}},
+      {'priority': 7, 'type': 'add_reality_sni',      'params': {'sni': 'update.microsoft.com'}},
+      {'priority': 8, 'type': 'add_reality_sni',      'params': {'sni': 'gateway.icloud.com'}},
+      {'priority': 9, 'type': 'add_reality_sni',      'params': {'sni': 'mask.icloud.com'}},
+      {'priority': 10,'type': 'trojan_ws_fallback',   'params': {'port': 443, 'path': '/stream'}},
+      // Zapret fake_sni: маскировка под разрешённый домен
+      {'priority': 11,'type': 'zapret_bypass',        'params': {'strategy': 'fake_sni'}},
+      {'priority': 12,'type': 'cdn_fallback',          'params': {'url': 'aura-vpn.workers.dev'}},
     ]},
     // Stealth: TCP reset (активная блокировка ТСПУ)
     {'id': 'stealth_reset', 'triggers': ['tcpReset'], 'strategies': [
@@ -598,6 +628,58 @@ class BypassRulesEngine {
           q['serverName'] = cdnUrl;   // FIX: required by some v2ray versions
           q['fp']         = StealthEngine.nextUTlsProfile();
           link = uri.replace(queryParameters: q).toString();
+        } catch (_) {}
+        break;
+
+      // Hysteria2 fallback — переключение на QUIC/UDP протокол.
+      // Когда TCP заблокирован ТСПУ, Hysteria2 продолжает работать через UDP.
+      // Salamander obfs скрывает QUIC fingerprint — выглядит как обычный UDP.
+      // Нода должна иметь Hysteria2 сервер на том же хосте (или мы берём из пула).
+      // Если hy2:// нода уже есть в конфиге — просто добавляем Salamander obfs.
+      case 'hysteria2_fallback':
+        try {
+          if (link.startsWith('hy2://') || link.startsWith('hysteria2://')) {
+            // Уже Hysteria2 — добавляем/усиливаем obfs параметры
+            final uri  = Uri.parse(link.replaceFirst(RegExp(r'^hysteria2://'), 'hy2://'));
+            final q    = Map<String, String>.from(uri.queryParameters);
+            final obfs = p['obfs'] as String? ?? 'salamander';
+            q['obfs'] = obfs;
+            // Если нет obfs-password — генерируем случайный (16 hex символов)
+            if ((q['obfs-password'] ?? '').isEmpty) {
+              final pw = List.generate(8, (_) => Random().nextInt(256))
+                  .map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+              q['obfs-password'] = pw;
+            }
+            // Обновляем SNI на российский авторитетный домен
+            if ((q['sni'] ?? '').isEmpty) {
+              q['sni'] = StealthEngine.pickLiveSniFromCache();
+            }
+            link = uri.replace(queryParameters: q).toString()
+                .replaceFirst('hy2://', 'hy2://');
+          } else {
+            // Не Hysteria2 нода — помечаем что нужен фоллбэк на hy2 из пула
+            // Реальное переключение происходит в VpnProvider._tryHysteria2Fallback()
+            // Здесь просто добавляем маркер в ссылку
+            link = '$link#hy2_fallback_needed';
+          }
+        } catch (_) {}
+        break;
+
+      // Zapret DPI bypass — активирует локальный Zapret как промежуточный прокси.
+      // Zapret работает на уровне пакетов (nfqueue/windivert) — не меняет VPN протокол.
+      // Эффективен когда ТСПУ блокирует по TLS fingerprint или делает TCP RST.
+      // Стратегии: fake_sni | disorder | split | ttl_trick
+      // ВАЖНО: Zapret должен быть установлен и запущен на устройстве отдельно.
+      case 'zapret_bypass':
+        try {
+          final strategy = p['strategy'] as String? ?? 'fake_sni';
+          // Zapret не меняет VPN ссылку — он работает на уровне ОС.
+          // Помечаем ссылку что нужен Zapret, VpnProvider активирует ZapretBridge.
+          // Используем fragment URI (#) чтобы не ломать парсинг протокола.
+          if (!link.contains('zapret=')) {
+            final sep = link.contains('#') ? '&' : '#';
+            link = '$link${sep}zapret=$strategy';
+          }
         } catch (_) {}
         break;
 

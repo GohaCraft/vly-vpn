@@ -27,43 +27,82 @@ const String kNodesUrl          = '$kControlPlaneUrl/nodes.json';
 
 // ── Stealth Engine 2.0 — Dead Drop зеркала ──────────────────────────────────
 // Если основной API недоступен — берём ноды из этих источников
+// Порядок: сначала Яндекс/VK (белый список РКН) → потом GitHub → DNS TXT
 const List<String> kDeadDropMirrors = [
+  // ── Tier 0: Яндекс — всегда белый список РКН (AS13238) ───────────────────
+  // storage.yandexcloud.net: S3-совместимое Object Storage, Яндекс CDN
+  // Не блокируется т.к. используется тысячами российских сайтов
+  'https://storage.yandexcloud.net/auravpn-nodes/nodes.json',
+  // Яндекс Диск public link (через get.disk.yandex.net — белый список)
+  'https://getfile.dokpub.com/yandex/get/https://disk.yandex.ru/d/auravpn-nodes',
+
+  // ── Tier 1: VK — крупнейшая российская соцсеть (AS47541) ─────────────────
+  // userapi.com / vk.com CDN — блокировка означает падение ВКонтакте
+  'https://vk.com/doc-auravpn_nodes',             // VK Documents (публичный)
+  'https://sun6-21.userapi.com/auravpn/nodes.json', // VK CDN edge
+
+  // ── Tier 2: GitHub (международный, может быть заблокирован) ──────────────
   'https://raw.githubusercontent.com/auravpn/nodes/main/nodes.json',
   'https://gist.githubusercontent.com/auravpn/nodes/raw/nodes.json',
+
+  // ── Tier 3: jsDelivr CDN — зеркало GitHub через CDN ─────────────────────
+  // jsDelivr использует Cloudflare + Fastly — сложнее заблокировать
+  'https://cdn.jsdelivr.net/gh/auravpn/nodes@main/nodes.json',
+
   // DNS TXT: dig TXT nodes.auravpn.app — содержит base64 списка нод
 ];
 const String kDeadDropDnsTxt = 'nodes.auravpn.app';
 
 // Reality SNI пул — высокоавторитетные домены (в белом списке РКН)
-// SNI-пул актуализирован 22.03.2026
+// SNI-пул актуализирован 28.03.2026
 // Источник: анализ CIDR белых списков ТСПУ + net4people/bbs #490 + XTLS/Xray-examples
 // Критерии: (1) IP в CIDR-whitelist РКН, (2) TLS1.3 + поддержка REALITY, (3) не блокируется в РФ
 // ВАЖНО: dest и serverName должны совпадать — XTLS-Vision требует реального TLS с этого сервера
 const List<String> kRealitySniPool = [
-  // ── Tier 1: MICROSOFT — крупнейший CIDR whitelist (20.112.0.0/13) ────────
+  // ── Tier 0: ЯНДЕКС — 100% белый список РКН (AS13238, 77.88.0.0/18) ──────
+  // Самый надёжный выбор для России — Яндекс никогда не блокируется
+  'www.yandex.ru',               // Яндекс главная — иконический российский домен
+  'mail.yandex.ru',              // Яндекс Почта — корпоративный whitelist
+  'yastatic.net',                // Яндекс Static CDN — используется тысячами сайтов
+  'storage.yandexcloud.net',     // Яндекс Object Storage S3 — корпоративный трафик
+  'api.browser.yandex.com',      // Яндекс Браузер API — высокий трафик
+
+  // ── Tier 1: VK / MAIL.RU GROUP (AS47541, 87.240.128.0/18) ───────────────
+  // Блокировка VK = социальный коллапс → ТСПУ никогда не тронет
+  'vk.com',                      // ВКонтакте — крупнейшая соцсеть РФ
+  'userapi.com',                 // VK CDN — медиа контент всех пользователей
+  'mail.ru',                     // Mail.ru — почта, белый список
+  'ok.ru',                       // Одноклассники — белый список
+
+  // ── Tier 2: MICROSOFT — крупнейший CIDR whitelist (20.112.0.0/13) ────────
   'www.microsoft.com',           // Рекомендован XTLS-examples для России/Ирана
   'login.microsoft.com',         // Microsoft Login — высокий корпоративный трафик
   'login.microsoftonline.com',   // Azure AD OAuth — в белом списке РКН
   'update.microsoft.com',        // Windows Update — критически важен для РКН
   'office.com',                  // Microsoft Office Online
   'teams.microsoft.com',         // Microsoft Teams — корпоративный, всегда whitelist
-  // ── Tier 2: APPLE — iCloud всегда доступен (17.0.0.0/8) ──────────────────
+
+  // ── Tier 3: APPLE — iCloud всегда доступен (17.0.0.0/8) ──────────────────
   'www.apple.com',               // Рекомендован XTLS/Xray-examples как dest
   'gateway.icloud.com',          // iCloud Gateway — Private Relay IP
   'mask.icloud.com',             // iCloud Private Relay — надёжный SNI
   'swscan.apple.com',            // Apple Software Updates — corporate whitelist
-  // ── Tier 3: GOOGLE — максимальный трафик (142.250.0.0/15) ────────────────
+
+  // ── Tier 4: GOOGLE — максимальный трафик (142.250.0.0/15) ────────────────
   'dl.google.com',               // Google Download CDN
   'www.gstatic.com',             // Google Static — connectivitycheck хост
   'accounts.google.com',         // Google Auth
   'play.googleapis.com',         // Google Play
-  // ── Tier 4: CLOUDFLARE — крупнейший CDN (104.16.0.0/13) ─────────────────
+
+  // ── Tier 5: CLOUDFLARE — крупнейший CDN (104.16.0.0/13) ─────────────────
   'www.cloudflare.com',          // Cloudflare главная
   'speed.cloudflare.com',        // Cloudflare Speed Test — в whitelist
-  // ── Tier 5: AMAZON AWS — глобальный CDN (205.251.0.0/17) ─────────────────
+
+  // ── Tier 6: AMAZON AWS — глобальный CDN (205.251.0.0/17) ─────────────────
   'www.amazon.com',              // Рекомендован XTLS/Xray-examples
   'd1.awsstatic.com',            // AWS Static CDN
-  // ── Tier 6: MOZILLA — Firefox в корпоративных whitelist ──────────────────
+
+  // ── Tier 7: MOZILLA — Firefox в корпоративных whitelist ──────────────────
   'addons.mozilla.org',          // Firefox Addons
   'aus5.mozilla.org',            // Firefox Auto-Update
 ];
@@ -74,6 +113,40 @@ const List<String> kCdnFallbackUrls = [
   'https://aura-vpn.workers.dev',  // Cloudflare Workers
   'https://aura-cdn.pages.dev',    // Cloudflare Pages
 ];
+
+// ── Hysteria2 настройки по умолчанию ────────────────────────────────────────
+// Hysteria2 использует QUIC (UDP) — ТСПУ плохо фильтрует UDP трафик
+// Salamander: XOR обфускация QUIC пакетов — скрывает Hysteria fingerprint
+// Порт 443 — выглядит как QUIC/HTTP3 (Chrome, YouTube используют QUIC)
+const kHysteria2Defaults = {
+  'obfs':           'salamander',  // обфускация протокола
+  'obfsPassword':   '',            // заполняется из конфига ноды
+  'sni':            '',            // заполняется из SNI пула
+  'insecure':       false,         // не использовать без крайней нужды
+  'fastOpen':       true,          // TFO — ускоряет переподключения
+  'lazy':           false,         // не ленивое — сразу устанавливаем туннель
+  'bandwidth': {
+    'up':   '50 mbps',
+    'down': '200 mbps',
+  },
+};
+
+// ── Zapret интеграция ────────────────────────────────────────────────────────
+// Zapret — локальный инструмент обхода DPI (не VPN, работает на сетевом уровне)
+// Используется как ДОПОЛНЕНИЕ к VPN когда ТСПУ активно блокирует TLS handshake
+// Режимы: fake_sni (подмена SNI) + disorder (переупорядочивание пакетов)
+// Источник: github.com/bol-van/zapret
+const kZapretConfig = {
+  'enabled':     false,            // по умолчанию выключен — только если VPN упал
+  'httpPort':    1080,             // локальный SOCKS5 порт Zapret
+  'strategies': [
+    'fake_sni',     // подменяет SNI в ClientHello → ТСПУ видит разрешённый домен
+    'disorder',     // переупорядочивает TLS пакеты → DPI не собирает fingerprint
+    'split',        // split TLS ClientHello → аналог fragment в Xray
+    'ttl_trick',    // TTL=5 для первого пакета → ТСПУ не видит, сервер видит
+  ],
+  'fakeSniFallback': 'www.yandex.ru',  // SNI для подмены — Яндекс всегда в whitelist
+};
 
 // Warm-up домены — реальный HTTPS трафик перед VPN туннелем
 // Warm-up домены обновлены март 2026:
