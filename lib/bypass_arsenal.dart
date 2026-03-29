@@ -115,6 +115,18 @@ class BypassArsenal {
     {'id': 98,  'name': 'SNI rotate final',          'type': 'rotate_reality_sni',  'priority': 98, 'params': {}},
     {'id': 99,  'name': 'Switch node final',         'type': 'switch_node',         'priority': 99, 'params': {}},
     {'id': 100, 'name': 'Shadow final CDN',          'type': 'shadow_fallback',     'priority': 100,'params': {}},
+    // ── TIER STEALTH 2026: Fragmented Reality + Whitelist bypass ─────────────
+    // Март 2026: РКН использует JA4+ fingerprint — нужна фрагментация первого TLS пакета
+    {'id': 101, 'name': '🔀 Fragmented Reality 1-5b', 'type': 'fragmented_reality',  'priority': 0,  'params': {'fragSize':1, 'delayMs':50,  'sni':'yandex.ru'}},
+    {'id': 102, 'name': '🔀 Fragmented Reality 3b',   'type': 'fragmented_reality',  'priority': 0,  'params': {'fragSize':3, 'delayMs':50,  'sni':'ya.ru'}},
+    {'id': 103, 'name': '🔀 Fragmented Reality 5b',   'type': 'fragmented_reality',  'priority': 0,  'params': {'fragSize':5, 'delayMs':50,  'sni':'vk.com'}},
+    {'id': 104, 'name': '🛡 Whitelist: Yandex SNI',   'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'yandex.ru', 'tier':0}},
+    {'id': 105, 'name': '🛡 Whitelist: VK SNI',       'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'vk.com',    'tier':1}},
+    {'id': 106, 'name': '🛡 Whitelist: mail.ru SNI',  'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'mail.ru',   'tier':1}},
+    {'id': 107, 'name': '🚀 Hysteria2 UDP fallback',  'type': 'hysteria2_fallback',   'priority': 0, 'params': {}},
+    {'id': 108, 'name': '🔀 Fragment 2b delay 30ms',  'type': 'fragmented_reality',   'priority': 0, 'params': {'fragSize':2, 'delayMs':30,  'sni':'mail.yandex.ru'}},
+    {'id': 109, 'name': '🔀 Fragment 1b delay 100ms', 'type': 'fragmented_reality',   'priority': 0, 'params': {'fragSize':1, 'delayMs':100, 'sni':'userapi.com'}},
+    {'id': 110, 'name': '🛡 Whitelist: MS Update',    'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'update.microsoft.com','tier':2}},
   ];
 
   static final _rng = Random();

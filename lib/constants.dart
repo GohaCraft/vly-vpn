@@ -148,6 +148,11 @@ const kZapretConfig = {
   'fakeSniFallback': 'www.yandex.ru',  // SNI для подмены — Яндекс всегда в whitelist
 };
 
+// Zapret/GoodbyeDPI локальный порт (запускается отдельно на устройстве)
+const int    kZapretLocalPort     = 1080;  // SOCKS5 порт Zapret
+const String kZapretDefaultSni    = 'www.microsoft.com'; // SNI для fake_sni стратегии
+
+
 // Warm-up домены — реальный HTTPS трафик перед VPN туннелем
 // Warm-up домены обновлены март 2026:
 // Используем те же URL что запрашивает Android при подключении к WiFi
@@ -208,12 +213,17 @@ const kStealthUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) '
 
 // Пул UA для ротации — каждый запрос выглядит как другое устройство
 const kStealthUAPool = [
-  'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.111 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 13; Redmi Note 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.135 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; motorola edge 50) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; Pixel 7a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.111 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 12; POCOPHONE F1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.135 Mobile Safari/537.36',
+  // Chrome 137 Mobile (март 2026) — актуальные JA4+ fingerprint не под блокировкой
+  'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.55 Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 14; SM-A556B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 14; Redmi Note 13 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 13; POCOF5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.55 Mobile Safari/537.36',
+  // Chrome 136 — запасной (менее новый но работает)
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.125 Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.125 Mobile Safari/537.36',
+
 ];
 
 // Акцентные цвета — управляются через AuraSkin (динамические)
@@ -226,4 +236,3 @@ const _accentGold   = Color(0xFFFFD740);
 // ═══════════════════════════════════════════════════════════════
 //  i18n
 // ═══════════════════════════════════════════════════════════════
-

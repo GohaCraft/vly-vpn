@@ -18,9 +18,12 @@ class HomeScreen extends StatelessWidget {
           title: Row(children: [
             Container(
               decoration: BoxDecoration(
-                boxShadow: [BoxShadow(color: _accent.withOpacity(0.4), blurRadius: 16)]),
+                boxShadow: [BoxShadow(
+                  color: _accent.withOpacity(0.5),
+                  blurRadius: 10, spreadRadius: 1,
+                  offset: Offset.zero)]),
               child: Image.asset('assets/images/aura_logo.png',
-                  width: 72, height: 28, fit: BoxFit.contain)),
+                  width: 90, height: 36, fit: BoxFit.contain)),
             const SizedBox(width: 8),
             Flexible(child: Text(S.t('app_name'),
               overflow: TextOverflow.ellipsis,

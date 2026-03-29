@@ -22,7 +22,8 @@ android {
         applicationId = "com.example.vpn_new"
         minSdk        = flutter.minSdkVersion
         targetSdk     = flutter.targetSdkVersion
-        versionCode   = flutter.versionCode
+        // versionCode по timestamp — каждый билд уникален, обновление без удаления
+        versionCode   = (System.currentTimeMillis() / 1000).toInt()
         versionName   = flutter.versionName
     }
 

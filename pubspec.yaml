@@ -1,7 +1,7 @@
 name: vpn_new
 description: "Aura VPN — Smart bypass, always on"
 publish_to: 'none'
-version: 6.0.0+1
+version: 6.1.0+1
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -9,31 +9,31 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # ── Core ──────────────────────────────────────────────────────────────
   provider: ^6.1.2
   flutter_v2ray: 1.0.10
-
-  # ── Network ───────────────────────────────────────────────────────────
   http: ^1.2.2
-
-  # ── Storage ───────────────────────────────────────────────────────────
   shared_preferences: ^2.3.2
-
-  # ── QR Scanner ────────────────────────────────────────────────────────
   mobile_scanner: ^5.2.3
-
-  # ── UI ────────────────────────────────────────────────────────────────
   cupertino_icons: ^1.0.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter_launcher_icons:
+  # Android adaptive icon
+  android: true
+  image_path: "assets/images/aura_icon.png"
+  adaptive_icon_background: "#050610"   # тёмный фон как bgDark скина Midnight
+  adaptive_icon_foreground: "assets/images/aura_icon.png"
+  min_sdk_android: 24
+  # iOS
+  ios: false
 
 flutter:
   uses-material-design: true
-
   assets:
     - assets/images/aura_icon.png
     - assets/images/aura_logo.png
