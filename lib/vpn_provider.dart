@@ -24,6 +24,11 @@ class VpnProvider extends ChangeNotifier {
   int    stealthHandshakeFails  = 0;      // счётчик провалов handshake
   String stealthStatus          = '';     // статус для UI
 
+  // ── Proxy Chain (DerevVPN-style) — TUN → SOCKS5 → VPN ─────────────────────
+  bool   proxyModeEnabled       = false;  // выключен по умолчанию
+  int    proxyPort              = 1080;   // локальный SOCKS5 порт
+  String proxyModeStatus       = 'OFF';   // статус для UI
+
   // ── Трафик (v4.0) ─────────────────────────────────────────────────────────
   int    trafficUp   = 0; // bytes/s текущая скорость
   int    trafficDown = 0;
@@ -282,6 +287,10 @@ class VpnProvider extends ChangeNotifier {
       await p.setBool('stealth_reality_sni', stealthRealitySni);
       await p.setBool('stealth_warmup',      stealthWarmup);
       await p.setBool('siberia_shield',      siberiaShield);
+      await p.setBool('proxy_mode',          proxyModeEnabled);
+      await p.setInt('proxy_port',           proxyPort);
+      await p.setBool('proxy_mode',          proxyModeEnabled);
+      await p.setInt('proxy_port',           proxyPort);
     } catch (_) {}
   }
 
@@ -293,6 +302,10 @@ class VpnProvider extends ChangeNotifier {
       stealthRealitySni = p.getBool('stealth_reality_sni') ?? true;
       stealthWarmup     = p.getBool('stealth_warmup')      ?? true;
       siberiaShield     = p.getBool('siberia_shield')      ?? true;
+      proxyModeEnabled  = p.getBool('proxy_mode')          ?? false;
+      proxyPort         = p.getInt('proxy_port')           ?? 1080;
+      proxyModeEnabled  = p.getBool('proxy_mode')          ?? false;
+      proxyPort         = p.getInt('proxy_port')           ?? 1080;
     } catch (_) {}
   }
 
@@ -302,6 +315,26 @@ class VpnProvider extends ChangeNotifier {
   // ── Публичные методы (вызываются из UI) ──────────────────────────────────
   void refresh()               { _notify(); }
   String get activeProfileName => _prof.name;
+  bool get isConnecting        => status == 'CONNECTING';
+
+  // ── Proxy Chain — публичные методы ────────────────────────────────────────
+  void toggleProxyMode() {
+    proxyModeEnabled = !proxyModeEnabled;
+    proxyModeStatus = proxyModeEnabled ? 'TUN → SOCKS5:$proxyPort → VPN' : 'OFF';
+    _saveStealthPrefs();
+    _notify();
+    _log(proxyModeEnabled ? '🔀 Proxy Chain ENABLED: TUN → SOCKS5:$proxyPort → VPN'
+                          : '🔀 Proxy Chain DISABLED');
+  }
+
+  void setProxyPort(int port) {
+    if (port >= 1024 && port <= 65535) {
+      proxyPort = port;
+      proxyModeStatus = proxyModeEnabled ? 'TUN → SOCKS5:$proxyPort → VPN' : 'OFF';
+      _saveStealthPrefs();
+      _notify();
+    }
+  }
   void setAiEnabled(bool v)    { _prof.aiEnabled  = v; saveToDisk(); _notify(); }
   void setKillSwitch(bool v)   { _prof.killSwitch = v; saveToDisk(); _notify(); }
 

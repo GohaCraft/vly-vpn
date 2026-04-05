@@ -665,6 +665,44 @@ class BypassRulesEngine {
         } catch (_) {}
         break;
 
+      // Fragmented Reality — TLS фрагментация ClientHello для обхода DPI
+      // FIX BUG-6.2: добавлена обработка fragmented_reality
+      case 'fragmented_reality':
+        try {
+          final uri = Uri.parse(link);
+          final q   = Map<String, String>.from(uri.queryParameters);
+          final fragSize = p['fragSize'] as int? ?? 2;
+          final delayMs  = p['delayMs']  as int? ?? 50;
+          final sni      = p['sni']      as String? ?? StealthEngine.nextSni();
+          q['security']   = 'reality';
+          q['sni']        = sni;
+          q['serverName'] = sni;
+          q['fp']         = StealthEngine.randomFingerprint();
+          // Помечаем для patchConfig что нужна фрагментация
+          if (!link.contains('fragment=')) {
+            final sep = link.contains('#') ? '&' : '#';
+            link = '$link${sep}fragment=${fragSize}b_${delayMs}ms';
+          }
+          link = uri.replace(queryParameters: q).toString();
+        } catch (_) {}
+        break;
+
+      // VLESS Vision whitelist — маскировка под разрешённый SNI
+      // FIX BUG-6.2: добавлена обработка vless_vision_whitelist
+      case 'vless_vision_whitelist':
+        try {
+          final uri = Uri.parse(link);
+          final q   = Map<String, String>.from(uri.queryParameters);
+          final sni = p['sni'] as String? ?? 'yandex.ru';
+          q['security']   = 'tls';
+          q['sni']        = sni;
+          q['serverName'] = sni;
+          q['flow']       = 'xtls-rprx-vision';
+          q['fp']         = StealthEngine.randomFingerprint();
+          link = uri.replace(queryParameters: q).toString();
+        } catch (_) {}
+        break;
+
       // Zapret DPI bypass — активирует локальный Zapret как промежуточный прокси.
       // Zapret работает на уровне пакетов (nfqueue/windivert) — не меняет VPN протокол.
       // Эффективен когда ТСПУ блокирует по TLS fingerprint или делает TCP RST.
@@ -696,6 +734,80 @@ class BypassRulesEngine {
           q['serverName'] = sni;       // FIX: required by some v2ray versions
           q['fp']         = StealthEngine.nextUTlsProfile();
           link = uri.replace(queryParameters: q).toString();
+        } catch (_) {}
+        break;
+
+      // Whitelist domain fronting — обход белого списка мобильных операторов
+      // ТСПУ DROP ALL кроме разрешённых IP (Яндекс, VK, Сбер).
+      // Domain fronting: TLS SNI = разрешённый домен, реальный трафик идёт на наш сервер.
+      case 'whitelist_domain_fronting':
+        try {
+          final endpointKey = p['endpoint'] as String? ?? 'gosuslugi';
+          final endpoint = WhitelistBypassEngine.getEndpointByKey(endpointKey);
+          if (endpoint != null) {
+            // Помечаем ссылку маркером для VpnProvider
+            if (!link.contains('whitelist_df=')) {
+              final sep = link.contains('#') ? '&' : '#';
+              link = '$link${sep}whitelist_df=${endpoint['host']}';
+            }
+          }
+        } catch (_) {}
+        break;
+
+      // Adaptive mimicry — имитация полного цифрового следа пользователя
+      // FIX BUG-1.4: теперь реально применяет персону к конфигу
+      case 'adaptive_mimicry':
+        try {
+          // Генерируем новую персону и сбрасываем старую
+          AdaptiveMimicryEngine.resetPersona();
+          final persona = AdaptiveMimicryEngine.generatePersona();
+          // Помечаем ссылку маркером
+          if (!link.contains('mimicry=')) {
+            final sep = link.contains('#') ? '&' : '#';
+            final personaName = p['persona'] as String? ?? 'auto';
+            link = '$link${sep}mimicry=$personaName';
+          }
+        } catch (_) {}
+        break;
+
+      // QUIC/HTTP3 fallback — DPI ещё не умеет анализировать QUIC
+      // Источник: bypasscore.com/blog/vpn-detection-bypass-dpi-evasion (18.03.2026)
+      // QUIC = UDP-based, encrypted multiplexed streams, indistinguishable from HTTP/3
+      case 'quic_h3_fallback':
+        try {
+          final sni = p['sni'] as String? ?? 'www.google.com';
+          final alpn = p['alpn'] as String? ?? 'h3';
+          // Помечаем ссылку для VpnProvider
+          if (!link.contains('quic=')) {
+            final sep = link.contains('#') ? '&' : '#';
+            link = '$link${sep}quic=$sni&alpn=$alpn';
+          }
+        } catch (_) {}
+        break;
+
+      // HTTP3 CDN Tunnel — CDN edge relay через QUIC
+      // Трафик идёт через CDN (Cloudflare Workers / edge functions)
+      // DPI видит обычный HTTP/3 к CDN, не VPN
+      case 'http3_cdn_tunnel':
+        try {
+          final cdn = p['cdn'] as String? ?? 'cloudflare';
+          if (!link.contains('h3tunnel=')) {
+            final sep = link.contains('#') ? '&' : '#';
+            link = '$link${sep}h3tunnel=$cdn';
+          }
+        } catch (_) {}
+        break;
+
+      // Residential IP — проверка что IP сервера не дата-центр
+      // Дата-центры (AS хостингов) в чёрных списках РКН
+      // Residential IP выглядит как домашний пользователь
+      case 'residential_ip':
+        try {
+          final region = p['region'] as String? ?? 'eu';
+          if (!link.contains('residential=')) {
+            final sep = link.contains('#') ? '&' : '#';
+            link = '$link${sep}residential=$region';
+          }
         } catch (_) {}
         break;
     }

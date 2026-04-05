@@ -63,7 +63,53 @@ enum AuraErrorCode {
   e1047('E-1047', 'QR parse failed',          'QR code has no valid VPN config. Need vless/vmess/ss link.'),
   e1048('E-1048', 'Clipboard empty',          'Clipboard is empty. Copy a vless:// link first.'),
   e1049('E-1049', 'IP check failed',          'All IP APIs (ipapi.co / ip-api.com / ipwho.is) failed.'),
-  e1050('E-1050', 'Watchdog timeout',         'VPN did not reach CONNECTED in 30s. Watchdog fired bypass.');
+  e1050('E-1050', 'Watchdog timeout',         'VPN did not reach CONNECTED in 30s. Watchdog fired bypass.'),
+  // ── Whitelist Bypass (04.04.2026) ─────────────────────────────────────────
+  e1051('E-1051', 'Whitelist active',         'Mobile whitelist detected. Only gov/CDN IPs allowed. Domain fronting applied.'),
+  e1052('E-1052', 'Domain fronting failed',   'All whitelist endpoints blocked. ISP blocking gov portals too.'),
+  e1053('E-1053', 'Endpoint probe timeout',   'Whitelist endpoint probe timed out (3s). Slow network or partial block.'),
+  // ── TSPU Bypass Window ─────────────────────────────────────────────────────
+  e1054('E-1054', 'TSPU bypass detected',     'TSPU overloaded (40K+ rules). Direct connection possible without stealth.'),
+  e1055('E-1055', 'TSPU bypass ended',        'TSPU recovered. Switching back to stealth mode.'),
+  e1056('E-1056', 'Bypass window missed',     'TSPU bypass ended during connection. Reconnecting with stealth.'),
+  // ── Adaptive Mimicry ───────────────────────────────────────────────────────
+  e1057('E-1057', 'Persona generation failed','Cannot generate digital persona. Using default browser fingerprint.'),
+  e1058('E-1058', 'Behavioral delay error',   'Behavioral delay interrupted. ML-DPI may detect uniform traffic.'),
+  e1059('E-1059', 'Network profile error',    'Cannot apply network profile (MTU/TTL). Using OS defaults.'),
+  // ── MTProxy Fallback ───────────────────────────────────────────────────────
+  e1060('E-1060', 'MTProxy DC unreachable',   'Telegram MTProxy DC timed out. Trying next DC.'),
+  e1061('E-1061', 'All MTProxy DCs blocked',  'All 5 Telegram DCs blocked. TSPU targeting MTProxy specifically.'),
+  e1062('E-1062', 'Fake TLS rejected',        'MTProxy Fake TLS rejected by DPI. Telegram CDN pattern detected.'),
+  // ── News Awareness (04.04.2026) ────────────────────────────────────────────
+  e1063('E-1063', 'Yandex/VK/Sber blocked',   'Yandex/VK/Sber now helping MinTsifry block VPN. Endpoints removed.'),
+  e1064('E-1064', 'Gov portals still open',   'Gosuslugi/FNS/SFR still in whitelist. Using these for domain fronting.'),
+  e1065('E-1065', 'CDN endpoints active',     'Cloudflare/AWS/Fastly still neutral. Domain fronting via international CDN.'),
+
+  // ── QUIC/HTTP3 (04.04.2026) ────────────────────────────────────────────────
+  e1066('E-1066', 'QUIC blocked',             'QUIC/UDP blocked by ISP. Falling back to TCP/TLS.'),
+  e1067('E-1067', 'HTTP3 tunnel failed',      'CDN edge relay unreachable. QUIC tunnel failed.'),
+  e1068('E-1068', 'ALPN mismatch',            'HTTP/3 ALPN negotiation failed. Server does not support h3.'),
+  // ── Residential IP ──────────────────────────────────────────────────────────
+  e1069('E-1069', 'Datacenter IP detected',   'Server IP is from datacenter ASN. High risk of blocking.'),
+  e1070('E-1070', 'Residential IP check fail','Cannot verify IP type. Using IP reputation databases.'),
+  e1071('E-1071', 'IP blacklisted',           'Server IP found in RKN VPN blacklist. Switch node needed.'),
+  // ── VPN Tariff / 15GB Limit ────────────────────────────────────────────────
+  e1072('E-1072', 'Traffic limit warning',    'Approaching 15GB monthly limit. Operator may charge extra.'),
+  e1073('E-1073', 'International traffic fee', 'VPN traffic classified as international. Extra fees apply.'),
+  e1074('E-1074', 'Traffic shaping detected', 'ISP throttling VPN speed. Possible tariff enforcement.'),
+  // ── Platform VPN Blocking ──────────────────────────────────────────────────
+  e1075('E-1075', 'Platform blocking VPN',    'Service (Yandex/VK/WB) detecting and blocking VPN users.'),
+  e1076('E-1076', 'White list platform block','Platform in whitelist must block VPN. Switch to direct.'),
+  // ── Smart VPN Timer ────────────────────────────────────────────────────────
+  e1077('E-1077', 'Smart timer auto-off',     'VPN auto-disconnected after 15min idle. Saves traffic limit.'),
+  e1078('E-1078', 'App-specific VPN mode',    'VPN active only for selected apps. Other traffic goes direct.'),
+  // ── Kill Switch v2 ─────────────────────────────────────────────────────────
+  e1079('E-1079', 'Kill Switch v2 activated', 'ALL traffic blocked on VPN drop. IPv6/WebRTC/DNS killed.'),
+  e1080('E-1080', 'IPv6 leak blocked',        'IPv6 traffic blocked to prevent leaks.'),
+  e1081('E-1081', 'WebRTC leak blocked',      'WebRTC disabled to prevent local IP exposure.'),
+  // ── App Store Obfuscation ──────────────────────────────────────────────────
+  e1082('E-1082', 'Stealth mode active',      'App disguised as utility. VPN keywords hidden from UI.'),
+  e1083('E-1083', 'App Store detection risk', 'VPN-related keywords detected in app. Risk of removal.');
 
   final String code, title, description;
   const AuraErrorCode(this.code, this.title, this.description);
@@ -86,7 +132,8 @@ enum AuraErrorCode {
       'telegram':    'E-1019', 'v2ray_crash':   'E-1020', 'siberia':     'E-1021',
       'bypass':      'E-1026', 'probe':         'E-1027', 'sub':         'E-1032',
       'save':        'E-1038', 'backup':        'E-1039', 'profile':     'E-1041',
-      'watchdog':    'E-1050',
+      'watchdog':    'E-1050', 'whitelist':     'E-1051', 'tspu_bypass': 'E-1054',
+      'mimicry':     'E-1057', 'mtproxy':       'E-1060', 'news':        'E-1063',
     };
     return map[event] ?? 'E-0000';
   }

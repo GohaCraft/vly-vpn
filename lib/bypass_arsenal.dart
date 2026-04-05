@@ -127,6 +127,31 @@ class BypassArsenal {
     {'id': 108, 'name': '🔀 Fragment 2b delay 30ms',  'type': 'fragmented_reality',   'priority': 0, 'params': {'fragSize':2, 'delayMs':30,  'sni':'mail.yandex.ru'}},
     {'id': 109, 'name': '🔀 Fragment 1b delay 100ms', 'type': 'fragmented_reality',   'priority': 0, 'params': {'fragSize':1, 'delayMs':100, 'sni':'userapi.com'}},
     {'id': 110, 'name': '🛡 Whitelist: MS Update',    'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'update.microsoft.com','tier':2}},
+    // ── TIER WHITELIST: Domain Fronting через разрешённые CDN ────────────────
+    {'id': 111, 'name': '🟡 Whitelist: Gosuslugi',    'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'gosuslugi'}},
+    {'id': 112, 'name': '🟡 Whitelist: FNS',          'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'fns'}},
+    {'id': 113, 'name': '🟡 Whitelist: Cloudflare',   'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'cloudflare'}},
+    {'id': 114, 'name': '🟡 Whitelist: AWS',          'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'aws'}},
+    {'id': 115, 'name': '🟡 Whitelist: Fastly',       'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'fastly'}},
+    {'id': 116, 'name': '🟡 Whitelist: Akamai',       'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'akamai'}},
+    // ── TIER MIMICRY: Адаптивная мимикрия под реального пользователя ────────
+    {'id': 117, 'name': '🎭 Mimicry: Pixel 8 Pro',    'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'pixel8pro'}},
+    {'id': 118, 'name': '🎭 Mimicry: iPhone 15 Pro',  'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'iphone15pro'}},
+    {'id': 119, 'name': '🎭 Mimicry: Win11 Edge',     'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'win11edge'}},
+    {'id': 120, 'name': '🎭 Mimicry: Samsung S24',    'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'samsung_s24'}},
+    // ── TIER QUIC/HTTP3: Обход DPI через QUIC (04.04.2026) ──────────────────
+    // MTProxy мёртв (01.04.2026) — DPI детектит Fake-TLS по TLS fingerprint
+    // QUIC/HTTP3 — DPI ещё не умеет полноценно анализировать QUIC
+    // Источник: bypasscore.com/blog/vpn-detection-bypass-dpi-evasion (18.03.2026)
+    {'id': 121, 'name': '⚡ QUIC: Google h3',        'type': 'quic_h3_fallback',      'priority': 0, 'params': {'sni':'www.google.com','alpn':'h3'}},
+    {'id': 122, 'name': '⚡ QUIC: Cloudflare h3',     'type': 'quic_h3_fallback',      'priority': 0, 'params': {'sni':'cloudflare.com','alpn':'h3'}},
+    {'id': 123, 'name': '⚡ QUIC: MS Azure h3',       'type': 'quic_h3_fallback',      'priority': 0, 'params': {'sni':'azure.microsoft.com','alpn':'h3'}},
+    {'id': 124, 'name': '⚡ HTTP3: CDN Tunnel',       'type': 'http3_cdn_tunnel',      'priority': 0, 'params': {'cdn':'cloudflare'}},
+    {'id': 125, 'name': '⚡ HTTP3: Edge Worker',      'type': 'http3_cdn_tunnel',      'priority': 0, 'params': {'cdn':'workers'}},
+    // ── TIER RESIDENTIAL: Residential IP + Smart Timer ───────────────────────
+    {'id': 126, 'name': '🏠 Residential: EU IP',      'type': 'residential_ip',        'priority': 0, 'params': {'region':'eu'}},
+    {'id': 127, 'name': '🏠 Residential: US IP',      'type': 'residential_ip',        'priority': 0, 'params': {'region':'us'}},
+    {'id': 128, 'name': '🏠 Residential: Asia IP',    'type': 'residential_ip',        'priority': 0, 'params': {'region':'asia'}},
   ];
 
   static final _rng = Random();
@@ -190,6 +215,38 @@ class BypassArsenal {
         [13, 14, 41, 42],      // Trojan WS variants
         [15, 81, 82, 83],      // Shadow + CF Workers
         [71, 90, 100],         // Node switch + final
+      ],
+      // ── Whitelist / mobile operator block ──────────────────────────────────
+      'whitelistBlock': [
+        [111, 113, 114],       // Gosuslugi, Cloudflare, AWS (tier 0 gov/CDN)
+        [112, 115, 116],       // FNS, Fastly, Akamai
+        [117, 118, 119, 120],  // Adaptive mimicry
+        [121, 122, 123],       // QUIC/HTTP3 fallback
+        [11, 12, 71, 90],      // CDN Workers + node switch
+      ],
+      // ── AI/ML-DPI detection — adaptive mimicry first ───────────────────────
+      'mlDetection': [
+        [117, 118, 119, 120],  // Adaptive mimicry (primary defense)
+        [121, 122, 123],       // QUIC/HTTP3 (DPI не анализирует QUIC)
+        [1, 9, 10],            // SNI rotate
+        [111, 112, 113],       // Whitelist domain fronting
+        [19, 33, 34],          // CF SNI
+        [71, 90, 100],         // Node switch + final
+      ],
+      // ── QUIC specific — QUIC/HTTP3 стратегии ───────────────────────────────
+      'quicBlocked': [
+        [121, 122, 123, 124, 125], // All QUIC/HTTP3
+        [126, 127, 128],       // Residential IP
+        [117, 118, 119],       // Mimicry
+        [1, 2, 3],             // SNI rotate
+        [11, 12, 71, 90],      // CDN + node switch
+      ],
+      // ── Residential IP block ───────────────────────────────────────────────
+      'residentialDetected': [
+        [126, 127, 128],       // All residential regions
+        [121, 122, 123],       // QUIC fallback
+        [117, 118, 119],       // Mimicry
+        [11, 12, 71, 90],      // CDN + node switch
       ],
     };
 

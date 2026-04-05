@@ -289,6 +289,39 @@ class _ConnectCard extends StatelessWidget {
                     style: const TextStyle(fontSize: 9,
                         color: Color(0xFFCE93D8), letterSpacing: 0.5)),
                 ]))),
+            // Proxy Mode — TUN → SOCKS5 proxy chain
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: GestureDetector(
+                onTap: vpn.isConnecting ? null : () => vpn.toggleProxyMode(),
+                child: AnimatedContainer(duration: const Duration(milliseconds: 300),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: vpn.proxyModeEnabled
+                        ? const Color(0xFFFF9500).withOpacity(0.20)
+                        : Colors.white.withOpacity(0.05),
+                    border: Border.all(
+                      color: vpn.proxyModeEnabled
+                          ? const Color(0xFFFF9500).withOpacity(0.50)
+                          : Colors.white.withOpacity(0.15)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.shuffle, size: 11,
+                        color: vpn.proxyModeEnabled ? const Color(0xFFFF9500) : Colors.white38),
+                    const SizedBox(width: 5),
+                    Text(
+                      vpn.proxyModeEnabled ? 'PROXY CHAIN: ON' : 'PROXY CHAIN: OFF',
+                      style: TextStyle(fontSize: 9,
+                          color: vpn.proxyModeEnabled
+                              ? const Color(0xFFFF9500)
+                              : Colors.white38,
+                          letterSpacing: 0.5,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ])),
+              ),
+            ),
             // ── IP строчка под карточкой ──────────────────────────────
             const SizedBox(height: 10),
             _IpStatusRow(vpn: vpn),

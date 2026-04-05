@@ -20,10 +20,49 @@ class AiBypassAgent {
   }
 
   Future<VpnConfig?> _run(VpnConfig blocked) async {
+    // Шаг 0: Проверяем ТСПУ bypass window — если ТСПУ перегружен, подключаемся напрямую
+    final tspuBypass = await TspuBypassWindowDetector.check(log: _log);
+    if (tspuBypass) {
+      _log('🟢 ТСПУ в bypass — подключаемся без стелса');
+      currentStrategyId = 0;
+      return blocked; // ТСПУ не фильтрует — подключаемся напрямую
+    }
+
     _log('🤖 Detecting block type…');
     final bt = await BlockDetector.detect(blocked);
     _log('🤖 Block: ${bt.name}');
     if (bt == BlockType.none) return blocked;
+
+    // Проверяем белый список на мобильном интернете
+    final whitelistActive = await WhitelistBypassEngine.isWhitelistActive();
+    if (whitelistActive) {
+      _log('🟡 Whitelist detected — applying domain fronting');
+      // Пробуем whitelist domain fronting стратегии первыми
+      final wlStrategies = WhitelistBypassEngine.getStrategies();
+      for (final endpoint in wlStrategies.take(3)) {
+        if (!_isRunning) return null;
+        _log('🤖 Trying whitelist: ${endpoint['name']}');
+        try {
+          final patched = blocked;
+          // Помечаем конфиг для domain fronting
+          final link = '${blocked.link}#whitelist_df=${endpoint['host']}';
+          final wlConfig = VpnConfig(
+            name: '${blocked.name} [WL]',
+            link: link,
+            groupName: blocked.groupName,
+            sourceUrl: blocked.sourceUrl,
+            isManual: blocked.isManual,
+            isAiPatched: true,
+            isFavourite: blocked.isFavourite,
+          );
+          final works = await BypassProber.probe(wlConfig);
+          if (works) {
+            _log('🤖 ✅ Whitelist bypass works: ${endpoint['name']}');
+            return wlConfig;
+          }
+        } catch (_) {}
+      }
+    }
 
     // Стратегии: server rules + BypassArsenal 100
     final ruleStrategies = _rules.getStrategies(bt);
@@ -67,7 +106,15 @@ class AiBypassAgent {
       _log('🤖 #$id · ${s.type} (${i+1}/${queue.length})');
 
       try {
-        final patched = _rules.applyStrategy(blocked, s);
+        var patched = _rules.applyStrategy(blocked, s);
+
+        // Применяем адаптивную мимикрию если стратегия требует
+        if (s.type == 'adaptive_mimicry') {
+          _log('🎭 Applying adaptive mimicry: ${AdaptiveMimicryEngine.persona.device}');
+          // Поведенческая задержка для имитации реального пользователя
+          await AdaptiveMimicryEngine.behavioralDelay();
+        }
+
         final works   = await BypassProber.probe(patched);
 
         if (works) {
