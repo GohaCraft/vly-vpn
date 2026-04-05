@@ -21,13 +21,18 @@ const String kNodesUrl          = '$kControlPlaneUrl/nodes.json';
 
 // ── Stealth Engine 2.0 — Dead Drop зеркала ──────────────────────────────────
 // Если основной API недоступен — берём ноды из этих источников
+// ОБНОВЛЕНО 05.04.2026: добавлен Cloudflare Workers (бесплатно, работает из РФ)
 const List<String> kDeadDropMirrors = [
-  // ── Tier 0: Госуслуги — всегда белый список РКН ──────────────────────────
-  'https://www.gosuslugi.ru/api/lk/v1/feed',
+  // ── Tier 0: Cloudflare Workers — бесплатный хостинг, работает из РФ ──────
+  // Создай worker на https://dash.cloudflare.com → Workers → Create
+  // Замени YOUR_SUBDOMAIN на свой (aura-nodes.твой-ник.workers.dev)
+  'https://aura-nodes.auravpn.workers.dev/nodes.json',
   // ── Tier 1: Нейтральные международные CDN ────────────────────────────────
   'https://raw.githubusercontent.com/auravpn/nodes/main/nodes.json',
   'https://cdn.jsdelivr.net/gh/auravpn/nodes@main/nodes.json',
   'https://storage.yandexcloud.net/auravpn-nodes/nodes.json',
+  // ── Tier 2: GitHub Gist (резерв) ─────────────────────────────────────────
+  'https://gist.githubusercontent.com/auravpn/nodes/raw/nodes.json',
   // DNS TXT: dig TXT nodes.auravpn.app — содержит base64 списка нод
 ];
 const String kDeadDropDnsTxt = 'nodes.auravpn.app';

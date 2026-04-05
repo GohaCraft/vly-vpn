@@ -29,6 +29,16 @@ class VpnProvider extends ChangeNotifier {
   int    proxyPort              = 1080;   // локальный SOCKS5 порт
   String proxyModeStatus       = 'OFF';   // статус для UI
 
+  // ── App Store Obfuscation (05.04.2026) ─────────────────────────────────────
+  // Apple удалила 20+ VPN из App Store РФ. Скрываем VPN-название приложения.
+  bool   appStoreStealth        = false;  // скрыть VPN-ключевые слова из UI
+  String stealthAppName        = 'Aura';  // нейтральное название приложения
+
+  // ── App Store Obfuscation (05.04.2026) ─────────────────────────────────────
+  // Apple удалила 20+ VPN из App Store РФ. Скрываем VPN-название приложения.
+  bool   appStoreStealth        = false;  // скрыть VPN-ключевые слова из UI
+  String stealthAppName        = 'Aura';  // нейтральное название приложения
+
   // ── Трафик (v4.0) ─────────────────────────────────────────────────────────
   int    trafficUp   = 0; // bytes/s текущая скорость
   int    trafficDown = 0;
