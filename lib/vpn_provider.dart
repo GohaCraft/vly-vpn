@@ -580,7 +580,7 @@ class VpnProvider extends ChangeNotifier {
 
   void _ensureDefaultProfile() {
     if (profiles.isEmpty) {
-      final def = AuraProfile(id: 'default', name: 'Default');
+      final def = AuraProfile(id: 'default', name: 'Default', splitMode: SplitTunnelMode.bypass);
       profiles = [def];
       activeProfileId = def.id;
     }
@@ -860,6 +860,11 @@ class VpnProvider extends ChangeNotifier {
 
       // Шаг 1: Парсим конфиг (мгновенно)
       String finalLink = cfg.link;
+
+      // ── HYSTERIA2 AUTO-DETECT: QUIC/UDP обход DPI ────────────────────────
+      if (finalLink.startsWith('hy2://') || finalLink.startsWith('hysteria2://')) {
+        _log('⚡ Hysteria2 QUIC — DPI cannot analyze QUIC traffic');
+      }
 
       // Reality SNI без сетевых проверок — используем кэш или первый в пуле
       if (stealthMode && stealthRealitySni) {
@@ -1178,6 +1183,7 @@ class VpnProvider extends ChangeNotifier {
             if (n.isNotEmpty) name = n;
           } catch (_) {}
         }
+        if (l.startsWith('hy2://') || l.startsWith('hysteria2://')) name = '⚡ $name';
         _configs.add(VpnConfig(name: name, link: l, groupName: gname, sourceUrl: url));
         added++;
       }
