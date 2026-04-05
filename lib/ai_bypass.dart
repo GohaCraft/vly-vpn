@@ -43,7 +43,6 @@ class AiBypassAgent {
         if (!_isRunning) return null;
         _log('🤖 Trying whitelist: ${endpoint['name']}');
         try {
-          final patched = blocked;
           // Помечаем конфиг для domain fronting
           final link = '${blocked.link}#whitelist_df=${endpoint['host']}';
           final wlConfig = VpnConfig(

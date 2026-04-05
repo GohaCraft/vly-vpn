@@ -82,6 +82,8 @@ class VpnConfig {
   }
 
   // ── TCP+TLS Ping: измеряем реальную доступность, не просто TCP ──────────────
+  // OPTIMIZED: TCP ping с уменьшенными таймаутами и параллельным TLS
+  // OPTIMIZED: TCP ping с уменьшенными таймаутами и параллельным TLS
   // FIX v3.0: TCP ping показывал "живую" ноду которая реально заблокирована по TLS
   // Теперь: быстрый TCP, потом TLS — если TLS падает → 9999 (заблокировано)
   static Future<int> tcpPing(String link) async {
@@ -94,27 +96,36 @@ class VpnConfig {
     } catch (_) { return 9999; }
     if (host.isEmpty) return 9999;
 
-    // Шаг 1: TCP latency (быстро)
-    int tcpMs = 9999;
-    try {
+    // OPTIMIZATION: TCP + TLS параллельно — TLS timeout меньше
+    // Экономим до 3 сек на каждой проверке
+    final tcpFuture = () async {
       final sw = Stopwatch()..start();
-      final s  = await Socket.connect(host, port, timeout: const Duration(seconds: 3));
-      sw.stop(); tcpMs = sw.elapsedMilliseconds;
-      await s.close();
-    } catch (_) { return 9999; }
+      try {
+        final s = await Socket.connect(host, port,
+            timeout: const Duration(milliseconds: 1500)); // было 3000ms
+        sw.stop();
+        await s.close();
+        return sw.elapsedMilliseconds;
+      } catch (_) { return 9999; }
+    }();
 
-    // Шаг 2: TLS handshake — если РКН режет на TLS уровне, TCP проходит а TLS нет
-    try {
-      final s = await SecureSocket.connect(
-        host, port,
-        timeout: const Duration(seconds: 3),
-        onBadCertificate: (_) => true,
-      );
-      await s.close();
-      return tcpMs; // TLS прошёл — нода реально живая
-    } catch (_) {
-      return 9999; // TLS упал — нода заблокирована по fingerprint
-    }
+    final tlsFuture = () async {
+      try {
+        final s = await SecureSocket.connect(
+          host, port,
+          timeout: const Duration(milliseconds: 2000), // было 3000ms
+          onBadCertificate: (_) => true,
+        );
+        await s.close();
+        return true;
+      } catch (_) { return false; }
+    }();
+
+    final results = await Future.wait([tcpFuture, tlsFuture]);
+    final tcpMs = results[0] as int;
+    final tlsOk = results[1] as bool;
+
+    return tlsOk ? tcpMs : 9999;
   }
 }
 

@@ -696,7 +696,6 @@ class StealthEngine {
 //  GitHub: github.com/bol-van/zapret
 // ═══════════════════════════════════════════════════════════════════════════════
 class ZapretBridge {
-  static final _rng = Random();
 
   // Проверяем доступность Zapret на локальном порту
   // Zapret запускается отдельным процессом (windivert/nfqueue), нам нужен его SOCKS5/HTTP порт

@@ -50,7 +50,6 @@ class TspuCountermeasures2026 {
       case BlockType.timeout:
         // Timeout → смена ноды + CDN
         return [71, 72, 73, 99, 100, 11, 12, 81, 82, 83];
-      case BlockType.timeout:
       default:
         // Unknown → Tier 1 strategies
         return [1, 2, 3, 9, 10, 11];
@@ -813,7 +812,6 @@ class AntiVpnTariffEngine {
 class SmartVpnTimer {
   static Timer? _idleTimer;
   static Timer? _trafficTimer;
-  static DateTime? _lastActivity;
   static int _idleMinutes = 0;
   static bool _isActive = false;
 
@@ -839,7 +837,7 @@ class SmartVpnTimer {
   }) {
     stop();
     _isActive = true;
-    _lastActivity = DateTime.now();
+    
     _idleMinutes = 0;
 
     // Проверка сброса месячного лимита
@@ -855,7 +853,7 @@ class SmartVpnTimer {
       if (!_isActive) return;
       final speed = getCurrentSpeed();
       if (speed > 1024) { // >1 КБ/с = активность
-        _lastActivity = DateTime.now();
+        
         _idleMinutes = 0;
       } else {
         _idleMinutes++;
@@ -888,13 +886,13 @@ class SmartVpnTimer {
   }
 
   static void recordActivity() {
-    _lastActivity = DateTime.now();
+    
     _idleMinutes = 0;
   }
 
   static void reset() {
     _idleMinutes = 0;
-    _lastActivity = DateTime.now();
+    
   }
 }
 

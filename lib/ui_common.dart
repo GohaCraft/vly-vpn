@@ -778,7 +778,7 @@ class _AuraBlobBgState extends State<AuraBlobBg> with SingleTickerProviderStateM
     return Stack(children: [
       Container(color: bg),
       // Медиа-фон поверх цвета
-      if (hasMedia && app != null)
+      if (hasMedia)
         Positioned.fill(child: _MediaBackground(
           path: app.customMediaPath,
           type: app.customMediaType,
