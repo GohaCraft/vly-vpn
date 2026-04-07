@@ -764,13 +764,18 @@ class _AuraBlobBgState extends State<AuraBlobBg> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    // Светлая тема: тёплый белый (#F7F8FC) вместо холодного белого — не режет глаза
+    // Фон берём из активного скина — каждая тема имеет уникальный bg
+    final app = _AppProviderRef.instance;
+    // Берём bgDark из активного скина безопасно
+    final _skinId = app?.skinId ?? AuraSkinId.midnight;
+    final skinBg  = AuraSkin.byId(_skinId).bgDark;
     final bg = widget.isLight
         ? (widget.connected ? const Color(0xFFEDF4FC) : const Color(0xFFF5F6FC))
-        : (widget.connected ? const Color(0xFF030810) : const Color(0xFF050610));
+        : (widget.connected
+            ? Color.lerp(skinBg, Colors.black, 0.12)!
+            : skinBg);
 
     // Кастомный медиа-фон (фото / GIF / видео)
-    final app = _AppProviderRef.instance;
     final hasMedia = app != null && app.hasCustomMedia;
     // opacity медиа-фона — при видео чуть темнее для читаемости UI
     final mediaOpacity = app?.customMediaType == 'video' ? 0.45 : 0.40;

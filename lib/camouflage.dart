@@ -165,20 +165,31 @@ class TrafficCamouflageEngine {
   // Уже реализован в TelegramProtocol — делегируем
   // ────────────────────────────────────────────────────────────────────────────
   static void _applyTelegram(Map<String, dynamic> j) {
-    // Telegram использует WebSocket 443 с CDN SNI
-    final sni = 'cdn4.telegram.org';
+    // Telegram MTProto через WebSocket — максимальная маскировка
+    // Март 2026: РКН анализирует JA4+ fingerprint
+    // Ротация CDN + реальный fingerprint iOS клиента
+    final cdns = ['cdn4.telegram.org', 'cdn5.telegram.org', 'cdn1.telegram.org'];
+    final sni  = cdns[DateTime.now().millisecond % cdns.length];
     _patchOutbounds(j, 'ws', {
       'wsSettings': {
-        'path': '/api',
+        'path': '/api/v1',
         'headers': {
-          'Host':       sni,
-          'User-Agent': 'Telegram-iOS/10.2 (iPhone; iOS 18.3; Scale/3.00)',
-          'Connection': 'Upgrade',
-          'Upgrade':    'websocket',
+          'Host':            sni,
+          'User-Agent':      'Telegram-iOS/10.6.1 (iPhone; iOS 18.4; Scale/3.00)',
+          'Connection':      'Upgrade',
+          'Upgrade':         'websocket',
+          'Accept':          '*/*',
+          'Accept-Language': 'ru-RU,ru;q=0.9',
+          'Sec-WebSocket-Version':    '13',
+          'Sec-WebSocket-Extensions': 'permessage-deflate; client_max_window_bits',
         },
       },
     }, sni, 'ios', disableMux: true,
-    extraSockopt: {'tcpKeepAliveIdle': 30});
+    extraSockopt: {
+      'tcpKeepAliveIdle':     30,
+      'tcpKeepAliveInterval': 10,
+      'tcpNoDelay':           true,
+    });
   }
 
   // ────────────────────────────────────────────────────────────────────────────

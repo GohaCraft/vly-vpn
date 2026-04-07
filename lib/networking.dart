@@ -818,6 +818,37 @@ class BypassRulesEngine {
       isFavourite: orig.isFavourite,
     );
   }
+
+  // ── Whitelist SNI по тиру доверия (для Норильска/Ростелеком Сибирь) ─────
+  // Tier 0: Яндекс — никогда не блокируется Ростелеком Сибирь
+  // Tier 1: VK/Mail.ru — в белом списке РКН федеральном
+  // Tier 2: Microsoft/Apple — корпоративный whitelist
+  static String _whitelistSniByTier(int tier) {
+    final _rng = Random();
+    switch (tier) {
+      case 0:  return ['yandex.ru','ya.ru','mail.yandex.ru','yastatic.net'][_rng.nextInt(4)];
+      case 1:  return ['vk.com','userapi.com','mail.ru','ok.ru'][_rng.nextInt(4)];
+      case 2:  return ['update.microsoft.com','www.apple.com','mask.icloud.com'][_rng.nextInt(3)];
+      default: return 'yandex.ru';
+    }
+  }
+
+  // Выбирает SNI по тиру доверия для обхода белых списков
+  // Tier 0: Яндекс — Ростелеком Сибирь никогда не блокирует
+  // Tier 1: VK/Mail.ru — в белом списке РКН
+  // Tier 2: Microsoft/Apple — корпоративный whitelist
+  static String _whitelistSniByTier(int tier) {
+    const t0 = ['yandex.ru', 'ya.ru', 'mail.yandex.ru', 'yastatic.net'];
+    const t1 = ['vk.com', 'userapi.com', 'mail.ru', 'ok.ru'];
+    const t2 = ['update.microsoft.com', 'www.apple.com', 'mask.icloud.com'];
+    switch (tier) {
+      case 0:  return t0[DateTime.now().millisecond % t0.length];
+      case 1:  return t1[DateTime.now().millisecond % t1.length];
+      case 2:  return t2[DateTime.now().millisecond % t2.length];
+      default: return 'yandex.ru';
+    }
+  }
+
 }
 
 class BypassProber {
@@ -881,4 +912,3 @@ class BypassProber {
     }
   }
 }
-

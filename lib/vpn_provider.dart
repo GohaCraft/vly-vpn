@@ -4,6 +4,7 @@ part of 'main.dart';
 class VpnProvider extends ChangeNotifier {
   late FlutterV2ray _v2ray;
   bool _disposed = false;
+  bool get mounted => !_disposed;
 
   // ── Состояние подключения ─────────────────────────────────────────────────
   String status      = 'OFFLINE';
@@ -608,9 +609,9 @@ class VpnProvider extends ChangeNotifier {
     _prof.configsJson = _configs.map((c) => c.toMap()).toList();
     activeProfileId = id;
     // Загружаем конфиги нового профиля
-    _configs = _prof.configsJson
+    _configs = List<VpnConfig>.from(_prof.configsJson
         .map((m) { try { return VpnConfig.fromMap(m); } catch (_) { return null; } })
-        .whereType<VpnConfig>().toList();
+        .whereType<VpnConfig>());
     if (selectedIndex >= _configs.length) selectedIndex = 0;
     await saveToDisk(); _notify();
   }
@@ -874,6 +875,23 @@ class VpnProvider extends ChangeNotifier {
       // ── HYSTERIA2 AUTO-DETECT: QUIC/UDP обход DPI ────────────────────────
       if (finalLink.startsWith('hy2://') || finalLink.startsWith('hysteria2://')) {
         _log('⚡ Hysteria2 QUIC — DPI cannot analyze QUIC traffic');
+        final h2params = StealthEngine.parseHysteria2Link(finalLink);
+        if (h2params != null) {
+          final h2config = StealthEngine.buildHysteria2Config(finalLink);
+          if (h2config != null) {
+            _log('⚡ Hysteria2: ${h2params['host']}:${h2params['port']} sni=${h2params['sni']}');
+            await _v2ray.startV2Ray(
+              remark: cfg.displayName,
+              config: jsonEncode(h2config),
+              blockedApps: _splitArgsForConnect(),
+            );
+            _isRotating = false;
+            status = 'CONNECTED';
+            _notify();
+            unawaited(_postConnectOps(cfg));
+            return;
+          }
+        }
       }
 
       // Reality SNI без сетевых проверок — используем кэш или первый в пуле
@@ -1145,8 +1163,14 @@ class VpnProvider extends ChangeNotifier {
       if (parsed.host.isEmpty) throw FormatException('No host');
     } catch (_) { _log('✗ E-1009: Invalid URL format'); return; }
     if (subLinks.contains(u)) { _log('⚠ Already exists'); return; }
+    // Гарантируем mutable (fix: Cannot add to unmodifiable list)
+    _prof.subLinks = List<String>.from(_prof.subLinks);
     _prof.subLinks.add(u);
-    await _fetchSub(u); saveToDisk();
+    _log('📡 Загружаю: $u');
+    _notify();
+    await _fetchSub(u);
+    saveToDisk();
+    _notify();
   }
 
   Future<void> removeSubscription(int i) async {
@@ -1564,9 +1588,9 @@ class VpnProvider extends ChangeNotifier {
       stealthFragment    = p.getBool('stealth_fragment')    ?? true;
       stealthRealitySni  = p.getBool('stealth_reality_sni') ?? true;
       stealthWarmup      = p.getBool('stealth_warmup')      ?? true;
-      _configs = _prof.configsJson
+      _configs = List<VpnConfig>.from(_prof.configsJson
           .map((m) { try { return VpnConfig.fromMap(m); } catch (_) { return null; } })
-          .whereType<VpnConfig>().toList();
+          .whereType<VpnConfig>());
       if (selectedIndex >= _configs.length) selectedIndex = 0;
       _log('✔ ${_configs.length} nodes [${_prof.name}]'); _notify();
     } catch (e) { _log('✗ Load: $e'); }
