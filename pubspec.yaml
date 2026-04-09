@@ -1,7 +1,7 @@
 name: vpn_new
-description: "Aura VPN — Smart bypass, always on"
+description: "Vly — Smart bypass, always on"
 publish_to: 'none'
-version: 6.1.0+1
+version: 6.2.0+1
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -26,7 +26,7 @@ flutter_launcher_icons:
   # Android adaptive icon
   android: true
   image_path: "assets/images/aura_icon.png"
-  adaptive_icon_background: "#050610"   # тёмный фон как bgDark скина Midnight
+  adaptive_icon_background: "#1F0B0F"   # тёмный фон как bgDark скина Midnight
   adaptive_icon_foreground: "assets/images/aura_icon.png"
   min_sdk_android: 24
   # iOS

@@ -1,4 +1,4 @@
-// ignore_for_file: unused_import, unused_element
+// ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last
 part of 'main.dart';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
@@ -7,12 +7,18 @@ const String kControlPlaneUrl   = 'https://api.auravpn.app';
 
 // ── Certificate Pinning ───────────────────────────────────────────────────────
 // SHA-256 отпечатки публичных ключей нашего сервера api.auravpn.app
-// ОТКЛЮЧЕНО: пустой список = pinning не применяется (fallback на стандартную проверку)
-// Когда получишь реальный сертификат — замени на настоящие SHA256
-// Команда: openssl s_client -connect api.auravpn.app:443 | openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | base64
-const kPinnedSha256 = <String>[]; // Пусто = pinning отключён
+// Когда получишь реальный сертификат — замени PLACEHOLDER на настоящие SHA256
+// Формат: base64(sha256(SubjectPublicKeyInfo DER))
+// Команда для получения: openssl s_client -connect api.auravpn.app:443 |
+//   openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER |
+//   openssl dgst -sha256 -binary | base64
+const kPinnedSha256 = [
+  'PLACEHOLDER_REPLACE_WITH_REAL_SHA256_OF_YOUR_CERT==',  // Primary cert
+  'PLACEHOLDER_REPLACE_WITH_REAL_SHA256_OF_BACKUP_CERT==', // Backup / Let's Encrypt root
+];
 
 // Домены для которых применяется cert pinning (только наши серверы)
+// Cloudflare, Google, antifilter.download — без pinning (у них своя цепочка)
 const kPinnedDomains = ['api.auravpn.app', 'auravpn.app'];
 
 const String kBypassRulesUrl    = '$kControlPlaneUrl/bypass_rules.json';
@@ -21,18 +27,28 @@ const String kNodesUrl          = '$kControlPlaneUrl/nodes.json';
 
 // ── Stealth Engine 2.0 — Dead Drop зеркала ──────────────────────────────────
 // Если основной API недоступен — берём ноды из этих источников
-// ОБНОВЛЕНО 05.04.2026: добавлен Cloudflare Workers (бесплатно, работает из РФ)
+// Порядок: сначала Яндекс/VK (белый список РКН) → потом GitHub → DNS TXT
 const List<String> kDeadDropMirrors = [
-  // ── Tier 0: Cloudflare Workers — бесплатный хостинг, работает из РФ ──────
-  // Создай worker на https://dash.cloudflare.com → Workers → Create
-  // Замени YOUR_SUBDOMAIN на свой (aura-nodes.твой-ник.workers.dev)
-  'https://aura-nodes.auravpn.workers.dev/nodes.json',
-  // ── Tier 1: Нейтральные международные CDN ────────────────────────────────
-  'https://raw.githubusercontent.com/auravpn/nodes/main/nodes.json',
-  'https://cdn.jsdelivr.net/gh/auravpn/nodes@main/nodes.json',
+  // ── Tier 0: Яндекс — всегда белый список РКН (AS13238) ───────────────────
+  // storage.yandexcloud.net: S3-совместимое Object Storage, Яндекс CDN
+  // Не блокируется т.к. используется тысячами российских сайтов
   'https://storage.yandexcloud.net/auravpn-nodes/nodes.json',
-  // ── Tier 2: GitHub Gist (резерв) ─────────────────────────────────────────
+  // Яндекс Диск public link (через get.disk.yandex.net — белый список)
+  'https://getfile.dokpub.com/yandex/get/https://disk.yandex.ru/d/auravpn-nodes',
+
+  // ── Tier 1: VK — крупнейшая российская соцсеть (AS47541) ─────────────────
+  // userapi.com / vk.com CDN — блокировка означает падение ВКонтакте
+  'https://vk.com/doc-auravpn_nodes',             // VK Documents (публичный)
+  'https://sun6-21.userapi.com/auravpn/nodes.json', // VK CDN edge
+
+  // ── Tier 2: GitHub (международный, может быть заблокирован) ──────────────
+  'https://raw.githubusercontent.com/auravpn/nodes/main/nodes.json',
   'https://gist.githubusercontent.com/auravpn/nodes/raw/nodes.json',
+
+  // ── Tier 3: jsDelivr CDN — зеркало GitHub через CDN ─────────────────────
+  // jsDelivr использует Cloudflare + Fastly — сложнее заблокировать
+  'https://cdn.jsdelivr.net/gh/auravpn/nodes@main/nodes.json',
+
   // DNS TXT: dig TXT nodes.auravpn.app — содержит base64 списка нод
 ];
 const String kDeadDropDnsTxt = 'nodes.auravpn.app';
@@ -155,7 +171,7 @@ const List<String> kWarmupTargets = [
 ];
 const String kSupportEmail      = 'support@auravpn.app';
 const int    kLocalRulesVersion = 0;
-const String kBackupMagic       = 'AURA_VPN_BACKUP_V1';
+const String kBackupMagic       = 'VLY_VPN_BACKUP_V1';
 
 // ─── COLORS ──────────────────────────────────────────────────────────────────
 

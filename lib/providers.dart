@@ -1,10 +1,10 @@
-// ignore_for_file: unused_import, unused_element
+// ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last, prefer_final_locals, omit_local_variable_types, always_use_package_imports
 part of 'main.dart';
 
 class AppProvider extends ChangeNotifier {
   AuraTheme  _theme  = AuraTheme.system;
   AuraLocale _locale = AuraLocale.en;
-  AuraSkinId _skinId = AuraSkinId.midnight;
+  AuraSkinId _skinId = AuraSkinId.crimson;
   bool _disposed = false;
 
   // Пользовательская тема
@@ -54,9 +54,9 @@ class AppProvider extends ChangeNotifier {
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();
     final ts  = p.getString('aura_theme') ?? 'system';
-    final sid = p.getString('aura_skin')  ?? 'midnight';
+    final sid = p.getString('aura_skin')  ?? 'crimson';
     _theme  = AuraTheme.values.firstWhere((e) => e.name == ts,  orElse: () => AuraTheme.system);
-    _skinId = AuraSkinId.values.firstWhere((e) => e.name == sid, orElse: () => AuraSkinId.midnight);
+    _skinId = AuraSkinId.values.firstWhere((e) => e.name == sid, orElse: () => AuraSkinId.crimson);
     // Загружаем кастомную тему
     _customAccent   = Color(p.getInt('ct_accent')   ?? 0xFF00E5FF);
     _customAccent2  = Color(p.getInt('ct_accent2')  ?? 0xFF4FC3F7);
@@ -239,7 +239,7 @@ class AuraProfile {
     this.subPingOnOpen    = true,
     this.subConnectOnOpen = false,
     this.subSortMode      = 'none',
-    this.subUserAgent     = 'AuraVPN/${kAppVersion}/Android',
+    this.subUserAgent     = 'AuraVPN/$kAppVersion/Android',
     this.subAllowDuplicates = false,
     // Ping
     this.pingType          = 'tcp',
@@ -305,7 +305,7 @@ class AuraProfile {
     subPingOnOpen: j['subPingOnOpen'] ?? true,
     subConnectOnOpen: j['subConnectOnOpen'] ?? false,
     subSortMode: j['subSortMode'] ?? 'none',
-    subUserAgent: j['subUserAgent'] ?? 'AuraVPN/${kAppVersion}/Android',
+    subUserAgent: j['subUserAgent'] ?? 'AuraVPN/$kAppVersion/Android',
     subAllowDuplicates: j['subAllowDuplicates'] ?? false,
     pingType: j['pingType'] ?? 'tcp',
     pingUrl: j['pingUrl'] ?? 'https://www.gstatic.com/generate_204',

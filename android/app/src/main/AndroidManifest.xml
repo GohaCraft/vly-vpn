@@ -21,7 +21,7 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
-        android:label="Aura VPN"
+        android:label="Vly"
         android:name=".AuraVpnApp"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
@@ -71,7 +71,7 @@
         <service
             android:name=".VpnTileService"
             android:exported="true"
-            android:label="Aura VPN"
+            android:label="Vly"
             android:icon="@mipmap/ic_launcher"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>

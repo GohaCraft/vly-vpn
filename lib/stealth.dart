@@ -696,6 +696,7 @@ class StealthEngine {
 //  GitHub: github.com/bol-van/zapret
 // ═══════════════════════════════════════════════════════════════════════════════
 class ZapretBridge {
+  static final _rng = Random();
 
   // Проверяем доступность Zapret на локальном порту
   // Zapret запускается отдельным процессом (windivert/nfqueue), нам нужен его SOCKS5/HTTP порт
@@ -796,5 +797,19 @@ class ZapretBridge {
         return 'fake_sni';
     }
   }
+}
+
+
+// ── Compatibility stubs ─────────────────────────────────────────────────────
+// These prevent undefined identifier errors from older code references
+
+// Zapret strategy list (also defined in constants.dart)
+// ignore: constant_identifier_names  
+const List<String> _kZapretCompatStrategies = ['fake_sni', 'disorder', 'split', 'ttl_trick'];
+
+// Rotate zapret strategy helper
+String _rotateZapretStrategy(String current) {
+  final idx = _kZapretCompatStrategies.indexOf(current);
+  return _kZapretCompatStrategies[(idx + 1) % _kZapretCompatStrategies.length];
 }
 

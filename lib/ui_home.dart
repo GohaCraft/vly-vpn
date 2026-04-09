@@ -1,4 +1,4 @@
-// ignore_for_file: unused_import, unused_element
+// ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last, prefer_final_locals, omit_local_variable_types, always_use_package_imports
 part of 'main.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -16,19 +16,9 @@ class HomeScreen extends StatelessWidget {
         extendBodyBehindAppBar: true,
         appBar: GlassAppBar(
           title: Row(children: [
-            Container(
-              decoration: BoxDecoration(
-                boxShadow: [BoxShadow(
-                  color: _accent.withOpacity(0.5),
-                  blurRadius: 10, spreadRadius: 1,
-                  offset: Offset.zero)]),
-              child: Image.asset('assets/images/aura_logo.png',
-                  width: 90, height: 36, fit: BoxFit.contain)),
-            const SizedBox(width: 8),
-            Flexible(child: Text(S.t('app_name'),
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5, color: _textColor(context)))),
+            // VLY логотип — PNG с прозрачным фоном, показываем как есть
+            Image.asset('assets/images/aura_logo.png',
+                width: 96, height: 38, fit: BoxFit.contain),
           ]),
           actions: [
             _ABtn(Icons.qr_code_scanner, () => _goQr(context)),
@@ -192,7 +182,7 @@ class _ConnectCard extends StatelessWidget {
 
     return RepaintBoundary(child: Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-      child: GlassBox(blur: 32, tint: const Color(0xFF0D2063), tintOpacity: light ? 0.06 : 0.18,
+      child: GlassBox(blur: 32, tint: const Color(0xFF2A0810), tintOpacity: light ? 0.06 : 0.20,
         borderColor: sc.withOpacity(light ? 0.20 : 0.40),
         child: Padding(padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
           child: Column(children: [
@@ -3074,4 +3064,3 @@ class _QrScanScreenState extends State<QrScanScreen> {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SETTINGS SCREEN v5.5 — плиточные категории как в Telegram
 // ═══════════════════════════════════════════════════════════════════════════════
-

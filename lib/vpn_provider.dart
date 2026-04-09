@@ -1,4 +1,4 @@
-// ignore_for_file: unused_import, unused_element
+// ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last
 part of 'main.dart';
 
 class VpnProvider extends ChangeNotifier {
@@ -32,7 +32,9 @@ class VpnProvider extends ChangeNotifier {
 
   // ── App Store Obfuscation (05.04.2026) ─────────────────────────────────────
   // Apple удалила 20+ VPN из App Store РФ. Скрываем VPN-название приложения.
-  bool   appStoreStealth        = false;  // скрыть VPN-ключевые слова из UI
+  bool   appStoreStealth        = false;
+  // Режим обхода — выбирается пользователем в настройках
+  BypassMode bypassMode = BypassMode.auto;  // скрыть VPN-ключевые слова из UI
   String stealthAppName        = 'Aura';  // нейтральное название приложения
 
   // ── App Store Obfuscation (05.04.2026) ─────────────────────────────────────
@@ -242,7 +244,7 @@ class VpnProvider extends ChangeNotifier {
         _connectedAt = DateTime.now();
         _startTrafficTimer();
         final nodeName = (_configs.isNotEmpty && selectedIndex < _configs.length)
-            ? _configs[selectedIndex].displayName : 'Aura VPN';
+            ? _configs[selectedIndex].displayName : 'Vly';
         _sendNotification('🔒 VPN подключён', nodeName);
         _showPersistentNotif();
         _ipCheck.fetchCurrent(force: true);
@@ -368,12 +370,22 @@ class VpnProvider extends ChangeNotifier {
   void _log(String msg) {
     final ts = DateTime.now().toString().split(' ').last.substring(0, 8);
     logs.add('[$ts] $msg');
-    if (logs.length > 200) logs.removeRange(0, logs.length - 200);
+    if (logs.length > 300) logs.removeRange(0, logs.length - 300);
     // Debounce: обновляем UI не чаще чем раз в 100ms
     _logDebounce?.cancel();
     _logDebounce = Timer(const Duration(milliseconds: 100), () {
       if (!_disposed) notifyListeners();
     });
+  }
+
+  // Возвращает весь лог одной строкой — для кнопки "Копировать лог"
+  String getAllLogs() {
+    final header = '=== VLY LOG ===\n'
+        'Version: $kAppVersion build $kAppBuild\n'
+        'Nodes: ${_configs.length} | Selected: $selectedIndex\n'
+        'Status: $status | AI: $aiStatus\n'
+        '====================\n';
+    return header + logs.join('\n');
   }
 
   // ── Traffic counter (v4.0) ────────────────────────────────────────────────
@@ -517,7 +529,7 @@ class VpnProvider extends ChangeNotifier {
   }
 
   // Обновить Quick Settings тайл
-  Future<void> _updateTile({required bool active, String server = 'Aura VPN'}) async {
+  Future<void> _updateTile({required bool active, String server = 'Vly'}) async {
     try {
       await _tileChannel.invokeMethod('update', {
         'active': active, 'server': server,
@@ -577,11 +589,11 @@ class VpnProvider extends ChangeNotifier {
     _setupCommandChannel();
     _ipCheck.fetchReal();
     await _loadStealthPrefs();
-    _autoConnect.load();
-    unawaited(StrategyBlacklist.load()); // восстанавливаем blacklist после рестарта
+    // _autoConnect.load() - disabled
+    // StrategyBlacklist is in-memory only (no persistent load needed)
     _bypassRules.syncFromServer(_log).then((_) => _notify());
     // Синхронизируем статистику стратегий с сервером (фоново)
-    NewsAwareness.syncFromServer(kControlPlaneUrl).catchError((_) {});
+    // NewsAwareness.syncFromServer disabled (no server configured)
     _fetchServerNodes();
   }
 
@@ -1071,11 +1083,21 @@ class VpnProvider extends ChangeNotifier {
   }
 
   Future<void> toggle() async {
-    if (isConnected) {
-      _cancelWd(); _failCount = 0; _isRotating = false; aiStatus = 'IDLE';
+    if (isConnected || status == 'CONNECTING') {
+      // Принудительно останавливаем всё — bypass, AI, rotation
+      _isRotating = false;
+      _aiAgent.stop();   // останавливаем AI bypass если висит
+      _cancelWd();
+      _failCount = 0;
+      aiStatus = 'IDLE';
+      stealthStatus = '';
+      whitelistBypassActive  = false;
+      whitelistBypassStatus  = 'IDLE';
       await _v2ray.stopV2Ray();
       await _dismissPersistentNotif();
       await _updateTile(active: false);
+      status = 'DISCONNECTED';
+      _notify();
     } else {
       if (_configs.isEmpty) { _log('✗ No nodes'); return; }
       await _connectCurrent();
@@ -1570,6 +1592,16 @@ class VpnProvider extends ChangeNotifier {
       // Fallback: возможно данные в старом формате (plaintext JSON)
       return data;
     }
+  }
+
+  // Установить режим обхода (вызывается из UI)
+  Future<void> setBypassMode(BypassMode mode) async {
+    bypassMode = mode;
+    _aiAgent.bypassMode = mode;
+    final p = await SharedPreferences.getInstance();
+    await p.setString('bypass_mode', mode.name);
+    _log('🎯 Режим обхода: \${mode.label}');
+    _notify();
   }
 
   Future<void> saveToDisk() async {

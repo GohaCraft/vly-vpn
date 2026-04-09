@@ -1,4 +1,4 @@
-// ignore_for_file: unused_import, unused_element
+// ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last
 part of 'main.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -1168,6 +1168,24 @@ class _AiBypassPage extends StatelessWidget {
     final vpn = Provider.of<VpnProvider>(context);
     return _SubPage(title: 'AI Bypass + Stealth', child: Column(children: [
 
+      // ── МЕТОД ОБХОДА ────────────────────────────────────────────────────
+      _SubSection('МЕТОД ОБХОДА (АПРЕЛЬ 2026)'),
+      _InfoCard(
+        icon: Icons.security_outlined,
+        text: '✅ Hysteria2/QUIC — лучший выбор\n'
+            '✅ VLESS+xHTTP — новый 2026\n'
+            '✅ Reality+VK SNI — белый список РКН\n'
+            '❌ VLESS+TCP plain TLS — заблокирован с 17.02.2026'),
+      const SizedBox(height: 12),
+
+      // Карточки режимов обхода
+      ...BypassMode.values.map((mode) => _BypassModeCard(
+        mode: mode,
+        selected: vpn.bypassMode == mode,
+        onSelect: () => vpn.setBypassMode(mode),
+      )),
+
+      const SizedBox(height: 20),
       _SubSection('AI BYPASS ENGINE'),
       _SwitchRow(
         icon: Icons.psychology_outlined, iconColor: _accent,
@@ -1404,7 +1422,7 @@ class _StealthStatusCard extends StatelessWidget {
                 color: color.withOpacity(0.3), blurRadius: 12)] : []),
           child: active
             ? Padding(padding: const EdgeInsets.all(5),
-                child: Image.asset('assets/images/aura_logo.png',
+                child: Image.asset('assets/images/aura_icon.png',
                     fit: BoxFit.contain))
             : Icon(Icons.security_outlined, size: 20, color: color)),
         const SizedBox(width: 14),
@@ -1711,24 +1729,38 @@ class _AboutPageState extends State<_AboutPage> {
   Widget build(BuildContext context) {
     return _SubPage(title: 'О приложении', child: Column(children: [
       // Логотип
+      // VLY иконка с неоновым свечением
       Container(
         decoration: BoxDecoration(
-          boxShadow: [BoxShadow(
-              color: _accent.withOpacity(0.35), blurRadius: 40,
-              spreadRadius: 5)]),
-        child: Image.asset('assets/images/aura_icon.png',
-            width: 120, height: 120, fit: BoxFit.contain)),
-      const SizedBox(height: 16),
-      const Text('AURA VPN', style: TextStyle(
-          fontSize: 18, fontWeight: FontWeight.w900,
-          letterSpacing: 3, color: Colors.white)),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(color: Color(0xFFFF2D55).withOpacity(0.4),
+                blurRadius: 35, spreadRadius: 2),
+            BoxShadow(color: Color(0xFFFF6B35).withOpacity(0.2),
+                blurRadius: 60, spreadRadius: 8),
+          ]),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: Image.asset('assets/images/aura_icon.png',
+              width: 130, height: 130, fit: BoxFit.contain))),
+      const SizedBox(height: 20),
+      // Название с градиентом
+      ShaderMask(
+        shaderCallback: (bounds) => LinearGradient(
+          colors: [Color(0xFFFF2D55), Color(0xFFFF6B35), Color(0xFFFFAA60)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ).createShader(bounds),
+        child: const Text('VLY', style: TextStyle(
+            fontSize: 22, fontWeight: FontWeight.w900,
+            letterSpacing: 6, color: Colors.white))),
       const SizedBox(height: 8),
       // 5 тапов → Dev Dashboard (незаметно)
       GestureDetector(
         onTap: _onVersionTap,
         onLongPress: () {
           Clipboard.setData(ClipboardData(
-              text: 'Aura VPN v$kAppVersion build $kAppBuild'));
+              text: 'Vly v$kAppVersion build $kAppBuild'));
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Версия скопирована'),
             duration: Duration(seconds: 2),
@@ -1755,6 +1787,94 @@ class _AboutPageState extends State<_AboutPage> {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  DEVELOPER DASHBOARD  —  скрытый (5 тапов по версии в О приложении)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+
+// ── Bypass Mode Card ─────────────────────────────────────────────────────────
+// Карточка выбора метода обхода в настройках AI Bypass
+class _BypassModeCard extends StatelessWidget {
+  final BypassMode mode;
+  final bool       selected;
+  final VoidCallback onSelect;
+  const _BypassModeCard({required this.mode, required this.selected,
+      required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    final isRec = mode.isRecommended;
+    return GestureDetector(
+      onTap: onSelect,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected
+              ? _accent.withOpacity(0.12)
+              : Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? _accent : Colors.white.withOpacity(0.08),
+            width: selected ? 1.5 : 1),
+        ),
+        child: Row(children: [
+          // Emoji иконка
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: selected
+                  ? _accent.withOpacity(0.2)
+                  : Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(10)),
+            child: Center(child: Text(mode.emoji,
+                style: const TextStyle(fontSize: 20)))),
+          const SizedBox(width: 12),
+          // Название + описание
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Text(mode.label, style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600,
+                  color: selected ? _accent : Colors.white.withOpacity(0.9))),
+                if (isRec) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00C853).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(4)),
+                    child: const Text('рекомендуется',
+                        style: TextStyle(fontSize: 9,
+                            color: Color(0xFF00C853),
+                            fontWeight: FontWeight.w600))),
+                ],
+              ]),
+              const SizedBox(height: 3),
+              Text(mode.description, style: TextStyle(
+                fontSize: 11, color: Colors.white.withOpacity(0.5),
+                height: 1.3)),
+              const SizedBox(height: 4),
+              // Статус актуальности
+              Text(mode.status, style: TextStyle(
+                fontSize: 10,
+                color: mode.status.startsWith('✅')
+                    ? const Color(0xFF00C853)
+                    : mode.status.startsWith('⚠️')
+                        ? const Color(0xFFFFB300)
+                        : const Color(0xFFE53935),
+                fontWeight: FontWeight.w500)),
+            ])),
+          // Индикатор выбора
+          if (selected)
+            Icon(Icons.check_circle, color: _accent, size: 20)
+          else
+            Icon(Icons.radio_button_unchecked,
+                color: Colors.white.withOpacity(0.2), size: 20),
+        ]),
+      ),
+    );
+  }
+}
 
 class _DevDashboard extends StatefulWidget {
   const _DevDashboard();
@@ -1842,7 +1962,7 @@ class _DevDashboardState extends State<_DevDashboard> {
       if (blacklist.isEmpty)
         const _DevEmptyMsg('Чёрный список пуст — все стратегии доступны')
       else
-        ...blacklist.entries.map((e) {
+        ...blacklist.map((e) {
           final mins = DateTime.now().isBefore(e.value)
               ? e.value.difference(DateTime.now()).inMinutes + 1 : 0;
           final key  = e.key.length > 28 ? e.key.substring(0, 28) : e.key;
