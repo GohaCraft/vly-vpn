@@ -37,8 +37,6 @@ class VpnProvider extends ChangeNotifier {
 
   // ── App Store Obfuscation (05.04.2026) ─────────────────────────────────────
   // Apple удалила 20+ VPN из App Store РФ. Скрываем VPN-название приложения.
-  bool   appStoreStealth        = false;  // скрыть VPN-ключевые слова из UI
-  String stealthAppName        = 'Aura';  // нейтральное название приложения
 
   // ── Трафик (v4.0) ─────────────────────────────────────────────────────────
   int    trafficUp   = 0; // bytes/s текущая скорость
@@ -873,25 +871,47 @@ class VpnProvider extends ChangeNotifier {
       String finalLink = cfg.link;
 
       // ── HYSTERIA2 AUTO-DETECT: QUIC/UDP обход DPI ────────────────────────
+      // ТСПУ не умеет анализировать QUIC трафик (март 2026)
       if (finalLink.startsWith('hy2://') || finalLink.startsWith('hysteria2://')) {
-        _log('⚡ Hysteria2 QUIC — DPI cannot analyze QUIC traffic');
-        final h2params = StealthEngine.parseHysteria2Link(finalLink);
-        if (h2params != null) {
-          final h2config = StealthEngine.buildHysteria2Config(finalLink);
-          if (h2config != null) {
-            _log('⚡ Hysteria2: ${h2params['host']}:${h2params['port']} sni=${h2params['sni']}');
-            await _v2ray.startV2Ray(
-              remark: cfg.displayName,
-              config: jsonEncode(h2config),
-              blockedApps: _splitArgsForConnect(),
-            );
-            _isRotating = false;
-            status = 'CONNECTED';
-            _notify();
-            unawaited(_postConnectOps(cfg));
-            return;
-          }
-        }
+        _log('⚡ Hysteria2 QUIC/UDP — DPI bypass');
+        try {
+          final uri      = Uri.parse(finalLink);
+          final host     = uri.host;
+          final port     = uri.port > 0 ? uri.port : 443;
+          final password = uri.userInfo;
+          final sni      = uri.queryParameters['sni'] ?? host;
+          final obfs     = uri.queryParameters['obfs'] ?? '';
+          final obfsPass = uri.queryParameters['obfs-password'] ?? '';
+          final h2config = <String, dynamic>{
+            'log': {'loglevel': 'warning'},
+            'inbounds': [{'tag': 'socks', 'port': 10808, 'protocol': 'socks',
+              'settings': {'auth': 'noauth', 'udp': true}}],
+            'outbounds': [<String, dynamic>{
+              'protocol': 'hysteria2',
+              'settings': {
+                'servers': [<String, dynamic>{
+                  'address': host, 'port': port, 'password': password,
+                  if (obfs == 'salamander')
+                    'obfs': {'type': 'salamander', 'password': obfsPass},
+                }],
+              },
+              'streamSettings': {
+                'network': 'tcp', 'security': 'tls',
+                'tlsSettings': {
+                  'serverName': sni, 'alpn': ['h3'],
+                  'allowInsecure': uri.queryParameters['insecure'] == '1',
+                },
+              },
+            }],
+          };
+          _log('⚡ Hysteria2: $host:$port sni=$sni');
+          await _v2ray.startV2Ray(
+            remark: cfg.displayName,
+            config: jsonEncode(h2config),
+            blockedApps: _splitArgsForConnect(),
+          );
+          _isRotating = false; status = 'CONNECTED'; _notify(); return;
+        } catch (e) { _log('✗ Hysteria2: $e — falling back'); }
       }
 
       // Reality SNI без сетевых проверок — используем кэш или первый в пуле
@@ -1163,7 +1183,6 @@ class VpnProvider extends ChangeNotifier {
       if (parsed.host.isEmpty) throw FormatException('No host');
     } catch (_) { _log('✗ E-1009: Invalid URL format'); return; }
     if (subLinks.contains(u)) { _log('⚠ Already exists'); return; }
-    // Гарантируем mutable (fix: Cannot add to unmodifiable list)
     _prof.subLinks = List<String>.from(_prof.subLinks);
     _prof.subLinks.add(u);
     _log('📡 Загружаю: $u');
@@ -1588,9 +1607,9 @@ class VpnProvider extends ChangeNotifier {
       stealthFragment    = p.getBool('stealth_fragment')    ?? true;
       stealthRealitySni  = p.getBool('stealth_reality_sni') ?? true;
       stealthWarmup      = p.getBool('stealth_warmup')      ?? true;
-      _configs = List<VpnConfig>.from(_prof.configsJson
+      _configs = _prof.configsJson
           .map((m) { try { return VpnConfig.fromMap(m); } catch (_) { return null; } })
-          .whereType<VpnConfig>());
+          .whereType<VpnConfig>().toList();
       if (selectedIndex >= _configs.length) selectedIndex = 0;
       _log('✔ ${_configs.length} nodes [${_prof.name}]'); _notify();
     } catch (e) { _log('✗ Load: $e'); }
