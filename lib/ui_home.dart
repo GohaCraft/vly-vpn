@@ -23,6 +23,8 @@ class HomeScreen extends StatelessWidget {
           actions: [
             _ABtn(Icons.qr_code_scanner, () => _goQr(context)),
             _ABtn(Icons.add_circle_outline_rounded, () => _showAddMenu(context, vpn)),
+            // Кнопка выйти из приложения
+            _ABtn(Icons.exit_to_app_rounded, () => _confirmExit(context, vpn)),
             const SizedBox(width: 4),
           ],
         ),
@@ -79,7 +81,36 @@ class HomeScreen extends StatelessWidget {
   }
 
   void _goQr(BuildContext ctx) => Navigator.push(ctx,
-      CupertinoPageRoute(builder: (_) => const QrScanScreen()));
+      PageRouteBuilder(
+            pageBuilder: (_, a, __) => const QrScanScreen(),
+            transitionsBuilder: (_, a, __, c) => SlideTransition(
+              position: Tween(begin: const Offset(0,1), end: Offset.zero)
+                  .animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
+              child: c)));
+
+  void _confirmExit(BuildContext ctx, VpnProvider vpn) {
+    showCupertinoDialog(context: ctx, builder: (x) => CupertinoAlertDialog(
+      title: const Text('Выйти из Vly?'),
+      content: Text(vpn.isConnected
+          ? 'VPN будет отключён' : 'Приложение закроется'),
+      actions: [
+        CupertinoDialogAction(
+            onPressed: () => Navigator.pop(x),
+            child: Text(S.t('cancel'))),
+        CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () async {
+              Navigator.pop(x);
+              if (vpn.isConnected) {
+                try { await vpn.toggle(); } catch (_) {}
+              }
+              await Future.delayed(const Duration(milliseconds: 300));
+              SystemNavigator.pop();
+            },
+            child: const Text('Выйти')),
+      ],
+    ));
+  }
 }
 
 // ── Search Bar ────────────────────────────────────────────────────────────────
@@ -484,8 +515,11 @@ class IpCheckProvider extends ChangeNotifier {
   Future<IpInfo> _fetchIpInfo() async {
     // Список API с fallback — ipapi.co часто возвращает HTML при лимите/блокировке
     final apis = [
-      'https://ipapi.co/json/',
+      // ipapi.co disabled (rate limited)
+        // 'https://ipapi.co/json/',
       'https://ip-api.com/json/?fields=query,country,countryCode,city,isp',
+        'https://freeipapi.com/api/json',
+        'https://api.myip.com',
       'https://ipwho.is/',
     ];
 
@@ -1149,7 +1183,7 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
     }
   }
 
-  static const _shareChannel = MethodChannel('aura_vpn/share');
+  static const _shareChannel = MethodChannel('vly_vpn/share');
 
   // Импорт файла — открываем системный file picker через share intent
   Future<void> _importFromFile() async {
@@ -1208,7 +1242,12 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
                 icon: Icons.qr_code_scanner_rounded,
                 label: 'QR',
                 color: _accent,
-                onTap: () { Navigator.pop(context); Navigator.push(context, CupertinoPageRoute(builder: (_) => const QrScanScreen())); },
+                onTap: () { Navigator.pop(context); Navigator.push(context, PageRouteBuilder(
+            pageBuilder: (_, a, __) => const QrScanScreen(),
+            transitionsBuilder: (_, a, __, c) => SlideTransition(
+              position: Tween(begin: const Offset(0,1), end: Offset.zero)
+                  .animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
+              child: c))); },
               )),
               const SizedBox(width: 8),
               Expanded(child: _AddMenuBtn(
@@ -2117,11 +2156,11 @@ class _NodeListSliver extends StatelessWidget {
           tint: const Color(0xFF0D47A1), tintOpacity: 0.12,
           child: Column(children: nodes.asMap().entries.map((e) {
             final idx = vpn.configs.indexOf(e.value);
-            return _NodeTile(
+            return RepaintBoundary(child: _NodeTile(
               cfg: e.value, idx: idx,
               isLast: e.key == nodes.length - 1,
               vpn: vpn,
-              onRename: () => _dlgNodeStatic(ctx, vpn, idx));
+              onRename: () => _dlgNodeStatic(ctx, vpn, idx)));
           }).toList()))),
       ));
     }
@@ -2208,7 +2247,7 @@ class AutoConnectAppsScreen extends StatefulWidget {
 }
 
 class _AutoConnectAppsScreenState extends State<AutoConnectAppsScreen> {
-  static const _appsChannel = MethodChannel('aura_vpn/apps');
+  static const _appsChannel = MethodChannel('vly_vpn/apps');
 
   List<InstalledApp> _all      = [];
   List<InstalledApp> _filtered = [];
@@ -2452,7 +2491,7 @@ class SplitTunnelAppsScreen extends StatefulWidget {
 }
 
 class _SplitTunnelAppsScreenState extends State<SplitTunnelAppsScreen> {
-  static const _appsChannel = MethodChannel('aura_vpn/apps');
+  static const _appsChannel = MethodChannel('vly_vpn/apps');
 
   List<InstalledApp> _all      = [];
   List<InstalledApp> _filtered = [];
@@ -2942,7 +2981,7 @@ class _QrPainter extends CustomPainter {
 class Share {
   static Future<void> share(String text, {String? subject}) async {
     try {
-      await const MethodChannel('aura_vpn/share')
+      await const MethodChannel('vly_vpn/share')
           .invokeMethod('share', {'text': text, 'subject': subject ?? ''});
     } catch (_) {
       // fallback — просто копируем

@@ -21,7 +21,10 @@ class ServersScreen extends StatelessWidget {
             const SizedBox(width: 4),
           ],
         ),
-        body: CustomScrollView(physics: const BouncingScrollPhysics(), slivers: [
+        body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        cacheExtent: 500, // кэшируем 500px за экраном — плавный скролл
+        slivers: [
           // GlassAppBar без extendBodyBehindAppBar — Flutter добавляет отступ сам
           // Нам нужен только небольшой зазор под AppBar
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
@@ -29,7 +32,12 @@ class ServersScreen extends StatelessWidget {
           SliverToBoxAdapter(child: _ListHeader(vpn: vpn)),
           if (vpn.filteredConfigs.isEmpty)
             SliverToBoxAdapter(child: _EmptyState(
-                onScan: () => Navigator.push(context, CupertinoPageRoute(builder: (_) => const QrScanScreen())),
+                onScan: () => Navigator.push(context, PageRouteBuilder(
+              pageBuilder: (_, a, __) => const QrScanScreen(),
+              transitionsBuilder: (_, a, __, c) => SlideTransition(
+                position: Tween(begin: const Offset(0,1), end: Offset.zero)
+                    .animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
+                child: c))),
                 onAdd: () => _showAddMenu(context, vpn)))
           else
             _NodeListSliver(vpn: vpn),

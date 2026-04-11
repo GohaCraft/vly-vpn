@@ -420,7 +420,7 @@ class _SubSettingsPage extends StatelessWidget {
       _SubSection('USER AGENT'),
       _TextInputRow(
         label: 'User-Agent запросов',
-        hint: 'AuraVPN/$kAppVersion/Android',
+        hint: 'Vly/$kAppVersion/Android',
         value: vpn.subUserAgent,
         onChanged: vpn.setSubUserAgent),
     ]));
@@ -1833,28 +1833,32 @@ class _BypassModeCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                Text(mode.label, style: TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600,
-                  color: selected ? _accent : Colors.white.withOpacity(0.9))),
+                Flexible(child: Text(mode.label,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600,
+                    color: selected ? _accent : Colors.white.withOpacity(0.9)))),
                 if (isRec) ...[
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
                       color: const Color(0xFF00C853).withOpacity(0.15),
                       borderRadius: BorderRadius.circular(4)),
-                    child: const Text('рекомендуется',
+                    child: const Text('✓',
                         style: TextStyle(fontSize: 9,
                             color: Color(0xFF00C853),
                             fontWeight: FontWeight.w600))),
                 ],
               ]),
               const SizedBox(height: 3),
-              Text(mode.description, style: TextStyle(
+              Text(mode.description,
+                overflow: TextOverflow.visible,
+                style: TextStyle(
                 fontSize: 11, color: Colors.white.withOpacity(0.5),
                 height: 1.3)),
               const SizedBox(height: 4),
-              // Статус актуальности
               Text(mode.status, style: TextStyle(
                 fontSize: 10,
                 color: mode.status.startsWith('✅')
@@ -2634,106 +2638,514 @@ class _SkinPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-      child: SizedBox(
-        height: 72,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: AuraSkin.all.length + 1, // +1 для "My Theme" кнопки
-          separatorBuilder: (_, __) => const SizedBox(width: 8),
-          itemBuilder: (_, i) {
-            // Последний элемент — кнопка "Моя тема"
-            if (i == AuraSkin.all.length) {
-              return GestureDetector(
-                onTap: () => Navigator.push(context, CupertinoPageRoute(
-                    builder: (_) => const _CustomThemeEditor())),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  width: 66,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft, end: Alignment.bottomRight,
-                      colors: [Colors.white.withOpacity(0.08), Colors.white.withOpacity(0.03)]),
-                    border: Border.all(
-                      color: app.skinId == AuraSkinId.custom
-                          ? app.skin.accent.withOpacity(0.8) : Colors.white24,
-                      width: app.skinId == AuraSkinId.custom ? 1.8 : 1.0),
-                    boxShadow: app.skinId == AuraSkinId.custom ? [
-                      BoxShadow(color: app.skin.accent.withOpacity(0.3), blurRadius: 14)] : [],
-                  ),
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('🎨', style: TextStyle(fontSize: 20)),
-                      SizedBox(height: 4),
-                      Text('My', style: TextStyle(fontSize: 8, color: Colors.white54)),
-                      SizedBox(height: 2),
-                      Text('Theme', style: TextStyle(fontSize: 7, color: Colors.white38)),
-                    ]),
-                ));
-            }
-            final skin = AuraSkin.all[i];
-            final sel  = app.skinId == skin.id;
-            return GestureDetector(
-              onTap: () => app.setSkin(skin.id),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOut,
-                width: 60,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      skin.accent.withOpacity(sel ? 0.35 : 0.15),
-                      skin.accentSecondary.withOpacity(sel ? 0.20 : 0.07),
-                    ]),
-                  border: Border.all(
-                    color: sel
-                        ? skin.accent.withOpacity(0.8)
-                        : skin.accent.withOpacity(0.25),
-                    width: sel ? 1.8 : 1.0),
-                  boxShadow: sel ? [
-                    BoxShadow(
-                      color: skin.accent.withOpacity(0.35),
-                      blurRadius: 14)
-                  ] : [],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(skin.emoji,
-                        style: TextStyle(
-                            fontSize: sel ? 22 : 18)),
-                    const SizedBox(height: 4),
-                    Text(skin.name,
-                        style: TextStyle(
-                            fontSize: 8,
-                            color: sel
-                                ? skin.accent
-                                : Colors.white38,
-                            fontWeight: sel
-                                ? FontWeight.bold
-                                : FontWeight.normal),
-                        overflow: TextOverflow.ellipsis),
-                    if (sel) ...[
-                      const SizedBox(height: 3),
-                      Container(
-                        width: 16, height: 2,
-                        decoration: BoxDecoration(
-                          color: skin.accent,
-                          borderRadius: BorderRadius.circular(1))),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          childAspectRatio: 1.1,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
         ),
+        itemCount: AuraSkin.all.length + 1,
+        itemBuilder: (ctx, i) {
+          if (i == AuraSkin.all.length) {
+            return _SkinGridTile(
+              name: 'My Theme',
+              emoji: '🎨',
+              accent: app.skin.accent,
+              bgColor: const Color(0xFF1A1A2E),
+              selected: app.skinId == AuraSkinId.custom,
+              onTap: () => Navigator.push(context, PageRouteBuilder(
+                pageBuilder: (_, a, __) => const _CustomThemeEditor(),
+                transitionsBuilder: (_, a, __, c) => SlideTransition(
+                  position: Tween(begin: const Offset(0,1), end: Offset.zero)
+                      .animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
+                  child: c))),
+              customChild: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.palette_outlined, color: app.skin.accent, size: 28),
+                  const SizedBox(height: 6),
+                  Text('My Theme', style: TextStyle(
+                    fontSize: 11, color: app.skin.accent,
+                    fontWeight: FontWeight.w600)),
+                  if (app.skinId == AuraSkinId.custom)
+                    const SizedBox(height: 4),
+                  if (app.skinId == AuraSkinId.custom)
+                    Text('активна', style: TextStyle(
+                      fontSize: 9, color: app.skin.accent.withOpacity(0.7))),
+                ]),
+            );
+          }
+          final skin = AuraSkin.all[i];
+          final sel  = app.skinId == skin.id;
+          return _SkinGridTile(
+            name: skin.name, emoji: skin.emoji,
+            accent: skin.accent, bgColor: skin.bgDark,
+            selected: sel,
+            onTap: () => app.setSkin(skin.id),
+          );
+        },
       ),
     );
+  }
+}
+
+// Плитка темы в сетке
+class _SkinGridTile extends StatelessWidget {
+  final String   name, emoji;
+  final Color    accent, bgColor;
+  final bool     selected;
+  final VoidCallback onTap;
+  final Widget?  customChild;
+
+  const _SkinGridTile({
+    required this.name, required this.emoji,
+    required this.accent, required this.bgColor,
+    required this.selected, required this.onTap,
+    this.customChild,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: bgColor,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [
+              accent.withOpacity(selected ? 0.25 : 0.08),
+              bgColor.withOpacity(0.95),
+            ]),
+          border: Border.all(
+            color: selected ? accent : accent.withOpacity(0.2),
+            width: selected ? 1.8 : 0.8),
+          boxShadow: selected ? [
+            BoxShadow(color: accent.withOpacity(0.4), blurRadius: 12, spreadRadius: 1),
+            BoxShadow(color: accent.withOpacity(0.2), blurRadius: 24),
+          ] : [],
+        ),
+        child: customChild ?? Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Превью фона — мини блобы
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(colors: [
+                  accent.withOpacity(0.7),
+                  accent.withOpacity(0.1),
+                ])),
+              child: Center(child: Text(emoji,
+                  style: const TextStyle(fontSize: 18)))),
+            const SizedBox(height: 8),
+            Text(name, style: TextStyle(
+              fontSize: 11,
+              color: selected ? accent : Colors.white.withOpacity(0.7),
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500),
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center),
+            if (selected) ...[
+              const SizedBox(height: 4),
+              Container(
+                width: 20, height: 2,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(1))),
+            ],
+          ]),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CUSTOM THEME EDITOR — редактор собственной темы
+// ═══════════════════════════════════════════════════════════════════════════
+class _CustomThemeEditor extends StatefulWidget {
+  const _CustomThemeEditor();
+  @override State<_CustomThemeEditor> createState() => _CustomThemeEditorState();
+}
+
+class _CustomThemeEditorState extends State<_CustomThemeEditor> {
+  late AppProvider _app;
+
+  @override
+  void initState() {
+    super.initState();
+    _app = Provider.of<AppProvider>(context, listen: false);
+  }
+
+  Future<void> _pickPhoto() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final path = result.files.first.path;
+      if (path == null) return;
+      final ext  = path.split('.').last.toLowerCase();
+      final type = ext == 'gif' ? 'gif' : 'photo';
+      await _app.setCustomTheme(mediaPath: path, mediaType: type);
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  Future<void> _clearPhoto() async {
+    await _app.clearCustomMedia();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = Provider.of<AppProvider>(context);
+    return AuraBlobBg(child: Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: GlassAppBar(
+        title: const Text('Моя тема',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+              color: Colors.white)),
+        actions: [
+          // Сохранить
+          TextButton(
+            onPressed: () {
+              app.setSkin(AuraSkinId.custom);
+              Navigator.pop(context);
+            },
+            child: Text('Сохранить',
+              style: TextStyle(color: _accent, fontWeight: FontWeight.w700,
+                  fontSize: 13))),
+        ],
+      ),
+      body: ListView(
+        padding: EdgeInsets.fromLTRB(16, GlassAppBar.totalHeight(context) + 8, 16, 40),
+        children: [
+
+          // ── ПРЕВЬЮ ──────────────────────────────────────────────────────
+          Container(
+            height: 140,
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              color: app.skin.bgDark,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
+                colors: [app.skin.accent.withOpacity(0.2), app.skin.bgDark]),
+              border: Border.all(color: app.skin.accent.withOpacity(0.3)),
+              boxShadow: [BoxShadow(
+                  color: app.skin.accent.withOpacity(0.25), blurRadius: 20)],
+            ),
+            child: Center(child: Column(
+              mainAxisAlignment: MainAxisAlignment.center, children: [
+                Container(
+                  width: 50, height: 50,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: app.skin.accent, width: 2),
+                    color: app.skin.accent.withOpacity(0.1)),
+                  child: Icon(Icons.power_settings_new_rounded,
+                      color: app.skin.accent, size: 26)),
+                const SizedBox(height: 10),
+                Text('ПРЕДПРОСМОТР', style: TextStyle(
+                    color: app.skin.accent, fontSize: 11,
+                    fontWeight: FontWeight.w800, letterSpacing: 2)),
+              ]))),
+
+          // ── ЦВЕТ АКЦЕНТА ────────────────────────────────────────────────
+          _SectionLabel('Цвет акцента'),
+          _ColorRow(label: 'Акцент', color: app.customAccent,
+            onTap: () => _showColorPicker(context, app.customAccent, (c) {
+              app.setCustomTheme(accent: c); setState((){});
+            })),
+          _ColorRow(label: 'Акцент 2', color: app.customAccent2,
+            onTap: () => _showColorPicker(context, app.customAccent2, (c) {
+              app.setCustomTheme(accent2: c); setState((){});
+            })),
+
+          const SizedBox(height: 16),
+
+          // ── ЦВЕТ ФОНА ────────────────────────────────────────────────────
+          _SectionLabel('Цвет фона'),
+          _ColorRow(label: 'Фон', color: app.customBg,
+            onTap: () => _showColorPicker(context, app.customBg, (c) {
+              app.setCustomTheme(bg: c); setState((){});
+            })),
+          _ColorRow(label: 'Блоб 1', color: app.customBlob1,
+            onTap: () => _showColorPicker(context, app.customBlob1, (c) {
+              app.setCustomTheme(blob1: c); setState((){});
+            })),
+          _ColorRow(label: 'Блоб 2', color: app.customBlob2,
+            onTap: () => _showColorPicker(context, app.customBlob2, (c) {
+              app.setCustomTheme(blob2: c); setState((){});
+            })),
+
+          const SizedBox(height: 16),
+
+          // ── ФОН — ФОТО / GIF ─────────────────────────────────────────────
+          _SectionLabel('Фото / GIF фон'),
+          GestureDetector(
+            onTap: _pickPhoto,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: Colors.white.withOpacity(0.05),
+                border: Border.all(color: Colors.white.withOpacity(0.1))),
+              child: Row(children: [
+                Icon(Icons.photo_library_outlined,
+                    color: _accent, size: 22),
+                const SizedBox(width: 12),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Выбрать фото или GIF',
+                    style: TextStyle(color: Colors.white.withOpacity(0.9),
+                        fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(
+                    app.hasCustomMedia
+                      ? app.customMediaPath.split('/').last
+                      : 'JPG, PNG, GIF — до 20 МБ',
+                    style: TextStyle(
+                      color: app.hasCustomMedia
+                        ? _accent : Colors.white.withOpacity(0.4),
+                      fontSize: 11),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                ])),
+                if (app.hasCustomMedia)
+                  GestureDetector(
+                    onTap: _clearPhoto,
+                    child: const Icon(Icons.close, color: Colors.redAccent, size: 18))
+                else
+                  Icon(Icons.add_circle_outline,
+                      color: _accent.withOpacity(0.6), size: 20),
+              ])),
+          ),
+
+          // Предпросмотр медиа
+          if (app.hasCustomMedia) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.file(
+                File(app.customMediaPath),
+                height: 100, width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  height: 100,
+                  color: Colors.white.withOpacity(0.05),
+                  child: const Center(child: Icon(Icons.broken_image,
+                      color: Colors.white30))),
+              )),
+            const SizedBox(height: 8),
+          ],
+
+          const SizedBox(height: 24),
+
+          // ── ПРИМЕНИТЬ ────────────────────────────────────────────────────
+          GestureDetector(
+            onTap: () {
+              app.setSkin(AuraSkinId.custom);
+              Navigator.pop(context);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(colors: [
+                  _accent, _accent.withOpacity(0.7)])),
+              child: const Text('Применить тему',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 15,
+                    fontWeight: FontWeight.w700, letterSpacing: 0.5))),
+          ),
+        ],
+      ),
+    ));
+  }
+
+  void _showColorPicker(BuildContext ctx, Color current, ValueChanged<Color> onChanged) {
+    showModalBottomSheet(
+      context: ctx,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _ColorPickerSheet(current: current, onChanged: onChanged));
+  }
+}
+
+// Строка выбора цвета
+class _ColorRow extends StatelessWidget {
+  final String label;
+  final Color  color;
+  final VoidCallback onTap;
+  const _ColorRow({required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext ctx) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.white.withOpacity(0.04),
+        border: Border.all(color: Colors.white.withOpacity(0.08))),
+      child: Row(children: [
+        Container(
+          width: 32, height: 32,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white24, width: 1),
+            boxShadow: [BoxShadow(color: color.withOpacity(0.5), blurRadius: 8)])),
+        const SizedBox(width: 12),
+        Expanded(child: Text(label, style: const TextStyle(
+            color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500))),
+        Text(
+          '#${color.value.toRadixString(16).substring(2).toUpperCase()}',
+          style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11,
+              fontFamily: 'monospace')),
+        const SizedBox(width: 8),
+        Icon(Icons.chevron_right, color: Colors.white.withOpacity(0.3), size: 18),
+      ])));
+}
+
+// Секция-заголовок
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  const _SectionLabel(this.text);
+  @override
+  Widget build(BuildContext ctx) => Padding(
+    padding: const EdgeInsets.only(bottom: 8, top: 4),
+    child: Text(text, style: TextStyle(
+      fontSize: 11, fontWeight: FontWeight.w700,
+      color: Colors.white.withOpacity(0.4),
+      letterSpacing: 1.2)));
+}
+
+// Bottom sheet выбора цвета
+class _ColorPickerSheet extends StatefulWidget {
+  final Color current;
+  final ValueChanged<Color> onChanged;
+  const _ColorPickerSheet({required this.current, required this.onChanged});
+  @override State<_ColorPickerSheet> createState() => _ColorPickerSheetState();
+}
+
+class _ColorPickerSheetState extends State<_ColorPickerSheet> {
+  late Color _selected;
+  late TextEditingController _hexCtrl;
+
+  // Палитра популярных цветов
+  static const _palette = [
+    Color(0xFFFF4D4D), Color(0xFFFF6B35), Color(0xFFFFD700), Color(0xFF00E676),
+    Color(0xFF00B4D8), Color(0xFF00E5FF), Color(0xFF4FC3F7), Color(0xFF7C4DFF),
+    Color(0xFFD500F9), Color(0xFFFF4081), Color(0xFFFFB5D8), Color(0xFFE8B8A0),
+    Color(0xFF00FF9F), Color(0xFF00FF41), Color(0xFFFF9800), Color(0xFFCDDC39),
+    Color(0xFFFFFFFF), Color(0xFFBDBDBD), Color(0xFF757575), Color(0xFF212121),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.current;
+    _hexCtrl = TextEditingController(
+        text: widget.current.value.toRadixString(16).substring(2).toUpperCase());
+  }
+
+  @override
+  void dispose() { _hexCtrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext ctx) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border.all(color: Colors.white.withOpacity(0.1))),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Handle
+        Container(width: 36, height: 4,
+          decoration: BoxDecoration(color: Colors.white24,
+              borderRadius: BorderRadius.circular(2))),
+        const SizedBox(height: 16),
+        // Превью
+        Container(
+          width: double.infinity, height: 56,
+          decoration: BoxDecoration(
+            color: _selected,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [BoxShadow(color: _selected.withOpacity(0.5), blurRadius: 16)])),
+        const SizedBox(height: 16),
+        // Палитра
+        Wrap(spacing: 10, runSpacing: 10, children: _palette.map((c) =>
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _selected = c;
+                _hexCtrl.text = c.value.toRadixString(16).substring(2).toUpperCase();
+              });
+              widget.onChanged(c);
+            },
+            child: Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: c, borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: _selected == c ? Colors.white : Colors.transparent,
+                  width: 2.5))),
+          )).toList()),
+        const SizedBox(height: 16),
+        // HEX ввод
+        Row(children: [
+          Text('HEX: ', style: TextStyle(
+              color: Colors.white.withOpacity(0.6), fontSize: 13)),
+          Expanded(child: TextField(
+            controller: _hexCtrl,
+            style: const TextStyle(color: Colors.white, fontSize: 13,
+                fontFamily: 'monospace'),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              filled: true, fillColor: Colors.white.withOpacity(0.07),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none)),
+            onChanged: (v) {
+              if (v.length == 6) {
+                try {
+                  final c = Color(int.parse('FF$v', radix: 16));
+                  setState(() => _selected = c);
+                  widget.onChanged(c);
+                } catch (_) {}
+              }
+            },
+          )),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () => Navigator.pop(ctx),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: _accent, borderRadius: BorderRadius.circular(8)),
+              child: const Text('OK', style: TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700)))),
+        ]),
+      ]));
   }
 }
 

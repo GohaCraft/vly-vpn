@@ -165,10 +165,10 @@ class VpnProvider extends ChangeNotifier {
   int    _failCount  = 0;
   Timer? _watchdog;
   bool   _isRotating = false;
-  static const int      maxFails        = 3;
+  static const int      maxFails        = 2;
   // FIX: 9с слишком мало — pacing+warmup+SNI может занять до 15 сек
   // Увеличено до 30с — это реальный timeout для VPN подключения
-  static const Duration _watchdogTimeout = Duration(seconds: 30);
+  static const Duration _watchdogTimeout = Duration(seconds: 12);
 
   // ── Группировка с избранным и поиском ─────────────────────────────────────
 
@@ -608,7 +608,9 @@ class VpnProvider extends ChangeNotifier {
   }
 
   Future<void> createProfile(String name) async {
-    final p = AuraProfile(id: AuraProfile._uid(), name: name.trim().isEmpty ? 'Profile' : name.trim());
+    final trimmed = name.trim().isEmpty ? 'Profile' : name.trim();
+    final limited = trimmed.length > 20 ? trimmed.substring(0, 20) : trimmed;
+    final p = AuraProfile(id: AuraProfile._uid(), name: limited);
     profiles.add(p);
     await saveToDisk(); _notify();
   }
@@ -839,12 +841,23 @@ class VpnProvider extends ChangeNotifier {
   }
 
   Future<void> _reconnect(VpnConfig cfg) async {
-    if (_isRotating) return; // guard против двойного вызова
+    if (_isRotating) return;
     _isRotating = true; _notify();
     try { await _v2ray.stopV2Ray(); } catch (_) {}
-    await Future.delayed(const Duration(milliseconds: 1200));
+    await Future.delayed(const Duration(milliseconds: 800));
     if (_disposed) { _isRotating = false; return; }
-    await _connectWith(cfg);
+    // Очищаем AI-суффиксы из ссылки (#whitelist_df=... и т.д.)
+    final cleanLink = cfg.link
+        .split('#whitelist_df=').first
+        .split('#fragment=').first;
+    final cleanCfg = VpnConfig(
+      name: cfg.name, link: cleanLink,
+      customName: cfg.customName, groupName: cfg.groupName,
+      sourceUrl: cfg.sourceUrl, isManual: cfg.isManual,
+      isAiPatched: true, isFavourite: cfg.isFavourite,
+    );
+    _log('🔄 Reconnecting: ${cleanCfg.displayName}');
+    await _connectWith(cleanCfg);
     _isRotating = false; aiStatus = 'IDLE'; _notify();
   }
 

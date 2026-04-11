@@ -1,5 +1,7 @@
 // ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last, prefer_final_locals, omit_local_variable_types, always_use_package_imports
 part of 'main.dart';
+// ignore: depend_on_referenced_packages
+import 'dart:math' as math;
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -764,32 +766,46 @@ class _AuraBlobBgState extends State<AuraBlobBg> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    // Фон берём из активного скина — каждая тема имеет уникальный bg
-    final app = _AppProviderRef.instance;
-    // Берём bgDark из активного скина безопасно
+    final app     = _AppProviderRef.instance;
     final _skinId = app?.skinId ?? AuraSkinId.crimson;
-    final skinBg  = AuraSkin.byId(_skinId).bgDark;
+    final activeSkin = AuraSkin.byId(_skinId);
+    final skinBg  = activeSkin.bgDark;
+    final skinMid = activeSkin.bgGradientMid;
     final bg = widget.isLight
         ? (widget.connected ? const Color(0xFFEDF4FC) : const Color(0xFFF5F6FC))
         : (widget.connected
             ? Color.lerp(skinBg, Colors.black, 0.12)!
             : skinBg);
 
-    // Кастомный медиа-фон (фото / GIF / видео)
     final hasMedia = app != null && app.hasCustomMedia;
-    // opacity медиа-фона — при видео чуть темнее для читаемости UI
     final mediaOpacity = app?.customMediaType == 'video' ? 0.45 : 0.40;
 
     return Stack(children: [
       Container(color: bg),
-      // Медиа-фон поверх цвета
+      // Радиальный градиент поверх (глубина)
+      if (!widget.isLight)
+        Positioned.fill(child: IgnorePointer(child: Container(
+          decoration: BoxDecoration(gradient: RadialGradient(
+            center: const Alignment(-0.3, -0.6),
+            radius: 1.3,
+            colors: [skinMid.withOpacity(0.55), Colors.transparent],
+          ))))),
+      // Узор скина
+      if (!widget.isLight && activeSkin.pattern != SkinPattern.none)
+        Positioned.fill(child: RepaintBoundary(child: CustomPaint(
+          painter: _PatternPainter(
+            pattern: activeSkin.pattern,
+            color: activeSkin.accent,
+            opacity: activeSkin.patternOpacity,
+          )))),
+      // Медиа-фон
       if (hasMedia)
         Positioned.fill(child: _MediaBackground(
           path: app.customMediaPath,
           type: app.customMediaType,
           opacity: mediaOpacity,
         )),
-      // Блобы — уменьшаем при медиа чтобы не перегружать
+      // Блобы
       if (!_lowPerf)
         RepaintBoundary(
           child: Opacity(
