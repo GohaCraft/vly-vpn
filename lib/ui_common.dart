@@ -1,8 +1,5 @@
 // ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last, prefer_final_locals, omit_local_variable_types, always_use_package_imports
 part of 'main.dart';
-// ignore: depend_on_referenced_packages
-import 'dart:math' as math;
-
 
 // ═══════════════════════════════════════════════════════════════
 //  GLASSMORPHISM 2.0
@@ -118,313 +115,7 @@ class _MediaBackgroundState extends State<_MediaBackground> {
 //  CUSTOM THEME EDITOR  —  Редактор пользовательской темы
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class _CustomThemeEditor extends StatefulWidget {
-  const _CustomThemeEditor();
-  @override State<_CustomThemeEditor> createState() => _CustomThemeEditorState();
-}
-
-class _CustomThemeEditorState extends State<_CustomThemeEditor> {
-  late Color _accent, _accent2, _bg, _blob1, _blob2;
-  String _mediaPath = '', _mediaType = '';
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final app = Provider.of<AppProvider>(context, listen: false);
-    _accent   = app.customAccent;
-    _accent2  = app.customAccent2;
-    _bg       = app.customBg;
-    _blob1    = app.customBlob1;
-    _blob2    = app.customBlob2;
-    _mediaPath = app.customMediaPath;
-    _mediaType = app.customMediaType;
-  }
-
-  // Медиа-пикер через MethodChannel (Android native file picker)
-  Future<void> _pickMedia() async {
-    // Показываем выбор типа
-    final choice = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text('Фон приложения'),
-        message: const Text('Выбери тип медиа для фона'),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.pop(ctx, 'photo'),
-            child: const Text('📷 Фото или GIF из галереи')),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.pop(ctx, 'path'),
-            child: const Text('📝 Ввести путь вручную')),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDestructiveAction: true,
-          onPressed: () => Navigator.pop(ctx, null),
-          child: Text(S.t('cancel'))),
-      ),
-    );
-    if (choice == null || !mounted) return;
-    if (choice == 'path') { _showPathInput(); return; }
-
-    // Используем существующий MethodChannel для выбора файла
-    try {
-      final result = await VpnProvider.cmdChannel
-          .invokeMethod<String>('pickFile');
-      if (result != null && result.isNotEmpty && mounted) {
-        final ext  = result.split('.').last.toLowerCase();
-        final type = ext == 'gif' ? 'gif' : 'photo';
-        setState(() { _mediaPath = result; _mediaType = type; });
-      }
-    } catch (_) {
-      // MethodChannel не поддерживает pickFile — ручной ввод
-      if (mounted) _showPathInput();
-    }
-  }
-
-  void _showPathInput() {
-    final ctrl = TextEditingController(text: _mediaPath);
-    showCupertinoDialog(context: context, builder: (ctx) => CupertinoAlertDialog(
-      title: const Text('Путь к файлу'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        const SizedBox(height: 8),
-        const Text('Введи полный путь к фото или GIF', style: TextStyle(fontSize: 12)),
-        const SizedBox(height: 8),
-        CupertinoTextField(controller: ctrl, placeholder: '/storage/emulated/0/...'),
-      ]),
-      actions: [
-        CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
-        CupertinoDialogAction(onPressed: () {
-          final path = ctrl.text.trim();
-          Navigator.pop(ctx);
-          if (path.isNotEmpty && File(path).existsSync()) {
-            final ext = path.split('.').last.toLowerCase();
-            setState(() { _mediaPath = path; _mediaType = ext == 'gif' ? 'gif' : 'photo'; });
-          }
-        }, child: const Text('OK')),
-      ],
-    ));
-  }
-
-  Future<void> _save() async {
-    setState(() => _saving = true);
-    final app = Provider.of<AppProvider>(context, listen: false);
-    await app.saveCustomTheme(
-      accent: _accent, accent2: _accent2, bg: _bg,
-      blob1: _blob1, blob2: _blob2,
-      mediaPath: _mediaPath, mediaType: _mediaType,
-    );
-    if (mounted) {
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: const Text('Тема сохранена ✓'),
-        backgroundColor: Color(0xFF1B3A1B),
-        duration: Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Live preview используя текущие цвета
-    // Preview uses _accent, _bg etc directly
-    return AuraScaffold(
-      title: 'Моя тема',
-      body: ListView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 60),
-        children: [
-
-          // ── Превью ──────────────────────────────────────────────────────────
-          _SubSection('ПРЕВЬЮ'),
-          Container(
-            height: 120,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              color: _bg,
-              boxShadow: [BoxShadow(color: _accent.withOpacity(0.3), blurRadius: 24)]),
-            child: Stack(children: [
-              // Блоб-превью
-              Positioned.fill(child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: CustomPaint(
-                  painter: _PreviewBlobPainter([_blob1, _blob2, _accent]),
-                  child: const SizedBox.expand()))),
-              // Медиа превью
-              if (_mediaPath.isNotEmpty && File(_mediaPath).existsSync())
-                Positioned.fill(child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: Opacity(opacity: 0.45,
-                    child: _mediaType == 'video'
-                        ? Container(color: Colors.black54,
-                            child: Icon(Icons.play_circle_fill_rounded, color: _accent, size: 44))
-                        : Image.file(File(_mediaPath), fit: BoxFit.cover)))),
-              // Кнопка VPN превью
-              Center(child: Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(colors: [
-                    _accent.withOpacity(0.4), _bg.withOpacity(0.6)]),
-                  border: Border.all(color: _accent.withOpacity(0.8), width: 2)),
-                child: Icon(Icons.vpn_key_rounded, color: _accent, size: 28))),
-            ]),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Цвета ───────────────────────────────────────────────────────────
-          _SubSection('ЦВЕТА'),
-          _ColorRow('Акцент (основной)', _accent, (c) => setState(() => _accent = c)),
-          _ColorRow('Акцент (вторичный)', _accent2, (c) => setState(() => _accent2 = c)),
-          _ColorRow('Фон', _bg, (c) => setState(() => _bg = c)),
-          _ColorRow('Блоб 1', _blob1, (c) => setState(() => _blob1 = c)),
-          _ColorRow('Блоб 2', _blob2, (c) => setState(() => _blob2 = c)),
-
-          const SizedBox(height: 20),
-
-          // ── Фон (медиа) ─────────────────────────────────────────────────────
-          _SubSection('ФОН'),
-          GlassBox(
-            radius: 14, blur: 20,
-            tint: _accent, tintOpacity: 0.06,
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                if (_mediaPath.isNotEmpty && File(_mediaPath).existsSync()) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: _mediaType == 'video'
-                        ? Container(
-                            height: 120, width: double.infinity,
-                            decoration: BoxDecoration(color: Colors.black87,
-                                borderRadius: BorderRadius.circular(10)),
-                            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              Icon(Icons.play_circle_fill_rounded, color: _accent, size: 52),
-                              const SizedBox(height: 6),
-                              const Text('Видео выбрано',
-                                  style: TextStyle(fontSize: 11, color: Colors.white54)),
-                            ]))
-                        : Image.file(File(_mediaPath),
-                            height: 120, width: double.infinity, fit: BoxFit.cover)),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Expanded(child: Text(
-                      _mediaPath.split('/').last,
-                      style: const TextStyle(fontSize: 10, color: Colors.white54),
-                      overflow: TextOverflow.ellipsis)),
-                    GestureDetector(
-                      onTap: () {
-                        final app = Provider.of<AppProvider>(context, listen: false);
-                        app.clearCustomMedia();
-                        setState(() { _mediaPath = ''; _mediaType = ''; });
-                      },
-                      child: const Icon(Icons.close, size: 16, color: Colors.white38)),
-                  ]),
-                  const SizedBox(height: 8),
-                ] else
-                  const Text('Фото или GIF как фон приложения',
-                      style: TextStyle(fontSize: 12, color: Colors.white54)),
-                const SizedBox(height: 8),
-                Row(children: [
-                  Expanded(child: _ActionBtn(
-                    icon: Icons.perm_media_outlined,
-                    label: 'Фото / GIF',
-                    color: _accent,
-                    onTap: _pickMedia)),
-                  const SizedBox(width: 8),
-                  Expanded(child: _ActionBtn(
-                    icon: Icons.edit_outlined,
-                    label: 'Ввести путь',
-                    color: _accent2,
-                    onTap: _showPathInput)),
-                ]),
-                const SizedBox(height: 6),
-                Text(
-                  'Фото: JPEG, PNG, WebP · GIF: ~25fps анимация\n'
-                  'Видео: MP4, MKV, MOV · Фон без звука, зациклен\n'
-                  'Оптимизация: авто-даунскейл до 2160px',
-                  style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.25)),
-                ),
-              ]),
-            )),
-          const SizedBox(height: 20),
-
-          // ── Быстрые пресеты ─────────────────────────────────────────────────
-          _SubSection('БЫСТРЫЕ ПРЕСЕТЫ'),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            _PresetChip('Киберпанк', const Color(0xFFFF006E), const Color(0xFF00F5FF), const Color(0xFF000814),
-                (a, a2, bg) => setState(() { _accent=a; _accent2=a2; _bg=bg; _blob1=const Color(0xFF1A0030); _blob2=const Color(0xFF003040); })),
-            _PresetChip('Лес', const Color(0xFF00E676), const Color(0xFF69FF47), const Color(0xFF020A05),
-                (a, a2, bg) => setState(() { _accent=a; _accent2=a2; _bg=bg; _blob1=const Color(0xFF1B5E20); _blob2=const Color(0xFF2E7D32); })),
-            _PresetChip('Закат', const Color(0xFFFF6D00), const Color(0xFFFFAB40), const Color(0xFF0A0500),
-                (a, a2, bg) => setState(() { _accent=a; _accent2=a2; _bg=bg; _blob1=const Color(0xFF4A1800); _blob2=const Color(0xFF7B3300); })),
-            _PresetChip('Лёд', const Color(0xFF88C0D0), const Color(0xFF81A1C1), const Color(0xFF0D1117),
-                (a, a2, bg) => setState(() { _accent=a; _accent2=a2; _bg=bg; _blob1=const Color(0xFF1C2D3F); _blob2=const Color(0xFF243447); })),
-            _PresetChip('Розовый', const Color(0xFFFF4081), const Color(0xFFFF80AB), const Color(0xFF0A0308),
-                (a, a2, bg) => setState(() { _accent=a; _accent2=a2; _bg=bg; _blob1=const Color(0xFF4A0020); _blob2=const Color(0xFF880E4F); })),
-          ]),
-          const SizedBox(height: 24),
-
-          // ── Сохранить ────────────────────────────────────────────────────────
-          GestureDetector(
-            onTap: _saving ? null : _save,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              height: 52,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [_accent, _accent2]),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: _accent.withOpacity(0.4), blurRadius: 20)]),
-              child: Center(child: _saving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('ПРИМЕНИТЬ ТЕМУ',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1.5)))),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Colour picker row ────────────────────────────────────────────────────────
-
-class _ColorRow extends StatelessWidget {
-  final String label;
-  final Color value;
-  final ValueChanged<Color> onChanged;
-  const _ColorRow(this.label, this.value, this.onChanged);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: GlassBox(radius: 12, blur: 16, child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(children: [
-          Expanded(child: Text(label,
-              style: const TextStyle(fontSize: 12, color: Colors.white70))),
-          GestureDetector(
-            onTap: () => _showPicker(context),
-            child: Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: value,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
-                boxShadow: [BoxShadow(color: value.withOpacity(0.4), blurRadius: 12)]),
-              child: Icon(Icons.colorize_outlined, color: Colors.white.withOpacity(0.7), size: 16),
-            )),
-        ]))));
-  }
-
-  void _showPicker(BuildContext ctx) {
-    showModalBottomSheet(
-      context: ctx,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => _HexColorPicker(initial: value, onPicked: onChanged));
-  }
-}
 
 // ── Hex color picker bottom sheet ─────────────────────────────────────────────
 
@@ -1148,3 +839,121 @@ class _AuraBottomNav extends StatelessWidget {
 }
 
 // ── Servers Screen (вкладка серверов) ─────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PATTERN PAINTER — узоры поверх фона (звёзды, волны, схемы и т.д.)
+// ═══════════════════════════════════════════════════════════════════════════
+class _PatternPainter extends CustomPainter {
+  final SkinPattern pattern;
+  final Color       color;
+  final double      opacity;
+  const _PatternPainter({required this.pattern, required this.color, required this.opacity});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..color = color.withOpacity(opacity);
+    final r = Random(42);
+    switch (pattern) {
+      case SkinPattern.dots:      _dots(canvas, size, p, r);
+      case SkinPattern.grid:      _grid(canvas, size, p);
+      case SkinPattern.hex:       _hex(canvas, size, p);
+      case SkinPattern.circuit:   _circuit(canvas, size, p, r);
+      case SkinPattern.stars:     _stars(canvas, size, p, r);
+      case SkinPattern.waves:     _waves(canvas, size, p);
+      case SkinPattern.particles: _particles(canvas, size, p, r);
+      case SkinPattern.none:      break;
+    }
+  }
+
+  void _dots(Canvas c, Size s, Paint p, Random r) {
+    const step = 28.0;
+    for (double x = 0; x < s.width; x += step)
+      for (double y = 0; y < s.height; y += step) {
+        final jx = x + (r.nextDouble()-.5)*6;
+        final jy = y + (r.nextDouble()-.5)*6;
+        c.drawCircle(Offset(jx, jy), .8 + r.nextDouble()*1.2, p);
+      }
+  }
+
+  void _grid(Canvas c, Size s, Paint p) {
+    final lp = Paint()..color = p.color..strokeWidth = .5;
+    const step = 32.0;
+    for (double x = 0; x <= s.width;  x += step) c.drawLine(Offset(x, 0), Offset(x, s.height), lp);
+    for (double y = 0; y <= s.height; y += step) c.drawLine(Offset(0, y), Offset(s.width, y),  lp);
+  }
+
+  void _hex(Canvas c, Size s, Paint p) {
+    const r = 18.0, h = r * 1.732, w = r * 2.0;
+    final lp = Paint()..color = p.color..strokeWidth = .6..style = PaintingStyle.stroke;
+    int row = 0;
+    for (double y = 0; y < s.height + h; y += h) {
+      final xOff = (row % 2 == 0) ? 0.0 : w * .75;
+      for (double x = -w; x < s.width + w; x += w * 1.5) {
+        final cx = x + xOff;
+        final path = Path();
+        for (int i = 0; i < 6; i++) {
+          final a = pi / 180 * (60*i - 30);
+          final px = cx + r * cos(a), py = y + r * sin(a);
+          i == 0 ? path.moveTo(px, py) : path.lineTo(px, py);
+        }
+        path.close(); c.drawPath(path, lp);
+      }
+      row++;
+    }
+  }
+
+  void _circuit(Canvas c, Size s, Paint p, Random r) {
+    final lp = Paint()..color = p.color..strokeWidth = .7;
+    const step = 40.0;
+    for (double x = step; x < s.width; x += step)
+      for (double y = step; y < s.height; y += step) {
+        if (r.nextDouble() > .35) continue;
+        final dir = r.nextInt(4);
+        final x2 = x + (dir==0?step:dir==1?-step:0);
+        final y2 = y + (dir==2?step:dir==3?-step:0);
+        c.drawLine(Offset(x,y), Offset(x2,y2), lp);
+        if (r.nextDouble() > .6) c.drawCircle(Offset(x,y), 2.0, p);
+      }
+  }
+
+  void _stars(Canvas c, Size s, Paint p, Random r) {
+    final count = (s.width * s.height / 1800).round().clamp(60, 250);
+    for (int i = 0; i < count; i++) {
+      final x = r.nextDouble()*s.width, y = r.nextDouble()*s.height;
+      final rv = r.nextDouble()*1.8 + .3;
+      final fade = r.nextDouble();
+      c.drawCircle(Offset(x,y), rv, Paint()..color = p.color.withOpacity(p.color.opacity*fade));
+      if (rv > 1.4) {
+        final bp = Paint()..color = p.color.withOpacity(p.color.opacity*.4)..strokeWidth = .4;
+        c.drawLine(Offset(x-rv*3,y), Offset(x+rv*3,y), bp);
+        c.drawLine(Offset(x,y-rv*3), Offset(x,y+rv*3), bp);
+      }
+    }
+  }
+
+  void _waves(Canvas c, Size s, Paint p) {
+    final lp = Paint()..color = p.color..strokeWidth = 1.0..style = PaintingStyle.stroke;
+    for (int w = 0; w < 5; w++) {
+      final yBase = s.height*(0.2+w*0.18), amp = 8.0+w*4.0, freq = 0.008-w*0.001;
+      final path = Path()..moveTo(0, yBase);
+      for (double x = 0; x <= s.width; x += 2)
+        path.lineTo(x, yBase + sin(x*freq*pi*2)*amp);
+      c.drawPath(path, lp);
+    }
+  }
+
+  void _particles(Canvas c, Size s, Paint p, Random r) {
+    final count = (s.width * s.height / 2500).round().clamp(40, 150);
+    for (int i = 0; i < count; i++) {
+      final x = r.nextDouble()*s.width, y = r.nextDouble()*s.height;
+      final rv = r.nextDouble()*2.5 + .5;
+      c.drawCircle(Offset(x,y), rv,
+          Paint()..color = p.color.withOpacity(p.color.opacity*(.3+r.nextDouble()*.7)));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PatternPainter o) =>
+      o.pattern != pattern || o.color != color || o.opacity != opacity;
+}
+

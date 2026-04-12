@@ -1422,7 +1422,7 @@ class _StealthStatusCard extends StatelessWidget {
                 color: color.withOpacity(0.3), blurRadius: 12)] : []),
           child: active
             ? Padding(padding: const EdgeInsets.all(5),
-                child: SvgPicture.asset('assets/images/vly_icon_clean.svg', width: 130, height: 130, fit: BoxFit.contain))
+                child: Image.asset('assets/images/vly_icon.png', width: 130, height: 130, fit: BoxFit.contain))
             : Icon(Icons.security_outlined, size: 20, color: color)),
         const SizedBox(width: 14),
         Expanded(child: Column(
@@ -1740,7 +1740,7 @@ class _AboutPageState extends State<_AboutPage> {
           ]),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(28),
-          child: SvgPicture.asset('assets/images/vly_icon_clean.svg', width: 130, height: 130, fit: BoxFit.contain))),
+          child: Image.asset('assets/images/vly_icon.png', width: 130, height: 130, fit: BoxFit.contain))),
       const SizedBox(height: 20),
       // Название с градиентом
       ShaderMask(
