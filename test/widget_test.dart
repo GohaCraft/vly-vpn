@@ -1,9 +1,9 @@
-// ignore_for_file: unused_import
+// This is a placeholder test file.
+// The VPN app requires device permissions and cannot be unit tested directly.
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  // Tests disabled - VPN app requires device permissions
-  test('placeholder', () {
+  test('placeholder test', () {
     expect(true, isTrue);
   });
 }

@@ -17,7 +17,7 @@ class HomeScreen extends StatelessWidget {
         appBar: GlassAppBar(
           title: Row(children: [
             // VLY логотип — PNG с прозрачным фоном, показываем как есть
-            Image.asset('assets/images/aura_logo.png',
+            SvgPicture.asset('assets/images/vly_logo_clean.svg',
                 width: 96, height: 38, fit: BoxFit.contain),
           ]),
           actions: [

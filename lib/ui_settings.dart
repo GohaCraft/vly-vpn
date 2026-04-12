@@ -1422,8 +1422,7 @@ class _StealthStatusCard extends StatelessWidget {
                 color: color.withOpacity(0.3), blurRadius: 12)] : []),
           child: active
             ? Padding(padding: const EdgeInsets.all(5),
-                child: Image.asset('assets/images/aura_icon.png',
-                    fit: BoxFit.contain))
+                child: SvgPicture.asset('assets/images/vly_icon_clean.svg', width: 130, height: 130, fit: BoxFit.contain))
             : Icon(Icons.security_outlined, size: 20, color: color)),
         const SizedBox(width: 14),
         Expanded(child: Column(
@@ -1741,8 +1740,7 @@ class _AboutPageState extends State<_AboutPage> {
           ]),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(28),
-          child: Image.asset('assets/images/aura_icon.png',
-              width: 130, height: 130, fit: BoxFit.contain))),
+          child: SvgPicture.asset('assets/images/vly_icon_clean.svg', width: 130, height: 130, fit: BoxFit.contain))),
       const SizedBox(height: 20),
       // Название с градиентом
       ShaderMask(
@@ -2786,23 +2784,45 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
 
   Future<void> _pickPhoto() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
-        allowMultiple: false,
-      );
-      if (result == null || result.files.isEmpty) return;
-      final path = result.files.first.path;
-      if (path == null) return;
+      // Используем текстовый ввод пути — FilePicker требует отдельной зависимости
+      final ctrl = TextEditingController();
+      final path = await showDialog<String>(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A2E),
+          title: const Text('Путь к фото/GIF',
+              style: TextStyle(color: Colors.white, fontSize: 15)),
+          content: TextField(
+            controller: ctrl,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: '/storage/emulated/0/Pictures/bg.jpg',
+              hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.07),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none)),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context),
+                child: const Text('Отмена', style: TextStyle(color: Colors.white54))),
+            TextButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+                child: Text('ОК', style: TextStyle(color: _accent))),
+          ]));
+      if (path == null || path.isEmpty) return;
+      if (!File(path).existsSync()) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Файл не найден'), backgroundColor: Colors.red));
+        return;
+      }
       final ext  = path.split('.').last.toLowerCase();
       final type = ext == 'gif' ? 'gif' : 'photo';
-      await _app.setCustomTheme(mediaPath: path, mediaType: type);
+      await _app.saveCustomTheme(mediaPath: path, mediaType: type);
       if (mounted) setState(() {});
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
-      }
     }
   }
 
@@ -2870,11 +2890,11 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
           _SectionLabel('Цвет акцента'),
           _ColorRow(label: 'Акцент', color: app.customAccent,
             onTap: () => _showColorPicker(context, app.customAccent, (c) {
-              app.setCustomTheme(accent: c); setState((){});
+              app.saveCustomTheme(accent: c); setState((){});
             })),
           _ColorRow(label: 'Акцент 2', color: app.customAccent2,
             onTap: () => _showColorPicker(context, app.customAccent2, (c) {
-              app.setCustomTheme(accent2: c); setState((){});
+              app.saveCustomTheme(accent2: c); setState((){});
             })),
 
           const SizedBox(height: 16),
@@ -2883,15 +2903,15 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
           _SectionLabel('Цвет фона'),
           _ColorRow(label: 'Фон', color: app.customBg,
             onTap: () => _showColorPicker(context, app.customBg, (c) {
-              app.setCustomTheme(bg: c); setState((){});
+              app.saveCustomTheme(bg: c); setState((){});
             })),
           _ColorRow(label: 'Блоб 1', color: app.customBlob1,
             onTap: () => _showColorPicker(context, app.customBlob1, (c) {
-              app.setCustomTheme(blob1: c); setState((){});
+              app.saveCustomTheme(blob1: c); setState((){});
             })),
           _ColorRow(label: 'Блоб 2', color: app.customBlob2,
             onTap: () => _showColorPicker(context, app.customBlob2, (c) {
-              app.setCustomTheme(blob2: c); setState((){});
+              app.saveCustomTheme(blob2: c); setState((){});
             })),
 
           const SizedBox(height: 16),

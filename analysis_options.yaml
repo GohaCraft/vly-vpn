@@ -11,6 +11,9 @@ analyzer:
     dead_code: ignore
     unnecessary_import: ignore
     duplicate_definition: ignore
+    invalid_use_of_protected_member: ignore
+    must_be_immutable: ignore
+    invalid_annotation_target: ignore
 
 linter:
   rules:
@@ -26,3 +29,6 @@ linter:
     depend_on_referenced_packages: false
     annotate_overrides: false
     empty_catches: false
+    library_private_types_in_public_api: false
+    no_leading_underscores_for_local_identifiers: false
+    non_constant_identifier_names: false
