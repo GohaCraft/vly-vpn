@@ -176,8 +176,8 @@ const String kBackupMagic       = 'VLY_VPN_BACKUP_V1';
 // ─── COLORS ──────────────────────────────────────────────────────────────────
 
 // ── Версия приложения ────────────────────────────────────────────────────────
-const kAppVersion = '6.0.0';
-const kAppBuild   = '20260322';
+const kAppVersion = '6.3.0';
+const kAppBuild   = '20260414';
 
 // ── Responsive breakpoints ────────────────────────────────────────────────────
 // phone < 600  |  tablet 600-840  |  desktop > 840

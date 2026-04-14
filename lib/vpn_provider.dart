@@ -892,8 +892,44 @@ class VpnProvider extends ChangeNotifier {
       // Решение: НЕ делаем никаких blocking операций до startV2Ray
       // Stealth операции (warmup, SNI, pacing) — только в фоне после старта
 
-      // Шаг 1: Парсим конфиг (мгновенно)
-      String finalLink = cfg.link;
+      // Шаг 1: Парсим конфиг — извлекаем AI патчи из суффикса, затем очищаем
+      final _rawLink = cfg.link;
+      
+      // Извлекаем параметры из AI-суффиксов перед очисткой
+      String? _aiSni;
+      String? _aiMode;
+      if (_rawLink.contains('#whitelist_df=')) {
+        final after = _rawLink.split('#whitelist_df=').last;
+        _aiSni = Uri.decodeComponent(after.split('&').first);
+      } else if (_rawLink.contains('#xhttp_sni=')) {
+        final after = _rawLink.split('#xhttp_sni=').last;
+        _aiSni = Uri.decodeComponent(after.split('&').first);
+        _aiMode = 'xhttp';
+      } else if (_rawLink.contains('#grpc_sni=')) {
+        final after = _rawLink.split('#grpc_sni=').last;
+        _aiSni = Uri.decodeComponent(after.split('&').first);
+        _aiMode = 'grpc';
+      } else if (_rawLink.contains('#shadowtls_v3=')) {
+        final after = _rawLink.split('#shadowtls_v3=').last;
+        _aiSni = Uri.decodeComponent(after.split('&').first);
+        _aiMode = 'shadowtls';
+      } else if (_rawLink.contains('#fragment=')) {
+        final after = _rawLink.split('#fragment=').last;
+        if (after.contains('sni=')) {
+          _aiSni = Uri.decodeComponent(after.split('sni=').last.split('&').first);
+        }
+      }
+      if (_aiSni != null) _log('🎯 AI-SNI: $_aiSni${_aiMode != null ? " mode=$_aiMode" : ""}');
+
+      // Очищаем суффиксы — v2ray их не понимает
+      String finalLink = _rawLink
+          .split('#whitelist_df=').first
+          .split('#fragment=').first
+          .split('#hy2_fallback').first
+          .split('#xhttp_sni=').first
+          .split('#grpc_sni=').first
+          .split('#shadowtls_v3=').first;
+
 
       // ── HYSTERIA2 AUTO-DETECT: QUIC/UDP обход DPI ────────────────────────
       // ТСПУ не умеет анализировать QUIC трафик (март 2026)
@@ -939,13 +975,16 @@ class VpnProvider extends ChangeNotifier {
         } catch (e) { _log('✗ Hysteria2: $e — falling back'); }
       }
 
-      // Reality SNI без сетевых проверок — используем кэш или первый в пуле
+      // Reality SNI — приоритет: AI-SNI > кэш > пул
       if (stealthMode && stealthRealitySni) {
         final cachedSni = StealthEngine.cachedSniPublic;
-        final sni = cachedSni.isNotEmpty && cachedSni != '—'
+        final sni = _aiSni ?? (cachedSni.isNotEmpty && cachedSni != '—'
             ? cachedSni
-            : StealthEngine.pickLiveSniFromCache(); // только кэш, без I/O
+            : StealthEngine.pickLiveSniFromCache());
         finalLink = StealthEngine.injectRealityWithSni(finalLink, sni);
+      } else if (_aiSni != null) {
+        // AI выбрал SNI но stealth mode выключен — применяем напрямую
+        finalLink = StealthEngine.injectRealityWithSni(finalLink, _aiSni!);
       }
 
       final patchedCfg = VpnConfig(
@@ -1152,26 +1191,65 @@ class VpnProvider extends ChangeNotifier {
   }
 
   void addSingleKey(String raw) {
-    final link = raw.trim();
-    // FIX v3.0: строгая валидация протокола — мусорные ноды вызывали crash в v2ray
-    const validProtocols = ['vless://', 'vmess://', 'trojan://', 'ss://', 'ssr://',
-                            'hysteria2://', 'hy2://', 'hysteria://', 'wireguard://'];
-    final hasValidProtocol = validProtocols.any((p) => link.toLowerCase().startsWith(p));
-    if (!hasValidProtocol) {
-      _log('✗ Unsupported protocol: ${link.split('://').first}');
+    // Поддержка нескольких конфигов сразу (multiline paste)
+    final lines = raw.trim().split('\n');
+    if (lines.length > 1) {
+      int added = 0;
+      for (final l in lines) {
+        final trimmed = l.trim();
+        if (trimmed.isNotEmpty) {
+          _addOneKey(trimmed);
+          added++;
+        }
+      }
+      if (added > 0) { saveToDisk(); _notify(); }
+      _log('✚ Добавлено конфигов: $added');
       return;
     }
-    if (_configs.any((c) => c.link == link)) { _log('⚠ Duplicate'); return; }
+    _addOneKey(raw.trim());
+    saveToDisk(); _notify();
+  }
+
+  void _addOneKey(String link) {
+    if (link.isEmpty) return;
+    const validProtocols = [
+      'vless://', 'vmess://', 'trojan://', 'ss://', 'ssr://',
+      'hysteria2://', 'hy2://', 'hysteria://', 'wireguard://',
+      'shadowtls://', 'tuic://', 'juicity://', 'naive+https://',
+    ];
+    final hasValidProtocol = validProtocols.any((p) => link.toLowerCase().startsWith(p));
+    if (!hasValidProtocol) {
+      _log('✗ Неподдерживаемый протокол: ${link.split('://').first}');
+      return;
+    }
+    if (_configs.any((c) => c.link == link)) { _log('⚠ Дубликат пропущен'); return; }
     String name = 'Manual Key';
     if (link.contains('#')) {
       try {
-        final n = Uri.decodeFull(link.split('#').last).replaceAll('+', ' ').trim();
-        if (n.isNotEmpty) name = n;
+        final rawName = link.split('#').last;
+        final n = Uri.decodeFull(rawName).replaceAll('+', ' ').trim();
+        if (n.isNotEmpty && !n.contains('=')) name = n;
       } catch (_) {}
     }
-    _configs.add(VpnConfig(name: name, link: link,
-        groupName: 'Manual Keys', sourceUrl: 'manual', isManual: true));
-    _log('✚ $name'); saveToDisk(); _notify();
+    // Определяем протокол для красивого имени
+    if (link.startsWith('hy2://') || link.startsWith('hysteria2://')) {
+      name = name == 'Manual Key' ? '⚡ Hysteria2' : '⚡ $name';
+    } else if (link.startsWith('vless://')) {
+      name = name == 'Manual Key' ? '🔷 VLESS' : name;
+    } else if (link.startsWith('vmess://')) {
+      name = name == 'Manual Key' ? '🔶 VMess' : name;
+    } else if (link.startsWith('trojan://')) {
+      name = name == 'Manual Key' ? '🔴 Trojan' : name;
+    } else if (link.startsWith('ss://')) {
+      name = name == 'Manual Key' ? '🟢 Shadowsocks' : name;
+    }
+    _configs.add(VpnConfig(
+      name: name, link: link,
+      groupName: 'Ручные ключи',
+      sourceUrl: 'manual',
+      isManual: true,
+    ));
+    _log('✚ Добавлен: $name');
   }
 
   // Сбросить ключ/конфиг к оригинальному (как пришёл от провайдера/подписки)

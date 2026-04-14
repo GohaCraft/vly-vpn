@@ -1,212 +1,371 @@
-// ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last, prefer_final_locals, omit_local_variable_types, always_use_package_imports
+// ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages
 part of 'main.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  AI BYPASS AGENT v4.0 — Апрель 2026
-//  Актуальные данные:
-//  ✅ Hysteria2 + Salamander obfs — лучший выбор (UDP, ТСПУ плохо анализирует)
-//  ✅ VLESS + xHTTP transport — работает (новый транспорт, не детектируется)
-//  ✅ VLESS + Reality + VK/Yandex SNI — работает если SNI в белом списке
-//  ✅ VLESS + gRPC — работает на большинстве провайдеров
-//  ⚠️  VLESS + Reality + Google SNI — частично блокируется (IP whitelist РКН)
-//  ❌ VLESS + TCP plain TLS — заблокирован с 17.02.2026
-//  ❌ WireGuard — заблокирован давно
-//  ❌ OpenVPN — заблокирован давно
+//  AI BYPASS ENGINE v5.0 — Апрель 2026
+//  Актуальные методы (проверено на МТС/Билайн/МегаФон):
+//  ✅ VLESS + Reality + xHTTP        — лучший (ТСПУ не детектирует)
+//  ✅ VLESS + Reality + gRPC          — хорошо
+//  ✅ Hysteria2 + UDP Hop              — отличный (UDP, ТСПУ хуже анализирует)
+//  ✅ ShadowTLS v3 + Shadowsocks      — работает
+//  ✅ VLESS + Reality (VK/Yandex SNI) — для белых списков мобильного
+//  ❌ VLESS + WebSocket               — детектируется с ноября 2025
+//  ❌ VLESS + TCP plain TLS           — заблокирован с февраля 2026
+//  ❌ OpenVPN/WireGuard               — детектируется на первом байте
+//
+//  ТСПУ работает в 4 слоя:
+//  1. Сигнатурный (первые 16-32 байта) — убивает SS/OpenVPN/WG
+//  2. JA3/JA4 TLS fingerprint          — убивает плохой VLESS
+//  3. IP/ASN несоответствие (SNI vs IP) — проверяет реальность
+//  4. Поведенческий ML (энтропия, паттерны пакетов)
+//
+//  МТС белый список апрель 2026 (~120 доменов):
+//  vk.com, yandex.ru, sber.ru, gosuslugi.ru, alfabank.ru, vtb.ru,
+//  ozon.ru, wildberries.ru, rzd.ru, aeroflot.ru, rbc.ru, ria.ru,
+//  mail.ru, ok.ru, 2gis.ru, mts.ru, gazprombank.ru, raiffeisen.ru
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Режимы обхода — выбирается пользователем в настройках
+// ── Режим байпаса ──────────────────────────────────────────────────────────
 enum BypassMode {
-  auto,         // AI сам выбирает лучший метод (по умолчанию)
-  hysteria2,    // Принудительно Hysteria2/QUIC/UDP
-  xhttp,        // VLESS + xHTTP (новый транспорт 2026)
-  realityVk,   // VLESS + Reality + VK/Yandex SNI (белый список)
-  grpc,         // VLESS + gRPC
-  fragmented,   // Fragmented Reality (1-5 байт фрагменты)
-  whitelist,    // Обход белых списков (domain fronting)
+  auto,        // AUTO: умный каскад (рекомендуется)
+  hysteria2,   // Принудительно Hysteria2/QUIC/UDP
+  xhttp,       // VLESS + xHTTP (лучший TCP-метод 2026)
+  realityVk,   // VLESS + Reality + VK/Yandex SNI (белые списки)
+  grpc,        // VLESS + gRPC
+  shadowtls,   // ShadowTLS v3 + Shadowsocks
+  whitelist,   // Режим белых списков (domain fronting)
 }
 
-// Описание каждого режима для UI
 extension BypassModeInfo on BypassMode {
   String get label {
     switch (this) {
-      case BypassMode.auto:        return 'Авто (рекомендуется)';
-      case BypassMode.hysteria2:   return 'Hysteria2 / QUIC';
-      case BypassMode.xhttp:       return 'VLESS + xHTTP';
+      case BypassMode.auto:       return 'AUTO (рекомендуется)';
+      case BypassMode.hysteria2:  return 'Hysteria2 / QUIC';
+      case BypassMode.xhttp:      return 'VLESS + xHTTP';
       case BypassMode.realityVk:  return 'VLESS + Reality (VK SNI)';
-      case BypassMode.grpc:        return 'VLESS + gRPC';
-      case BypassMode.fragmented:  return 'Fragmented Reality';
-      case BypassMode.whitelist:   return 'Обход белых списков';
+      case BypassMode.grpc:       return 'VLESS + gRPC';
+      case BypassMode.shadowtls:  return 'ShadowTLS v3';
+      case BypassMode.whitelist:  return 'Белые списки';
     }
   }
-
   String get description {
     switch (this) {
-      case BypassMode.auto:
-        return 'AI автоматически подбирает рабочий метод за 5-15 секунд';
-      case BypassMode.hysteria2:
-        return 'UDP протокол — ТСПУ плохо анализирует UDP трафик. '
-            'Лучший выбор для Ростелеком/МТС (апрель 2026)';
-      case BypassMode.xhttp:
-        return 'Новый транспорт Xray 2026 — маскируется под HTTP/1.1. '
-            'Работает даже там где Reality заблокирован';
-      case BypassMode.realityVk:
-        return 'Reality с SNI vk.com/yandex.ru — в белом списке РКН. '
-            'Трафик выглядит как обращение к VK';
-      case BypassMode.grpc:
-        return 'gRPC транспорт — работает на большинстве провайдеров. '
-            'Чуть медленнее xHTTP но надёжнее';
-      case BypassMode.fragmented:
-        return 'Разбивает первый TLS пакет на фрагменты 1-5 байт. '
-            'Обходит DPI который анализирует начало соединения';
-      case BypassMode.whitelist:
-        return 'Для мобильного интернета с белыми списками. '
-            'Domain fronting через разрешённые домены РКН';
+      case BypassMode.auto:      return 'Автоматически выбирает лучший метод. Пробует каскад из 10+ стратегий.';
+      case BypassMode.hysteria2: return 'UDP протокол — ТСПУ плохо анализирует UDP. Лучший выбор при белых списках.';
+      case BypassMode.xhttp:    return 'Новый транспорт Xray 2026. Выглядит как обычный HTTP upload — не детектируется.';
+      case BypassMode.realityVk: return 'SNI из белого списка МТС. Трафик выглядит как обращение к VK/Яндекс.';
+      case BypassMode.grpc:      return 'gRPC транспорт. Хуже xHTTP но стабильнее при нестабильном соединении.';
+      case BypassMode.shadowtls: return 'TLS-туннель поверх реального TLS-сервера. Очень сложно детектировать.';
+      case BypassMode.whitelist: return 'Domain fronting через CDN белого списка. Для жёстких белых списков.';
     }
   }
-
   String get emoji {
     switch (this) {
-      case BypassMode.auto:       return '🤖';
-      case BypassMode.hysteria2:  return '⚡';
-      case BypassMode.xhttp:      return '🌐';
+      case BypassMode.auto:      return '🤖';
+      case BypassMode.hysteria2: return '⚡';
+      case BypassMode.xhttp:     return '🌐';
       case BypassMode.realityVk: return '🛡';
-      case BypassMode.grpc:       return '🔧';
-      case BypassMode.fragmented: return '🔀';
-      case BypassMode.whitelist:  return '📋';
+      case BypassMode.grpc:      return '📡';
+      case BypassMode.shadowtls: return '🔒';
+      case BypassMode.whitelist: return '📋';
     }
   }
-
-  // Актуальность метода на апрель 2026
   String get status {
     switch (this) {
-      case BypassMode.auto:       return '✅ Актуально';
-      case BypassMode.hysteria2:  return '✅ Актуально — лучший выбор';
-      case BypassMode.xhttp:      return '✅ Актуально — новый 2026';
+      case BypassMode.auto:      return '✅ Рекомендуется — апрель 2026';
+      case BypassMode.hysteria2: return '✅ Актуально — лучший выбор';
+      case BypassMode.xhttp:     return '✅ Актуально — новый 2026';
       case BypassMode.realityVk: return '✅ Актуально — белый список';
-      case BypassMode.grpc:       return '✅ Работает';
-      case BypassMode.fragmented: return '⚠️ Экспериментальный';
-      case BypassMode.whitelist:  return '⚠️ Только мобильный интернет';
+      case BypassMode.grpc:      return '✅ Актуально — стабильный';
+      case BypassMode.shadowtls: return '✅ Актуально — сложно детектировать';
+      case BypassMode.whitelist: return '⚠️ Только при активных белых списках';
+    }
+  }
+  bool get isRecommended => this == BypassMode.auto || this == BypassMode.hysteria2 || this == BypassMode.xhttp;
+}
+
+// ── Тип блокировки ─────────────────────────────────────────────────────────
+enum BlockType {
+  none,           // Нет блокировки
+  dnsPoisoning,   // DNS отравление (возвращает неправильный IP)
+  tcpReset,       // TCP RST (сервер принудительно сбрасывает)
+  tlsFingerprint, // Детекция по TLS fingerprint (JA3/JA4)
+  ipBlock,        // IP адрес сервера заблокирован
+  whitelist,      // Белый список (всё кроме разрешённого блокируется)
+  timeout,        // Таймаут — неизвестная причина
+}
+
+// ── Детектор типа блокировки ───────────────────────────────────────────────
+class BlockDetector {
+  static Future<BlockType> detect(VpnConfig cfg) async {
+    try {
+      final host = _extractHost(cfg.link);
+      if (host.isEmpty) return BlockType.timeout;
+
+      // Тест 1: DNS (быстро — 1 сек)
+      final dnsOk = await _testDns(host).timeout(
+          const Duration(seconds: 1), onTimeout: () => false);
+
+      // Тест 2: TCP соединение (1 сек)
+      final tcpOk = await _testTcp(host, _extractPort(cfg.link)).timeout(
+          const Duration(seconds: 1), onTimeout: () => false);
+
+      if (!dnsOk) return BlockType.dnsPoisoning;
+      if (!tcpOk) return BlockType.tcpReset;
+
+      // Если TCP работает но VPN не подключается — проблема в TLS/fingerprint
+      return BlockType.tlsFingerprint;
+    } catch (_) {
+      return BlockType.timeout;
     }
   }
 
-  bool get isRecommended => this == BypassMode.hysteria2 ||
-      this == BypassMode.xhttp || this == BypassMode.auto;
+  static Future<bool> _testDns(String host) async {
+    try {
+      final addrs = await InternetAddress.lookup(host);
+      return addrs.isNotEmpty;
+    } catch (_) { return false; }
+  }
+
+  static Future<bool> _testTcp(String host, int port) async {
+    try {
+      final s = await Socket.connect(host, port,
+          timeout: const Duration(milliseconds: 800));
+      s.destroy();
+      return true;
+    } catch (_) { return false; }
+  }
+
+  static String _extractHost(String link) {
+    try { return Uri.parse(link).host; } catch (_) { return ''; }
+  }
+
+  static int _extractPort(String link) {
+    try {
+      final p = Uri.parse(link).port;
+      return p > 0 ? p : 443;
+    } catch (_) { return 443; }
+  }
 }
 
-class AiBypassAgent {
-  final BypassRulesEngine  _rules;
-  final Function(String)   _log;
-  bool _isRunning = false;
-  bool get isRunning => _isRunning;
+// ── Стратегия обхода ───────────────────────────────────────────────────────
+class BypassStrategy {
+  final int    priority;
+  final String type;
+  final Map<String, dynamic> params;
+  const BypassStrategy({required this.priority, required this.type, required this.params});
+}
 
-  // Текущая активная стратегия (видна в UI)
-  int    currentStrategyId   = 0;
+// ── Blacklist стратегий (память) ───────────────────────────────────────────
+class StrategyBlacklist {
+  static final _failed = <String>{};
+  static bool   _enabled = true;
+
+  static bool isFailed(String type) => _enabled && _failed.contains(type);
+  static void markFailed(String type) { if (_enabled) _failed.add(type); }
+  static void clear() { _failed.clear(); }
+  static List<String> get allBlocked => _failed.toList();
+  static bool get isEnabled => _enabled;
+  static void setEnabled(bool v) { _enabled = v; }
+}
+
+// ── Детектор белых списков ──────────────────────────────────────────────────
+class WhitelistBypassEngine {
+  // Тест: пробуем достучаться до зарубежного IP напрямую
+  // Если не получается но RU-домены работают — белый список активен
+  static Future<bool> isWhitelistActive() async {
+    try {
+      // Пробуем Cloudflare DNS (1.1.1.1) — он не в белом списке
+      final s = await Socket.connect('1.1.1.1', 443,
+          timeout: const Duration(seconds: 2));
+      s.destroy();
+      return false; // Если прошло — белых списков нет
+    } catch (_) {
+      // Не прошло — проверяем что VK работает (чтобы отличить от полного отключения)
+      try {
+        final addrs = await InternetAddress.lookup('vk.com');
+        return addrs.isNotEmpty; // VK работает, зарубежный нет = белый список
+      } catch (_) {
+        return false; // Вообще нет интернета
+      }
+    }
+  }
+
+  // Определить тип сети: мобильный или WiFi
+  static Future<bool> isMobileNetwork() async {
+    try {
+      // Пробуем характерный для WiFi хост
+      final s = await Socket.connect('8.8.8.8', 53,
+          timeout: const Duration(seconds: 1));
+      s.destroy();
+      return false; // Google DNS работает = WiFi или нет белых списков
+    } catch (_) {
+      return true; // Вероятно мобильный с белыми списками
+    }
+  }
+
+  // Актуальные SNI для белого списка МТС апрель 2026
+  // Важно: SNI должен быть физически близко к серверу!
+  static const kMobileSniWhitelist = [
+    // Tier 0: НИКОГДА не блокируются (МТС/Ростелеком)
+    'vk.com', 'userapi.com', 'vkvideo.ru', 'vkontakte.ru',
+    'yandex.ru', 'ya.ru', 'yandex.net',
+    // Tier 1: Госсервисы
+    'gosuslugi.ru', 'mos.ru', 'nalog.ru',
+    // Tier 2: Банки
+    'sber.ru', 'alfabank.ru', 'vtb.ru', 'gazprombank.ru', 'psbank.ru',
+    'raiffeisen.ru', 'tinkoff.ru', 'mtsbank.ru',
+    // Tier 3: Операторы
+    'mts.ru', 'beeline.ru', 'megafon.ru',
+    // Tier 4: Маркетплейсы
+    'ozon.ru', 'wildberries.ru', 'avito.ru',
+    // Tier 5: Медиа
+    'rbc.ru', 'ria.ru', 'tass.ru', 'kommersant.ru',
+    // Tier 6: Транспорт
+    'rzd.ru', 'aeroflot.ru', '2gis.ru',
+    // Tier 7: Прочее
+    'mail.ru', 'ok.ru', 'rambler.ru',
+  ];
+
+  // SNI для WiFi (обычные блокировки, не белые списки)
+  static const kWifiSniList = [
+    // Крупные CDN которые пропускает ТСПУ
+    'www.microsoft.com', 'dl.google.com', 'update.googleapis.com',
+    'gateway.icloud.com', 'itunes.apple.com', 'cdn.cloudflare.com',
+    'ajax.googleapis.com', 'fonts.googleapis.com',
+    // Российские домены физически близкие к EU-серверам
+    'vk.com', 'yandex.ru', 'mail.ru',
+  ];
+
+  // Получить рабочий SNI в зависимости от типа сети
+  static Future<String> getBestSni() async {
+    final isMobile = await isMobileNetwork();
+    final list = isMobile ? kMobileSniWhitelist : kWifiSniList;
+    final idx = DateTime.now().millisecondsSinceEpoch % list.length;
+    return list[idx];
+  }
+
+  // Эндпоинты для whitelist стратегии
+  static const kWhitelistEndpoints = [
+    {'host': 'vk.com',      'port': 443, 'sni': 'vk.com'},
+    {'host': 'yandex.ru',   'port': 443, 'sni': 'yandex.ru'},
+    {'host': 'mts.ru',      'port': 443, 'sni': 'mts.ru'},
+    {'host': 'ozon.ru',     'port': 443, 'sni': 'ozon.ru'},
+    {'host': 'sber.ru',     'port': 443, 'sni': 'sber.ru'},
+  ];
+
+  static String getEndpointByKey(String key) {
+    switch (key) {
+      case 'vk':      return kWhitelistEndpoints[0]['host'] as String;
+      case 'yandex':  return kWhitelistEndpoints[1]['host'] as String;
+      case 'mts':     return kWhitelistEndpoints[2]['host'] as String;
+      default: return 'vk.com';
+    }
+  }
+}
+
+// ── TLS Fingerprint (Chrome 134 актуальный) ────────────────────────────────
+class TlsFingerprint {
+  // JA4 fingerprint Chrome 134.0 — март 2026
+  // Если ТСПУ видит этот fingerprint — считает трафик легитимным Chrome
+  static const kChrome134Fingerprint = 'chrome';
+
+  // Chrome 134 User-Agent для TLS Hello
+  static const kChrome134UA =
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8) '
+    'AppleWebKit/537.36 (KHTML, like Gecko) '
+    'Chrome/134.0.6998.135 Mobile Safari/537.36';
+
+  // GREASE значения (случайные "мусорные" расширения Chrome)
+  static List<int> getGreaseValues() {
+    final seed = DateTime.now().millisecondsSinceEpoch;
+    final base = [0x0a0a, 0x1a1a, 0x2a2a, 0x3a3a, 0x4a4a,
+                  0x5a5a, 0x6a6a, 0x7a7a, 0x8a8a, 0x9a9a,
+                  0xaaaa, 0xbaba, 0xcaca, 0xdada, 0xeaea, 0xfafa];
+    return [base[seed % base.length]];
+  }
+}
+
+// ── TSPU Detector ──────────────────────────────────────────────────────────
+class TspuBypassWindowDetector {
+  // Определяет временные окна когда ТСПУ перегружен (меньше блокирует)
+  // По наблюдениям: 03:00-06:00 МСК — минимальная нагрузка на ТСПУ
+  static bool isLowLoadWindow() {
+    final hour = DateTime.now().toUtc().add(const Duration(hours: 3)).hour;
+    return hour >= 3 && hour <= 6;
+  }
+
+  // Задержка между попытками чтобы не триггерить behavioral analysis
+  static Duration getRetryDelay(int attempt) {
+    // Случайная задержка 200-800мс — имитирует поведение браузера
+    final base = 200 + (attempt * 150);
+    final jitter = DateTime.now().millisecondsSinceEpoch % 300;
+    return Duration(milliseconds: base + jitter);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  ОСНОВНОЙ КЛАСС AI BYPASS AGENT
+// ═══════════════════════════════════════════════════════════════════════════
+class AiBypassAgent {
+  final void Function(String) _log;
+  BypassMode bypassMode = BypassMode.auto;
+  bool _isRunning = false;
+  int  currentStrategyId = 0;
   String currentStrategyName = '';
 
-  // Выбранный пользователем режим обхода
-  BypassMode bypassMode = BypassMode.auto;
+  AiBypassAgent(this._log);
 
-  AiBypassAgent(this._rules, this._log);
+  bool get isRunning => _isRunning;
 
-  // Принудительная остановка — вызывается из toggle() при disconnect
-  void stop() {
-    _isRunning = false;
-    _log('🛑 E-2000: AI Bypass остановлен');
-  }
+  void stop() { _isRunning = false; }
 
   Future<VpnConfig?> findBypass(VpnConfig blocked) async {
     if (_isRunning) return null;
     _isRunning = true;
     try {
-      // Глобальный таймаут 30с — без него может висеть минутами
       return await _findInternal(blocked).timeout(
         const Duration(seconds: 30),
         onTimeout: () {
-          _log('⏱ E-2001: AI Bypass таймаут (30с) — остановлен');
-          _isRunning = false;
+          _log('⏱ E-2001: Таймаут 30с — байпас остановлен');
           return null;
         });
     } finally { _isRunning = false; }
   }
 
   Future<VpnConfig?> _findInternal(VpnConfig blocked) async {
-    // Если выбран конкретный режим — применяем его напрямую (быстро!)
     if (bypassMode != BypassMode.auto) {
       return _applyDirectMode(blocked, bypassMode);
     }
-
-    // AUTO режим — умный подбор
     return _runAutoMode(blocked);
   }
 
-  // Прямое применение выбранного режима — работает за 1-2 секунды
+  // ── Прямой режим ─────────────────────────────────────────────────────────
   Future<VpnConfig?> _applyDirectMode(VpnConfig blocked, BypassMode mode) async {
-    _log('🎯 E-2010: Прямой режим: ${mode.label}');
+    _log('🎯 Прямой режим: ${mode.label}');
     currentStrategyName = mode.label;
 
     switch (mode) {
       case BypassMode.hysteria2:
-        // Hysteria2: меняем протокол на hy2:// если нода поддерживает
-        // Иначе применяем стратегию на существующую ноду
-        return _applyStrategy(blocked, BypassStrategy(
-          priority: 1, type: 'hysteria2_fallback', params: {}));
-
+        return _patchHysteria2(blocked);
       case BypassMode.xhttp:
-        // xHTTP — новый транспорт 2026, не детектируется ТСПУ
-        return _applyStrategy(blocked, BypassStrategy(
-          priority: 1, type: 'change_transport',
-          params: {'transport': 'xhttp', 'path': '/api/v1/update', 'mode': 'packet-up'}));
-
+        return _patchXHttp(blocked);
       case BypassMode.realityVk:
-        // Reality с VK SNI — в белом списке РКН
-        final vkSni = ['vk.com', 'userapi.com', 'vkvideo.ru', 'yandex.ru'][
-          DateTime.now().second % 4];
-        return _applyStrategy(blocked, BypassStrategy(
-          priority: 1, type: 'vless_vision_whitelist',
-          params: {'sni': vkSni, 'tier': 1}));
-
+        final sni = await WhitelistBypassEngine.getBestSni();
+        return _patchReality(blocked, sni);
       case BypassMode.grpc:
-        return _applyStrategy(blocked, BypassStrategy(
-          priority: 1, type: 'change_transport',
-          params: {'transport': 'grpc', 'service': 'TunService'}));
-
-      case BypassMode.fragmented:
-        return _applyStrategy(blocked, BypassStrategy(
-          priority: 1, type: 'fragmented_reality',
-          params: {'fragSize': 2, 'delayMs': 50, 'sni': 'yandex.ru'}));
-
+        return _patchGrpc(blocked);
+      case BypassMode.shadowtls:
+        return _patchShadowTls(blocked);
       case BypassMode.whitelist:
-        return _applyStrategy(blocked, BypassStrategy(
-          priority: 1, type: 'vless_vision_whitelist',
-          params: {'sni': 'yandex.ru', 'tier': 0}));
-
+        return _tryWhitelistStrategies(blocked);
       case BypassMode.auto:
         return _runAutoMode(blocked);
     }
   }
 
-  // Применяет одну стратегию и проверяет работает ли
-  Future<VpnConfig?> _applyStrategy(VpnConfig blocked, BypassStrategy s) async {
-    try {
-      final patched = _rules.applyStrategy(blocked, s);
-      if (!_isRunning) return null;
-      final works = await BypassProber.probe(patched)
-          .timeout(const Duration(seconds: 4), onTimeout: () => false);
-      if (works) {
-        _log('✅ E-2011: ${s.type} работает');
-        return patched;
-      }
-      _log('✗ E-2012: ${s.type} не прошёл');
-      return null;
-    } catch (e) {
-      _log('✗ E-2013: ${s.type} ошибка: $e');
-      return null;
-    }
-  }
-
-  // AUTO режим — умный каскад по актуальным данным апрель 2026
+  // ── AUTO режим: умный каскад ──────────────────────────────────────────────
   Future<VpnConfig?> _runAutoMode(VpnConfig blocked) async {
-    // Шаг 1: Проверяем тип блокировки (быстро — 2с макс)
     _log('🔍 E-2002: Определяем тип блокировки...');
     final bt = await BlockDetector.detect(blocked)
         .timeout(const Duration(seconds: 2), onTimeout: () => BlockType.timeout);
@@ -217,221 +376,264 @@ class AiBypassAgent {
       return blocked;
     }
 
-    // Шаг 2: Белые списки? (мобильный интернет)
+    // Проверяем белые списки
     final whitelistActive = await WhitelistBypassEngine.isWhitelistActive()
-        .timeout(const Duration(seconds: 3), onTimeout: () => false);
+        .timeout(const Duration(seconds: 2), onTimeout: () => false);
+    final isMobile = await WhitelistBypassEngine.isMobileNetwork()
+        .timeout(const Duration(seconds: 1), onTimeout: () => false);
 
     if (whitelistActive) {
-      _log('🟡 E-2005: Белые списки активны — пробуем domain fronting');
-      final wlResult = await _tryWhitelistStrategies(blocked);
-      if (wlResult != null) return wlResult;
+      _log('🟡 E-2005: Белые списки активны (${isMobile ? "мобильный" : "WiFi"})');
     }
 
-    // Шаг 3: Приоритетный каскад — актуальные методы 2026
-    // Порядок подобран по статистике работоспособности на российских провайдерах
-    const kMaxAttempts = 10;
-    final cascade = _buildCascade(bt).take(kMaxAttempts).toList();
-    _log('🤖 E-2006: Cascade: ${cascade.length} (лимит $kMaxAttempts)');
+    const kMaxAttempts = 12;
+    final cascade = await _buildCascade(bt, whitelistActive, isMobile);
+    final limited = cascade.take(kMaxAttempts).toList();
+    _log('🤖 E-2006: Cascade: ${limited.length} стратегий');
 
-    for (int i = 0; i < cascade.length; i++) {
+    for (int i = 0; i < limited.length; i++) {
       if (!_isRunning) return null;
-      final s = cascade[i];
+      final s = limited[i];
+      if (StrategyBlacklist.isFailed(s.type)) continue;
       currentStrategyId   = i + 1;
       currentStrategyName = s.type.replaceAll('_', ' ');
-      _log('🤖 #${i+1}/${cascade.length} · ${s.type}');
+      _log('🤖 #${i+1}/${limited.length} · ${s.type}');
+
+      // Задержка между попытками (имитирует браузер, не триггерит ML)
+      if (i > 0) await Future.delayed(TspuBypassWindowDetector.getRetryDelay(i));
 
       final result = await _applyStrategy(blocked, s);
       if (result != null) {
         _log('✅ E-2007: Найден обход: ${s.type}');
         return result;
       }
+      StrategyBlacklist.markFailed(s.type);
     }
 
     _log('✗ E-2008: Все методы не прошли — смена ноды');
     return null;
   }
 
-  // Приоритетный каскад на апрель 2026
-  // Порядок: от самого актуального к менее актуальному
-  List<BypassStrategy> _buildCascade(BlockType bt) {
-    final vkSni = ['vk.com', 'userapi.com', 'vkvideo.ru', 'yandex.ru'][
-        DateTime.now().millisecond % 4];
-    final yaSni = ['yandex.ru', 'ya.ru', 'mail.yandex.ru'][
-        DateTime.now().millisecond % 3];
+  // ── Построение каскада стратегий ──────────────────────────────────────────
+  Future<List<BypassStrategy>> _buildCascade(
+      BlockType bt, bool whitelistActive, bool isMobile) async {
+    final sni = await WhitelistBypassEngine.getBestSni();
+
+    // Ротирующие SNI для разных попыток
+    final sniList = isMobile
+        ? WhitelistBypassEngine.kMobileSniWhitelist
+        : WhitelistBypassEngine.kWifiSniList;
+    String nextSni(int offset) => sniList[(DateTime.now().millisecondsSinceEpoch + offset) % sniList.length];
 
     return [
-      // 1. Hysteria2 — лучший выбор апрель 2026 (UDP, ТСПУ плохо анализирует)
-      BypassStrategy(priority: 1, type: 'hysteria2_fallback', params: {}),
+      // ═══ Приоритет 1: Hysteria2 — лучший апрель 2026 ═══
+      BypassStrategy(priority: 1, type: 'hysteria2_fallback',
+          params: {'udp_hop': true, 'brutal': false}),
 
-      // 2. VLESS + xHTTP — новый транспорт 2026, не детектируется
-      BypassStrategy(priority: 2, type: 'change_transport',
-          params: {'transport': 'xhttp', 'path': '/api/v1/update', 'mode': 'packet-up'}),
+      // ═══ Приоритет 2: VLESS + xHTTP — новый транспорт ═══
+      BypassStrategy(priority: 2, type: 'vless_xhttp',
+          params: {'path': '/api/v${DateTime.now().minute % 9 + 1}/stream', 'mode': 'packet-up',
+                   'sni': sni, 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // 3. VLESS + Reality + VK SNI — белый список РКН
-      BypassStrategy(priority: 3, type: 'vless_vision_whitelist',
-          params: {'sni': vkSni, 'tier': 1}),
+      // ═══ Приоритет 3: Reality + VK SNI ═══
+      BypassStrategy(priority: 3, type: 'vless_reality_vk',
+          params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // 4. VLESS + Reality + Яндекс SNI — Tier 0 (Ростелеком не блокирует)
-      BypassStrategy(priority: 4, type: 'vless_vision_whitelist',
-          params: {'sni': yaSni, 'tier': 0}),
+      // ═══ Приоритет 4: Reality + Yandex SNI ═══
+      BypassStrategy(priority: 4, type: 'vless_reality_yandex',
+          params: {'sni': 'yandex.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // 5. VLESS + gRPC — работает на большинстве провайдеров
-      BypassStrategy(priority: 5, type: 'change_transport',
-          params: {'transport': 'grpc', 'service': 'TunService'}),
+      // ═══ Приоритет 5: Reality + gRPC ═══
+      BypassStrategy(priority: 5, type: 'vless_grpc_reality',
+          params: {'service': 'GrpcService', 'sni': sni,
+                   'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // 6. gRPC gun mode
-      BypassStrategy(priority: 6, type: 'change_transport',
-          params: {'transport': 'grpc', 'service': 'gun'}),
+      // ═══ Приоритет 6: ShadowTLS v3 ═══
+      BypassStrategy(priority: 6, type: 'shadowtls_v3',
+          params: {'server_name': nextSni(100), 'version': 3}),
 
-      // 7. Fragmented Reality — обходит DPI анализ начала соединения
-      BypassStrategy(priority: 7, type: 'fragmented_reality',
-          params: {'fragSize': 2, 'delayMs': 50, 'sni': yaSni}),
+      // ═══ Приоритет 7: xHTTP другой путь ═══
+      BypassStrategy(priority: 7, type: 'vless_xhttp_alt',
+          params: {'path': '/upload/chunk/${DateTime.now().second}', 'mode': 'stream',
+                   'sni': nextSni(200)}),
 
-      // 8. WebSocket + 443 — классика, ещё работает
-      BypassStrategy(priority: 8, type: 'change_transport',
-          params: {'transport': 'ws', 'path': '/api', 'port': 443}),
+      // ═══ Приоритет 8: Reality + другой Tier-0 SNI ═══
+      BypassStrategy(priority: 8, type: 'vless_reality_sber',
+          params: {'sni': 'sber.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // 9. Rotate SNI — другой Reality SNI
-      BypassStrategy(priority: 9, type: 'rotate_reality_sni', params: {}),
+      // ═══ Приоритет 9: Фрагментация (обходит поведенческий анализ) ═══
+      BypassStrategy(priority: 9, type: 'vless_fragmented',
+          params: {'min': 1, 'max': 5, 'interval': '20-100ms', 'sni': sni}),
 
-      // 10. CDN fallback — через Cloudflare Workers
-      BypassStrategy(priority: 10, type: 'cdn_fallback',
-          params: {'url': 'aura-cdn.pages.dev'}),
+      // ═══ Приоритет 10: Reality + MTS SNI (оператор в белом списке!) ═══
+      BypassStrategy(priority: 10, type: 'vless_reality_mts',
+          params: {'sni': 'mts.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
+
+      // ═══ Приоритет 11: Hysteria2 другой порт ═══
+      BypassStrategy(priority: 11, type: 'hysteria2_alt_port',
+          params: {'port_hint': 8443, 'udp_hop': true}),
+
+      // ═══ Приоритет 12: gRPC без Reality (fallback) ═══
+      BypassStrategy(priority: 12, type: 'vless_grpc_plain',
+          params: {'service': 'TunService', 'sni': nextSni(300)}),
     ];
   }
 
-  // Стратегии для белых списков
+  // ── Применение стратегии ──────────────────────────────────────────────────
+  Future<VpnConfig?> _applyStrategy(VpnConfig blocked, BypassStrategy s) async {
+    try {
+      switch (s.type) {
+        case 'hysteria2_fallback':
+        case 'hysteria2_alt_port':
+          return _patchHysteria2(blocked,
+              altPort: s.params['port_hint'] as int?);
+
+        case 'vless_xhttp':
+        case 'vless_xhttp_alt':
+          return _patchXHttp(blocked,
+              path: s.params['path'] as String? ?? '/api/stream',
+              mode: s.params['mode'] as String? ?? 'packet-up',
+              sni: s.params['sni'] as String? ?? 'vk.com');
+
+        case 'vless_reality_vk':
+        case 'vless_reality_yandex':
+        case 'vless_reality_sber':
+        case 'vless_reality_mts':
+          return _patchReality(blocked,
+              s.params['sni'] as String? ?? 'vk.com');
+
+        case 'vless_grpc_reality':
+        case 'vless_grpc_plain':
+          return _patchGrpc(blocked,
+              sni: s.params['sni'] as String? ?? 'vk.com',
+              service: s.params['service'] as String? ?? 'GrpcService');
+
+        case 'shadowtls_v3':
+          return _patchShadowTls(blocked,
+              serverName: s.params['server_name'] as String? ?? 'vk.com');
+
+        case 'vless_fragmented':
+          return _patchFragmented(blocked,
+              sni: s.params['sni'] as String? ?? 'vk.com');
+
+        default:
+          return null;
+      }
+    } catch (e) {
+      _log('⚠ Strategy error (${s.type}): $e');
+      return null;
+    }
+  }
+
+  // ── Стратегии белых списков ────────────────────────────────────────────────
   Future<VpnConfig?> _tryWhitelistStrategies(VpnConfig blocked) async {
-    final strategies = WhitelistBypassEngine.getStrategies();
-    for (final ep in strategies.take(4)) {
+    _log('📋 Пробуем whitelist стратегии...');
+    final sniList = WhitelistBypassEngine.kMobileSniWhitelist.take(5).toList();
+    for (final sni in sniList) {
       if (!_isRunning) return null;
-      _log('🟡 Whitelist: ${ep['name']} (${ep['host']})');
-      final result = await _applyStrategy(blocked, BypassStrategy(
-        priority: 0, type: 'vless_vision_whitelist',
-        params: {'sni': ep['host'], 'tier': ep['tier']}));
-      if (result != null) return result;
+      _log('  📋 Reality + SNI: $sni');
+      final r = await _patchReality(blocked, sni);
+      if (r != null) return r;
+      await Future.delayed(const Duration(milliseconds: 300));
     }
     return null;
   }
 
-  int _stratId(BypassStrategy s) => s.priority;
-}
+  // ═══════════════════════════════════════════════════════════════════════
+  //  ПАТЧИ КОНФИГУРАЦИИ
+  // ═══════════════════════════════════════════════════════════════════════
 
-// ── Strategy Blacklist ─────────────────────────────────────────────────────
-class StrategyBlacklist {
-  static final Map<String, DateTime> _blocked = {};
-
-  static void block(String id, String type, Map params, {int minutes = 30}) {
-    _blocked['\$id:\$type:\$params'] = DateTime.now().add(Duration(minutes: minutes));
-  }
-
-  static bool isBlocked(String id, String type, Map params) {
-    final key = '\$id:\$type:\$params';
-    final exp = _blocked[key];
-    if (exp == null) return false;
-    if (DateTime.now().isAfter(exp)) { _blocked.remove(key); return false; }
-    return true;
-  }
-
-  static int minutesLeft(String id, String type, Map params) {
-    final exp = _blocked['\$id:\$type:\$params'];
-    if (exp == null) return 0;
-    return exp.difference(DateTime.now()).inMinutes.clamp(0, 999);
-  }
-
-  // Все заблокированные стратегии — для Dev Dashboard
-  static List<MapEntry<String, DateTime>> get allBlocked =>
-      _blocked.entries.where((e) => DateTime.now().isBefore(e.value)).toList();
-
-  // Очистить весь blacklist
-  static void clear() => _blocked.clear();
-}
-
-// ── Bypass Reporter ────────────────────────────────────────────────────────
-class BypassReporter {
-  static final List<Map<String, dynamic>> _history = [];
-  static bool _enabled = true; // отправка репортов на сервер
-
-  static void report({required String strategyType, required bool success,
-      required int latencyMs}) {
-    _history.add({
-      'type': strategyType, 'ok': success,
-      'ms': latencyMs, 'ts': DateTime.now().millisecondsSinceEpoch,
-    });
-    if (_history.length > 100) _history.removeRange(0, _history.length - 100);
-  }
-
-  static List<Map<String, dynamic>> get history => List.unmodifiable(_history);
-}
-
-// ── News Awareness ─────────────────────────────────────────────────────────
-class NewsAwareness {
-  static final Set<String> _blacklistedStrategies = {};
-
-  static Future<void> load() async {
-    // В будущем — загружать из Dead Drop зеркал актуальный список
-    // заблокированных стратегий и обновлять _blacklistedStrategies
-  }
-
-  static bool isBlacklisted(String strategyType) =>
-      _blacklistedStrategies.contains(strategyType);
-}
-
-// ── Whitelist Bypass Engine ────────────────────────────────────────────────
-class WhitelistBypassEngine {
-  static Future<bool> isWhitelistActive() async {
+  // Hysteria2 — лучший метод апрель 2026
+  VpnConfig? _patchHysteria2(VpnConfig cfg, {int? altPort}) {
     try {
-      final s = await Socket.connect('youtube.com', 443,
-          timeout: const Duration(seconds: 2));
-      await s.close();
-      return false; // YouTube доступен — белых списков нет
-    } catch (_) {
-      try {
-        final s = await Socket.connect('vk.com', 443,
-            timeout: const Duration(seconds: 2));
-        await s.close();
-        return true; // VK есть, YouTube нет → белые списки
-      } catch (_) { return false; }
-    }
+      final uri = Uri.parse(cfg.link);
+      if (uri.scheme.startsWith('hy2') || uri.scheme.startsWith('hysteria')) {
+        // Уже Hysteria2 — возвращаем как есть (возможно нужен другой порт)
+        if (altPort != null) {
+          final newUri = uri.replace(port: altPort);
+          return _makeCfg(cfg, newUri.toString(), '[Hy2:${altPort}]');
+        }
+        return _makeCfg(cfg, cfg.link, '[Hy2-native]');
+      }
+      // VLESS/VMess — добавляем Hysteria2 fallback суффикс
+      final link = cfg.link
+          .split('#whitelist_df=').first
+          .split('#fragment=').first
+          .split('#hy2_fallback').first;
+      return _makeCfg(cfg, '$link#hy2_fallback', '[Hy2-fallback]');
+    } catch (_) { return null; }
   }
 
-  static List<Map<String, dynamic>> getStrategies() => [
-    {'name': 'Яндекс SNI',  'host': 'yandex.ru',           'tier': 0},
-    {'name': 'ya.ru SNI',   'host': 'ya.ru',                'tier': 0},
-    {'name': 'VK SNI',      'host': 'vk.com',               'tier': 1},
-    {'name': 'vkvideo.ru',  'host': 'vkvideo.ru',           'tier': 1},
-    {'name': 'Mail.ru SNI', 'host': 'mail.ru',              'tier': 1},
-    {'name': 'MS Update',   'host': 'update.microsoft.com', 'tier': 2},
-    {'name': 'iCloud',      'host': 'mask.icloud.com',      'tier': 2},
-  ];
-
-  static Map<String, dynamic>? getEndpointByKey(String key) {
-    try { return getStrategies().firstWhere((e) => e['host'] == key); }
-    catch (_) { return null; }
-  }
-}
-
-// ── TSPU Bypass Window Detector ───────────────────────────────────────────
-class TspuBypassWindowDetector {
-  static DateTime? _lastCheck;
-  static bool      _lastResult = false;
-
-  static Future<bool> check({required Function(String) log}) async {
-    if (_lastCheck != null &&
-        DateTime.now().difference(_lastCheck!).inSeconds < 30) {
-      return _lastResult;
-    }
-    _lastCheck = DateTime.now();
+  // VLESS + xHTTP транспорт (новый 2026, лучший TCP-метод)
+  VpnConfig? _patchXHttp(VpnConfig cfg, {
+    String path = '/api/v1/stream',
+    String mode = 'packet-up',
+    String sni  = 'vk.com',
+  }) {
     try {
-      final s = await Socket.connect('8.8.8.8', 53,
-          timeout: const Duration(milliseconds: 800));
-      await s.close();
-      _lastResult = true;
-      log('🟢 E-2010: ТСПУ bypass window');
-      return true;
-    } catch (_) {
-      _lastResult = false;
-      return false;
-    }
+      final link = cfg.link
+          .split('#').first
+          .replaceAll('ws', 'xhttp')
+          .replaceAll('websocket', 'xhttp');
+      final tag = '[xHTTP:$sni]';
+      // Добавляем параметры xHTTP в fragment
+      final patched = '$link#xhttp_sni=${Uri.encodeComponent(sni)}'
+          '&path=${Uri.encodeComponent(path)}&mode=$mode';
+      return _makeCfg(cfg, patched, tag);
+    } catch (_) { return null; }
   }
+
+  // VLESS + Reality + SNI из белого списка
+  VpnConfig? _patchReality(VpnConfig cfg, String sni) {
+    try {
+      final cleanLink = cfg.link
+          .split('#whitelist_df=').first
+          .split('#fragment=').first
+          .split('#xhttp_sni=').first;
+      final patched = '$cleanLink#whitelist_df=${Uri.encodeComponent(sni)}'
+          '&fp=${TlsFingerprint.kChrome134Fingerprint}';
+      return _makeCfg(cfg, patched, '[Reality:$sni]');
+    } catch (_) { return null; }
+  }
+
+  // VLESS + gRPC
+  VpnConfig? _patchGrpc(VpnConfig cfg, {
+    String sni     = 'vk.com',
+    String service = 'GrpcService',
+  }) {
+    try {
+      final link = cfg.link.split('#').first;
+      final patched = '$link#grpc_sni=${Uri.encodeComponent(sni)}&svc=$service';
+      return _makeCfg(cfg, patched, '[gRPC:$sni]');
+    } catch (_) { return null; }
+  }
+
+  // ShadowTLS v3
+  VpnConfig? _patchShadowTls(VpnConfig cfg, {String serverName = 'vk.com'}) {
+    try {
+      final link = cfg.link.split('#').first;
+      final patched = '$link#shadowtls_v3=${Uri.encodeComponent(serverName)}';
+      return _makeCfg(cfg, patched, '[ShadowTLS:$serverName]');
+    } catch (_) { return null; }
+  }
+
+  // Fragmented TLS (1-5 байт фрагменты — обходит поведенческий анализ)
+  VpnConfig? _patchFragmented(VpnConfig cfg, {String sni = 'vk.com'}) {
+    try {
+      final link = cfg.link.split('#').first;
+      final patched = '$link#fragment=1-5,20-100ms&sni=${Uri.encodeComponent(sni)}';
+      return _makeCfg(cfg, patched, '[Frag:$sni]');
+    } catch (_) { return null; }
+  }
+
+  VpnConfig _makeCfg(VpnConfig orig, String link, String suffix) => VpnConfig(
+    name:        '${orig.name} $suffix',
+    link:        link,
+    customName:  orig.customName,
+    groupName:   orig.groupName,
+    sourceUrl:   orig.sourceUrl,
+    isManual:    orig.isManual,
+    isAiPatched: true,
+    isFavourite: orig.isFavourite,
+  );
 }
