@@ -897,6 +897,43 @@ class VpnProvider extends ChangeNotifier {
     _isRotating = false; aiStatus = 'IDLE'; _notify();
   }
 
+
+  final Map<String, String> _configCache = {};
+  String? _getCachedConfig(String link) => _configCache[link.split('#').first];
+  void _cacheConfig(String link, String config) {
+    _configCache[link.split('#').first] = config;
+    if (_configCache.length > 20) _configCache.remove(_configCache.keys.first);
+  }
+
+  // ЗАДАЧА 10: Предиктивное авто-переключение
+  // Мониторим latency каждые 5с — переключаемся ДО разрыва
+  // Как у Cloudflare WARP: переключение на лучшую ноду проактивно
+  Timer? _predictiveTimer;
+  int _lastGoodPing = 9999;
+
+  void _startPredictiveMonitor() {
+    _predictiveTimer?.cancel();
+    _predictiveTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (!isConnected || selectedIndex >= _configs.length) return;
+      final cur = _configs[selectedIndex];
+      final ms  = await VpnConfig.tcpPing(cur.link).timeout(
+          const Duration(seconds: 2), onTimeout: () => 9999);
+      
+      // Если ping ухудшился в 3+ раза — начинаем искать лучшую ноду
+      if (ms > _lastGoodPing * 3 && ms < 9999) {
+        _log('⚡ Предиктивное: пинг вырос ${_lastGoodPing}ms → ${ms}ms, ищем лучшее...');
+        unawaited(_autoSelectBest(reconnect: true));
+      } else if (ms < 9999) {
+        _lastGoodPing = ms;
+      }
+    });
+  }
+
+  void _stopPredictiveMonitor() {
+    _predictiveTimer?.cancel();
+    _predictiveTimer = null;
+  }
+
   Future<void> _autoNext() async {
     if (_configs.isEmpty) { _isRotating = false; return; }
     try { await _v2ray.stopV2Ray(); } catch (_) {}
@@ -968,9 +1005,68 @@ class VpnProvider extends ChangeNotifier {
         'queryStrategy': 'UseIPv4',
       };
 
-      // 5. Routing hybrid matcher — быстрее + мешает ML паттерн-анализу
+      // 5. Routing hybrid matcher
       if (j['routing'] is Map) {
         (j['routing'] as Map)['domainMatcher'] ??= 'hybrid';
+      }
+
+      // 6. ЗАДАЧА 1: Удалить xray gRPC management API
+      // XrayAPIDetector сканирует порт 10085 — убираем API секцию
+      // yourvpndead PoC использует это для дампа конфигов
+      j.remove('api');
+      if (j['inbounds'] is List) {
+        final inbounds = (j['inbounds'] as List);
+        inbounds.removeWhere((ib) =>
+          ib is Map && (ib['tag'] == 'api' || ib['protocol'] == 'dokodemo-door'));
+      }
+      if (j['routing'] is Map && (j['routing'] as Map)['rules'] is List) {
+        final rules = (j['routing'] as Map)['rules'] as List;
+        rules.removeWhere((r) => r is Map && r['outboundTag'] == 'api');
+      }
+
+      // 8. ЗАДАЧА 3: Блокировка telemetry (anti-Happ)
+      // Блокируем известные телеметрические хосты в routing
+      // Защита: наше приложение не может случайно утечь данные
+      if (j['routing'] is Map && (j['routing'] as Map)['rules'] is List) {
+        final rules = (j['routing'] as Map)['rules'] as List;
+        rules.insert(0, {
+          'type': 'field',
+          'domain': [
+            'check.happ.su',       // Happ telemetry
+            'api.happ.su',
+            'update.happ.su',
+            'metric.happ.su',
+            'analytics.',          // generic analytics
+            'telemetry.',
+            'collect.',
+            'stat.',
+          ],
+          'outboundTag': 'block',
+        });
+      }
+
+      // 7. ЗАДАЧА 2: Anti-WebRTC STUN leak
+      // Meta Pixel / Яндекс.Метрика используют WebRTC STUN для сканирования localhost
+      // Блокируем UDP трафик к STUN серверам через routing
+      if (j['routing'] is Map && (j['routing'] as Map)['rules'] is List) {
+        final rules = (j['routing'] as Map)['rules'] as List;
+        // Блокируем stun.l.google.com и другие STUN серверы
+        rules.insert(0, {
+          'type': 'field',
+          'domain': ['stun.l.google.com', 'stun1.l.google.com',
+                     'stun.cloudflare.com', 'stun.nextcloud.com'],
+          'outboundTag': 'block',
+          'network': 'udp',
+        });
+      }
+      // Убедимся что есть blackhole outbound
+      if (j['outbounds'] is List) {
+        final outs = j['outbounds'] as List;
+        final hasBlock = outs.any((o) => o is Map && o['tag'] == 'block');
+        if (!hasBlock) {
+          outs.add({'tag': 'block', 'protocol': 'blackhole',
+              'settings': {'response': {'type': 'none'}}});
+        }
       }
 
       return jsonEncode(j);
@@ -1095,8 +1191,12 @@ class VpnProvider extends ChangeNotifier {
       );
 
       // Шаг 2: Генерируем конфиг (мгновенно)
-      final V2RayURL parsed = FlutterV2ray.parseFromURL(patchedCfg.link);
-      String configStr = parsed.getFullConfiguration();
+      // ЗАДАЧА 11: Проверяем кэш перед парсингом
+      String configStr = _getCachedConfig(patchedCfg.link) ?? '';
+      if (configStr.isEmpty) {
+        final V2RayURL parsed = FlutterV2ray.parseFromURL(patchedCfg.link);
+        configStr = parsed.getFullConfiguration();
+      }
       if (configStr.isEmpty) {
         _log('✗ E-1003: getFullConfiguration() returned empty');
         _isRotating = false; status = 'ERROR'; stealthStatus = ''; _notify(); return;
@@ -1546,7 +1646,7 @@ class VpnProvider extends ChangeNotifier {
     // Batch 32 параллельно — максимальная скорость пинга
     for (int i = 0; i < total; i += 32) {
       if (_disposed) { isPingAllRunning = false; _notify(); return; }
-      final batch = (i + 32 <= total) ? 32 : total - i;
+      final batch = (i + 32 <= total) ? 32 : total - i; // 32 ноды параллельно
       await Future.wait(List.generate(batch, (j) => pingNode(i + j)));
     }
     isPingAllRunning = false;

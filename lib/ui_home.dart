@@ -218,27 +218,24 @@ class _ConnectCard extends StatelessWidget {
         child: Padding(padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
           child: Column(children: [
             // Power button — с тенью для видимости в светлой теме
-            GestureDetector(onTap: vpn.toggle,
-              child: AnimatedContainer(duration: const Duration(milliseconds: 600),
-                width: 90, height: 90,
-                decoration: BoxDecoration(shape: BoxShape.circle,
-                  gradient: RadialGradient(colors: [
-                    sc.withOpacity(light ? 0.15 : 0.20),
-                    sc.withOpacity(light ? 0.05 : 0.06),
-                    Colors.transparent], stops: const [0,0.6,1]),
-                  border: Border.all(color: sc.withOpacity(light ? 0.60 : 0.75), width: 1.5),
-                  boxShadow: [
-                    // Основное свечение
-                    BoxShadow(color: sc.withOpacity(light ? 0.25 : 0.45), blurRadius: 24),
-                    // Тень для глубины (особенно важна в светлой теме)
-                    BoxShadow(color: Colors.black.withOpacity(light ? 0.12 : 0.30),
-                        blurRadius: 12, spreadRadius: -2, offset: const Offset(0, 4)),
-                  ]),
-                child: Icon(vpn.isConnected ? Icons.stop_rounded : Icons.power_settings_new_rounded,
-                    size: 38, color: sc))),
+            // iOS 26: spring animation кнопка подключения
+            _LiquidGlassButton(
+              status: vpn.status,
+              statusColor: sc,
+              isLight: light,
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                vpn.toggle();
+              }),
             const SizedBox(height: 14),
-            Text(st, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900,
-                color: sc, letterSpacing: 3.0)),
+            // iOS 26: крупный статус в стиле SF Pro
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: Text(st, key: ValueKey(st),
+                style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700,
+                  color: sc, letterSpacing: 2.5,
+                  shadows: [Shadow(color: sc.withOpacity(0.4), blurRadius: 12)]))),
             const SizedBox(height: 6),
             if (cfg != null) Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               Flexible(child: Text(cfg.displayName, maxLines: 1, overflow: TextOverflow.ellipsis,
@@ -3103,3 +3100,106 @@ class _QrScanScreenState extends State<QrScanScreen> {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SETTINGS SCREEN v5.5 — плиточные категории как в Telegram
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  iOS 26 LIQUID GLASS BUTTON — кнопка подключения
+// ─────────────────────────────────────────────────────────────────────────────
+class _LiquidGlassButton extends StatefulWidget {
+  final String status;
+  final Color statusColor;
+  final bool isLight;
+  final VoidCallback onTap;
+  const _LiquidGlassButton({
+    required this.status, required this.statusColor,
+    required this.isLight, required this.onTap});
+  @override State<_LiquidGlassButton> createState() => _LiquidGlassButtonState();
+}
+
+class _LiquidGlassButtonState extends State<_LiquidGlassButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _anim;
+  late Animation<double> _scaleAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(vsync: this,
+        duration: const Duration(milliseconds: 100),
+        reverseDuration: const Duration(milliseconds: 500));
+    // Spring back — iOS 26 signature feel
+    _scaleAnim = Tween(begin: 1.0, end: 0.87).animate(
+        CurvedAnimation(parent: _anim, curve: Curves.easeIn,
+            reverseCurve: Curves.elasticOut));
+  }
+
+  @override void dispose() { _anim.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final sc = widget.statusColor;
+    final light = widget.isLight;
+    final connected  = widget.status == 'CONNECTED';
+    final connecting = widget.status == 'CONNECTING';
+
+    return GestureDetector(
+      onTapDown: (_) { _anim.forward(); HapticFeedback.mediumImpact(); },
+      onTapUp:   (_) { _anim.reverse(); widget.onTap(); },
+      onTapCancel: () => _anim.reverse(),
+      child: AnimatedBuilder(animation: _scaleAnim,
+        builder: (_, __) => Transform.scale(scale: _scaleAnim.value,
+          child: SizedBox(width: 110, height: 110,
+            child: Stack(alignment: Alignment.center, children: [
+
+              // Outer glow ring (iOS 26 signature)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 600), curve: Curves.easeOut,
+                width: 110, height: 110,
+                decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [
+                  BoxShadow(color: sc.withOpacity(connected ? 0.55 : 0.22),
+                      blurRadius: connected ? 50 : 22),
+                  BoxShadow(color: sc.withOpacity(connected ? 0.22 : 0.08),
+                      blurRadius: connected ? 90 : 45),
+                ])),
+
+              // Liquid Glass core — translucent + refraction
+              ClipOval(child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 38, sigmaY: 38),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 600), curve: Curves.easeOut,
+                  width: 104, height: 104,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                        center: const Alignment(-0.3, -0.4), radius: 1.0,
+                        colors: light
+                            ? [Colors.white.withOpacity(0.85),
+                               sc.withOpacity(0.15),
+                               sc.withOpacity(0.05)]
+                            : [Colors.white.withOpacity(connected ? 0.24 : 0.15),
+                               sc.withOpacity(connected ? 0.20 : 0.09),
+                               Colors.black.withOpacity(0.22)]),
+                    border: Border.all(
+                        color: sc.withOpacity(light ? 0.72 : 0.50), width: 1.5)),
+                  child: Stack(children: [
+                    // iOS 26 specular highlight — полоска света сверху
+                    Positioned(top: 10, left: 20, right: 46, child: Container(height: 1.2,
+                        decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(1),
+                            gradient: LinearGradient(colors: [
+                              Colors.white.withOpacity(light ? 0.95 : 0.65),
+                              Colors.transparent])))),
+                    // Icon / Spinner
+                    Center(child: connecting
+                        ? SizedBox(width: 36, height: 36,
+                            child: CircularProgressIndicator(strokeWidth: 2.5, color: sc,
+                                backgroundColor: sc.withOpacity(0.2)))
+                        : Icon(
+                            connected ? Icons.stop_rounded : Icons.power_settings_new_rounded,
+                            size: 44, color: sc,
+                            shadows: [Shadow(color: sc.withOpacity(0.6), blurRadius: 20)])),
+                  ])
+                ))),
+
+            ])))));
+  }
+}

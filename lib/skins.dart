@@ -52,6 +52,8 @@ class AuraSkin {
   final List<Color>   blobs;
   final SkinPattern   pattern;       // узор поверх фона
   final double        patternOpacity; // прозрачность узора 0.0-1.0
+  final Color         glassAccent;   // iOS 26 Liquid Glass tint цвет
+  final double        glassBlur;     // Blur strength для этой темы
 
   const AuraSkin({
     required this.id,
@@ -65,8 +67,11 @@ class AuraSkin {
     required this.blobs,
     this.pattern        = SkinPattern.none,
     this.patternOpacity = 0.06,
+    Color? glassAccent,
+    this.glassBlur      = 40.0,
   }) : bgGradientMid = bgGradientMid ?? bgDark,
-       bgGradientEnd = bgGradientEnd ?? bgDark;
+       bgGradientEnd = bgGradientEnd ?? bgDark,
+       glassAccent   = glassAccent ?? accent;
 
   static const all = [
     // 1. MIDNIGHT — звёздное небо

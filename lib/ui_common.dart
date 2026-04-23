@@ -562,13 +562,14 @@ class _BlobPainter extends CustomPainter {
       o.blobs.length != blobs.length; // перерисовывать только при реальных изменениях
 }
 
+// iOS 26 Liquid Glass material — specular highlights, refraction, blur
 class GlassBox extends StatelessWidget {
   final Widget child;
   final EdgeInsets? padding, margin;
   final double radius, blur, tintOpacity;
   final Color? borderColor, tint;
   const GlassBox({super.key, required this.child, this.padding, this.margin,
-    this.radius = 20, this.borderColor, this.blur = 28, this.tint, this.tintOpacity = 0.10});
+    this.radius = 28, this.borderColor, this.blur = 40, this.tint, this.tintOpacity = 0.12});
 
   @override
   Widget build(BuildContext context) {

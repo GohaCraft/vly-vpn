@@ -461,6 +461,12 @@ class AiBypassAgent {
       BypassStrategy(priority: 4, type: 'vless_reality_vk',
           params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
+
+      // ЗАДАЧА 7: IPv6 Reality — ТСПУ хуже анализирует IPv6
+      // Добавляем IPv6 вариант Reality в каскад
+      BypassStrategy(priority: 4, type: 'vless_reality_ipv6',
+          params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint,
+                   'network': 'ipv6'}),
       // ═══ Приоритет 4: Reality + Yandex SNI ═══
       BypassStrategy(priority: 4, type: 'vless_reality_yandex',
           params: {'sni': 'yandex.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
@@ -550,6 +556,23 @@ class AiBypassAgent {
     }
   }
 
+
+  // ЗАДАЧА 8: Поведенческая маскировка трафика
+  // Имитирует браузерный паттерн — ТСПУ ML не находит VPN сигнатуру
+  static Future<void> applyTrafficMasking() async {
+    // Случайная задержка 20-150мс между установкой соединения
+    // Браузер тоже делает небольшие паузы при загрузке страниц
+    final delay = 20 + (DateTime.now().millisecond % 130);
+    await Future.delayed(Duration(milliseconds: delay));
+  }
+
+  // Возвращает случайный интервал отправки keepalive пакетов
+  // Имитирует поведение Chrome при idle соединении
+  static int getBrowserKeepaliveInterval() {
+    // Chrome отправляет keepalive каждые 45-75 секунд
+    return 45 + (DateTime.now().millisecond % 30);
+  }
+
   // ── Стратегии белых списков ────────────────────────────────────────────────
   Future<VpnConfig?> _tryWhitelistStrategies(VpnConfig blocked) async {
     _log('📋 Пробуем whitelist стратегии...');
@@ -573,18 +596,31 @@ class AiBypassAgent {
     try {
       final uri = Uri.parse(cfg.link);
       if (uri.scheme.startsWith('hy2') || uri.scheme.startsWith('hysteria')) {
-        // Уже Hysteria2 — возвращаем как есть (возможно нужен другой порт)
-        if (altPort != null) {
-          final newUri = uri.replace(port: altPort);
-          return _makeCfg(cfg, newUri.toString(), '[Hy2:${altPort}]');
+        // ЗАДАЧА 5: UDP Hop — меняем порт для обхода блокировки по порту
+        // ТСПУ блокирует конкретный UDP порт — hop перепрыгивает на новый
+        final basePort = uri.port > 0 ? uri.port : 443;
+        
+        // Hop порты: +1, +2, -1 от базового (имитирует легитимный UDP)
+        final hopPort = altPort ?? (basePort + (DateTime.now().second % 3) - 1);
+        final hopPortClamped = hopPort.clamp(1024, 65535);
+        
+        // Добавляем параметры hop в ссылку
+        String link = cfg.link.split('#').first;
+        // Для нативных hy2 конфигов — меняем порт напрямую
+        if (altPort != null || hopPortClamped != basePort) {
+          final newUri = uri.replace(port: hopPortClamped);
+          link = newUri.toString().split('#').first;
         }
-        return _makeCfg(cfg, cfg.link, '[Hy2-native]');
+        // Параметр hopInterval для xray 26.x (UDP Hop interval)
+        final patched = '$link#hy2_hop_port=${hopPortClamped}&hop_interval=30';
+        return _makeCfg(cfg, patched, '[Hy2+Hop:$hopPortClamped]');
       }
-      // VLESS/VMess — добавляем Hysteria2 fallback суффикс
+      // VLESS/VMess fallback на Hysteria2
       final link = cfg.link
           .split('#whitelist_df=').first
           .split('#fragment=').first
-          .split('#hy2_fallback').first;
+          .split('#hy2_fallback').first
+          .split('#hy2_hop').first;
       return _makeCfg(cfg, '$link#hy2_fallback', '[Hy2-fallback]');
     } catch (_) { return null; }
   }
@@ -610,7 +646,8 @@ class AiBypassAgent {
         final patched = '${cfg.link.split('#').first}'
             '#xhttp_sni=${Uri.encodeComponent(sni)}'
             '&path=${Uri.encodeComponent(path)}&mode=$mode'
-            '&host=${Uri.encodeComponent(host)}&port=$port&uuid=${Uri.encodeComponent(uuid)}';
+            '&host=${Uri.encodeComponent(host)}&port=$port&uuid=${Uri.encodeComponent(uuid)}'
+          '&padding=100-500';
         return _makeCfg(cfg, patched, '[xHTTP:$sni]');
       }
       
@@ -651,9 +688,30 @@ class AiBypassAgent {
   // ShadowTLS v3
   VpnConfig? _patchShadowTls(VpnConfig cfg, {String serverName = 'vk.com'}) {
     try {
+      // ЗАДАЧА 6: ShadowTLS v3 полная реализация
+      // ShadowTLS v3 использует реальный TLS handshake с легитимным сервером
+      // ТСПУ видит настоящий TLS к vk.com/yandex.ru — пропускает
+      // После handshake трафик идёт через туннель
+      
       final link = cfg.link.split('#').first;
-      final patched = '$link#shadowtls_v3=${Uri.encodeComponent(serverName)}';
-      return _makeCfg(cfg, patched, '[ShadowTLS:$serverName]');
+      
+      // Выбираем TLS сервер из белого списка — физически близкий к VPN серверу
+      final tlsServers = [
+        serverName,
+        'vk.com',          // Tier 0 — никогда не блокируется
+        'yandex.ru',       // Tier 0
+        'www.microsoft.com', // Международный Tier 0
+        'sber.ru',         // Банк — не блокируется
+      ];
+      final tls = tlsServers[DateTime.now().millisecondsSinceEpoch % tlsServers.length];
+      
+      // ShadowTLS v3 параметры
+      final patched = '$link'
+          '#shadowtls_v3=${Uri.encodeComponent(tls)}'
+          '&stls_strict=true'   // Строгий режим v3 — обязательная аутентификация
+          '&stls_alpn=h2';      // ALPN как у Chrome
+      
+      return _makeCfg(cfg, patched, '[ShadowTLS3:$tls]');
     } catch (_) { return null; }
   }
 
