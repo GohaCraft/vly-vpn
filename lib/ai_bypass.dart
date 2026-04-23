@@ -83,7 +83,6 @@ extension BypassModeInfo on BypassMode {
   }
   bool get isRecommended => this == BypassMode.auto || this == BypassMode.hysteria2 || this == BypassMode.xhttp;
 }
-}
 
 // ── Blacklist стратегий (память) ───────────────────────────────────────────
 class StrategyBlacklist {
@@ -454,7 +453,7 @@ class AiBypassAgent {
 
         case 'vless_xtls_vision':
           return _patchReality(blocked,
-              sni: s.params['sni'] as String? ?? 'vk.com');
+              s.params['sni'] as String? ?? 'vk.com');
         case 'vless_reality_vk':
         case 'vless_reality_yandex':
         case 'vless_reality_sber':
