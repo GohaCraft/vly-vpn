@@ -1,4 +1,4 @@
-// ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last, prefer_final_locals, omit_local_variable_types, always_use_package_imports
+// ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last, prefer_final_locals, omit_local_variable_types, always_use_package_imports, curly_braces_in_flow_control_structures, argument_type_not_assignable, invalid_assignment, body_might_complete_normally
 part of 'main.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -492,7 +492,7 @@ class IpCheckProvider extends ChangeNotifier {
     if (isLoading) return;
     // Кэш 30 секунд — не делаем запрос слишком часто
     if (!force && _lastFetch != null &&
-        DateTime.now().difference(_lastFetch!).inSeconds < 30) return;
+        DateTime.now().difference(_lastFetch!).inSeconds < 15) return; // обновляем каждые 15с
     isLoading = true; hasError = false; _safeNotify();
     try {
       currentIp  = await _fetchIpInfo();
@@ -524,7 +524,7 @@ class IpCheckProvider extends ChangeNotifier {
     ];
 
     for (final apiUrl in apis) {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
       try {
         final req  = await client.getUrl(Uri.parse(apiUrl));
         req.headers.set('User-Agent', kStealthUA);
@@ -748,7 +748,7 @@ class _IpCheckScreenState extends State<IpCheckScreen> {
         },
       ),      // ListenableBuilder
       ),      // SafeArea
-    ));  // AuraBlobBg + Scaffold
+    ));  // Scaffold
   }
 }
 
