@@ -1965,10 +1965,8 @@ class _DevDashboardState extends State<_DevDashboard> {
         const _DevEmptyMsg('Чёрный список пуст — все стратегии доступны')
       else
         ...blacklist.map((e) {
-          final mins = DateTime.now().isBefore(e.value)
-              ? e.value.difference(DateTime.now()).inMinutes + 1 : 0;
-          final key  = e.key.length > 28 ? e.key.substring(0, 28) : e.key;
-          return _DevRow(key, '${mins}m left', color: Colors.redAccent);
+          final key = e.length > 28 ? e.substring(0, 28) : e;
+          return _DevRow(key, 'blocked', color: Colors.redAccent);
         }),
       const SizedBox(height: 12),
       _DevSection('SIBERIA SHIELD'),
@@ -1977,7 +1975,7 @@ class _DevDashboardState extends State<_DevDashboard> {
       _DevRow('Shield enabled',    '${vpn.siberiaShield}'),
       const SizedBox(height: 12),
       _DevSection('BYPASS REPORTER'),
-      _DevRow('Server enabled',    '${BypassReporter._enabled}'),
+      _DevRow('Server enabled',    'N/A'),
       _DevRow('Server URL',        kControlPlaneUrl),
       const SizedBox(height: 12),
       _DevSection('ACTIONS'),

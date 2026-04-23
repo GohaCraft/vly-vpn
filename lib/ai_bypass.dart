@@ -83,77 +83,6 @@ extension BypassModeInfo on BypassMode {
   }
   bool get isRecommended => this == BypassMode.auto || this == BypassMode.hysteria2 || this == BypassMode.xhttp;
 }
-
-// ── Тип блокировки ─────────────────────────────────────────────────────────
-enum BlockType {
-  none,           // Нет блокировки
-  dnsPoisoning,   // DNS отравление (возвращает неправильный IP)
-  tcpReset,       // TCP RST (сервер принудительно сбрасывает)
-  tlsFingerprint, // Детекция по TLS fingerprint (JA3/JA4)
-  ipBlock,        // IP адрес сервера заблокирован
-  whitelist,      // Белый список (всё кроме разрешённого блокируется)
-  timeout,        // Таймаут — неизвестная причина
-}
-
-// ── Детектор типа блокировки ───────────────────────────────────────────────
-class BlockDetector {
-  static Future<BlockType> detect(VpnConfig cfg) async {
-    try {
-      final host = _extractHost(cfg.link);
-      if (host.isEmpty) return BlockType.timeout;
-
-      // Тест 1: DNS (быстро — 1 сек)
-      final dnsOk = await _testDns(host).timeout(
-          const Duration(seconds: 1), onTimeout: () => false);
-
-      // Тест 2: TCP соединение (1 сек)
-      final tcpOk = await _testTcp(host, _extractPort(cfg.link)).timeout(
-          const Duration(seconds: 1), onTimeout: () => false);
-
-      if (!dnsOk) return BlockType.dnsPoisoning;
-      if (!tcpOk) return BlockType.tcpReset;
-
-      // Если TCP работает но VPN не подключается — проблема в TLS/fingerprint
-      return BlockType.tlsFingerprint;
-    } catch (_) {
-      return BlockType.timeout;
-    }
-  }
-
-  static Future<bool> _testDns(String host) async {
-    try {
-      final addrs = await InternetAddress.lookup(host);
-      return addrs.isNotEmpty;
-    } catch (_) { return false; }
-  }
-
-  static Future<bool> _testTcp(String host, int port) async {
-    try {
-      final s = await Socket.connect(host, port,
-          timeout: const Duration(milliseconds: 800));
-      s.destroy();
-      return true;
-    } catch (_) { return false; }
-  }
-
-  static String _extractHost(String link) {
-    try { return Uri.parse(link).host; } catch (_) { return ''; }
-  }
-
-  static int _extractPort(String link) {
-    try {
-      final p = Uri.parse(link).port;
-      return p > 0 ? p : 443;
-    } catch (_) { return 443; }
-  }
-}
-
-// ── Стратегия обхода ───────────────────────────────────────────────────────
-class BypassStrategy {
-  final int    priority;
-  final String type;
-  final Map<String, dynamic> params;
-  const BypassStrategy({required this.priority, required this.type, required this.params});
 }
 
 // ── Blacklist стратегий (память) ───────────────────────────────────────────
@@ -524,7 +453,7 @@ class AiBypassAgent {
               sni: s.params['sni'] as String? ?? 'vk.com');
 
         case 'vless_xtls_vision':
-          return _patchXtlsVision(blocked,
+          return _patchReality(blocked,
               sni: s.params['sni'] as String? ?? 'vk.com');
         case 'vless_reality_vk':
         case 'vless_reality_yandex':

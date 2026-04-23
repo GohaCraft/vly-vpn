@@ -515,7 +515,7 @@ class BypassRulesEngine {
         }
       }
     }
-    all.sort((a, b) => a.priority.compareTo(b.priority));
+    all.sort((a, b) => (a as BypassStrategy).priority.compareTo((b as BypassStrategy).priority));
     return all;
   }
 
@@ -748,7 +748,7 @@ class BypassRulesEngine {
             // Помечаем ссылку маркером для VpnProvider
             if (!link.contains('whitelist_df=')) {
               final sep = link.contains('#') ? '&' : '#';
-              link = '$link${sep}whitelist_df=${endpoint['host']}';
+              link = '\$link\${sep}whitelist_df=\${endpoint["host"] as String}';
             }
           }
         } catch (_) {}

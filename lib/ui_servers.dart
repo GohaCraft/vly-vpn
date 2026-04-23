@@ -23,7 +23,6 @@ class ServersScreen extends StatelessWidget {
         ),
         body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
-        addRepaintBoundaries: true,
         cacheExtent: 500, // кэшируем 500px за экраном — плавный скролл
         slivers: [
           // GlassAppBar без extendBodyBehindAppBar — Flutter добавляет отступ сам

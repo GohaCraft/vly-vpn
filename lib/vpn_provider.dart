@@ -255,7 +255,7 @@ class VpnProvider extends ChangeNotifier {
 
   VpnProvider() {
     _bypassRules = BypassRulesEngine();
-    _aiAgent     = AiBypassAgent(_bypassRules, _log);
+    _aiAgent     = AiBypassAgent(_log);
     _v2ray = FlutterV2ray(onStatusChanged: (v2s) {
       final prev   = status;
       final newSt  = v2s.state.toUpperCase();
@@ -621,7 +621,7 @@ class VpnProvider extends ChangeNotifier {
     );
     await loadFromDisk();
     await _loadHistory();
-    await NewsAwareness.load();           // загружаем blacklist стратегий
+    // NewsAwareness.load() — disabled (no server)
     _setupCommandChannel();
     _ipCheck.fetchReal();
     await _loadStealthPrefs();
@@ -1266,7 +1266,7 @@ class VpnProvider extends ChangeNotifier {
 
       // Шаг 6: ЗАПУСКАЕМ V2RAY — Android требует вызова внутри 5 сек
       await _v2ray.startV2Ray(
-        remark:        parsed.remark.isNotEmpty ? parsed.remark : cfg.displayName,
+        remark:        cfg.displayName,
         config:        configStr,
         blockedApps:   _splitArgsForConnect(),
         bypassSubnets: null,
