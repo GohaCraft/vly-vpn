@@ -86,6 +86,7 @@ class VpnProvider extends ChangeNotifier {
   Duration sessionDuration = Duration.zero;
   DateTime? _connectedAt;
   Timer?  _trafficTimer;
+  Timer?  _saveDebounce;   // дебаунс записи на диск (см. saveToDisk/saveNow)
 
   // ── История подключений (v4.0) ────────────────────────────────────────────
   List<ConnectionRecord> connectionHistory = [];
@@ -330,6 +331,8 @@ class VpnProvider extends ChangeNotifier {
     _stopTrafficTimer();
     _autoRecheckTimer?.cancel();
     _logDebounce?.cancel();
+    // Флаш отложенной записи, чтобы не потерять последние изменения настроек.
+    if (_saveDebounce?.isActive ?? false) { _saveDebounce!.cancel(); saveNow(); }
     super.dispose();
   }
 
@@ -664,7 +667,7 @@ class VpnProvider extends ChangeNotifier {
     final limited = trimmed.length > 20 ? trimmed.substring(0, 20) : trimmed;
     final p = AuraProfile(id: AuraProfile._uid(), name: limited);
     profiles.add(p);
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   Future<void> switchProfile(String id) async {
@@ -677,27 +680,27 @@ class VpnProvider extends ChangeNotifier {
         .map((m) { try { return VpnConfig.fromMap(m); } catch (_) { return null; } })
         .whereType<VpnConfig>());
     if (selectedIndex >= _configs.length) selectedIndex = 0;
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   Future<void> deleteProfile(String id) async {
     if (profiles.length <= 1) return; // нельзя удалить единственный профиль
     profiles.removeWhere((p) => p.id == id);
     if (activeProfileId == id) activeProfileId = profiles.first.id;
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   Future<void> renameProfile(String id, String newName) async {
     final p = profiles.firstWhere((p) => p.id == id, orElse: () => profiles.first);
     p.name = newName.trim().isEmpty ? 'Profile' : newName.trim();
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   // ── Split Tunnel (v3.0) ──────────────────────────────────────────────────
 
   Future<void> setSplitMode(SplitTunnelMode mode) async {
     _prof.splitMode = mode;
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   Future<void> toggleSplitApp(String packageName) async {
@@ -705,7 +708,7 @@ class VpnProvider extends ChangeNotifier {
     if (list.contains(packageName)) list.remove(packageName);
     else list.add(packageName);
     _prof.splitApps = list;
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   List<String>? _splitArgsForConnect() {
@@ -742,7 +745,7 @@ class VpnProvider extends ChangeNotifier {
           .map((m) { try { return VpnConfig.fromMap(m); } catch (_) { return null; } })
           .whereType<VpnConfig>().toList();
       if (selectedIndex >= _configs.length) selectedIndex = 0;
-      await saveToDisk(); _notify();
+      await saveNow(); _notify();
       return true;
     } catch (_) { return false; }
   }
@@ -1543,7 +1546,7 @@ class VpnProvider extends ChangeNotifier {
     if (idx < 0 || idx >= _configs.length) return;
     _configs[idx].resetToOriginal();
     _log('↩ "${_configs[idx].displayName}" — сброс к оригинальному ключу провайдера');
-    saveToDisk();
+    saveNow();
     _notify();
   }
 
@@ -1586,7 +1589,7 @@ class VpnProvider extends ChangeNotifier {
     _log('📡 Загружаю: $u');
     _notify();
     await _fetchSub(u);
-    saveToDisk();
+    saveNow();
     _notify();
   }
 
@@ -1607,7 +1610,7 @@ class VpnProvider extends ChangeNotifier {
     for (final url in subLinks) await _fetchSub(url);
     status = _configs.isEmpty ? 'OFFLINE' : 'UPDATED';
     if (selectedIndex >= _configs.length) selectedIndex = 0;
-    _log('✔ ${_configs.length} nodes'); _notify(); saveToDisk();
+    _log('✔ ${_configs.length} nodes'); _notify(); saveNow();
   }
 
   Future<void> _fetchSub(String url) async {
@@ -1981,7 +1984,20 @@ class VpnProvider extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> saveToDisk() async {
+  // ── Персистенция (дебаунс для производительности) ─────────────────────────
+  // saveToDisk() раньше сериализовал ВСЕ ноды+профили, обфусцировал JSON и писал
+  // в SharedPreferences на КАЖДОМ сеттере/тоггле (десятки вызовов). Быстрые
+  // изменения = повторная тяжёлая сериализация всего. Теперь saveToDisk()
+  // дебаунсит (коалесцирует burst в одну запись через 600мс), а saveNow()
+  // пишет немедленно — для мутаций данных (импорт/удаление/сброс нод).
+  void saveToDisk() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 600), saveNow);
+  }
+
+  Future<void> saveNow() async {
+    _saveDebounce?.cancel();
+    _saveDebounce = null;
     try {
       _prof.configsJson = _configs.map((c) => c.toMap()).toList();
       final p    = await SharedPreferences.getInstance();
