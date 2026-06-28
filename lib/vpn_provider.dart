@@ -1625,11 +1625,18 @@ class VpnProvider extends ChangeNotifier {
         raw = utf8.decode(base64.decode(pad == 0 ? clean : clean + '=' * (4 - pad)));
       } catch (_) {}
       final gname = _groupNameFromUrl(url);
-      int added = 0;
+
+      // Парсим свежие ноды подписки в отдельный список.
+      final fresh = <VpnConfig>[];
+      final seen  = <String>{};
+      // Ссылки из ДРУГИХ источников — не дублируем их в этой подписке.
+      final otherLinks = _configs
+          .where((c) => c.sourceUrl != url)
+          .map((c) => c.link).toSet();
       for (final line in raw.split(RegExp(r'[\n\r]+'))) {
         final l = line.trim();
         if (!l.contains('://')) continue;
-        if (_configs.any((c) => c.link == l)) continue;
+        if (otherLinks.contains(l) || !seen.add(l)) continue; // дубль (другой источник / внутри)
         String name = 'Node';
         if (l.contains('#')) {
           try {
@@ -1638,10 +1645,30 @@ class VpnProvider extends ChangeNotifier {
           } catch (_) {}
         }
         if (l.startsWith('hy2://') || l.startsWith('hysteria2://')) name = '⚡ $name';
-        _configs.add(VpnConfig(name: name, link: l, groupName: gname, sourceUrl: url));
-        added++;
+        fresh.add(VpnConfig(name: name, link: l, groupName: gname, sourceUrl: url));
       }
-      _log('✔ $gname +$added');
+      if (fresh.isEmpty) { _log('✔ $gname +0 (нет нод — список не тронут)'); return; }
+
+      // ОБНОВЛЕНИЕ = СИНХРОНИЗАЦИЯ (replace), а не append. Иначе при ротации нод
+      // провайдером старые мёртвые ноды копятся в списке навсегда. Сохраняем
+      // пользовательские пометки (избранное/кастомное имя) по совпадению ссылки.
+      // Ноды из других источников и ручные (другой sourceUrl) не трогаем.
+      final oldOfThisSrc = {
+        for (final c in _configs.where((c) => c.sourceUrl == url)) c.link: c
+      };
+      for (final f in fresh) {
+        final prev = oldOfThisSrc[f.link];
+        if (prev != null) {
+          f.isFavourite = prev.isFavourite;
+          if (prev.customName.isNotEmpty) f.customName = prev.customName;
+        }
+      }
+      final before = oldOfThisSrc.length;
+      _configs.removeWhere((c) => c.sourceUrl == url);
+      _configs.addAll(fresh);
+      // Корректируем selectedIndex, чтобы не указывал мимо после replace.
+      if (selectedIndex >= _configs.length) selectedIndex = _configs.isEmpty ? 0 : _configs.length - 1;
+      _log('✔ $gname: ${fresh.length} нод (было $before, синхронизировано)');
     } on TimeoutException { _log('✗ Timeout: $url'); }
     catch (e) { _log('✗ Fetch: $e'); }
   }
