@@ -1191,8 +1191,22 @@ class VpnProvider extends ChangeNotifier {
       );
 
       // Шаг 2: Генерируем конфиг (мгновенно)
+      String configStr = '';
+
+      // Honest transport: режим xHTTP строит РЕАЛЬНЫЙ xHTTP-конфиг через builder.
+      // Раньше стратегия xHTTP меняла только SNI — транспорт оставался type=tcp
+      // (parseFromURL), т.е. обход был фиктивным. Теперь генерируем настоящий
+      // xHTTP outbound. При любой неудаче — тихий фолбэк на стандартный путь ниже.
+      if (_aiMode == 'xhttp') {
+        final built = StealthEngine.buildHonestXhttp(patchedCfg.link, sni: _aiSni);
+        if (built != null && built.isNotEmpty) {
+          configStr = built;
+          _log('🌐 xHTTP honest config (real transport)');
+        }
+      }
+
       // ЗАДАЧА 11: Проверяем кэш перед парсингом
-      String configStr = _getCachedConfig(patchedCfg.link) ?? '';
+      if (configStr.isEmpty) configStr = _getCachedConfig(patchedCfg.link) ?? '';
       if (configStr.isEmpty) {
         final V2RayURL parsed = FlutterV2ray.parseFromURL(patchedCfg.link);
         configStr = parsed.getFullConfiguration();

@@ -528,6 +528,34 @@ class StealthEngine {
   }
 
   
+  // ── Мост: vless-ссылка → честный xHTTP конфиг ──────────────────────────────
+  // Раньше стратегия 'xhttp' лишь подменяла SNI, а транспорт оставался прежним
+  // (parseFromURL строил исходный type=tcp). Теперь строим РЕАЛЬНЫЙ xHTTP outbound
+  // из параметров ноды. Возвращает JSON-строку конфига или null при неудаче —
+  // вызывающий код тогда падает обратно на стандартный путь parseFromURL.
+  static String? buildHonestXhttp(String vlessLink, {String? sni}) {
+    if (!vlessLink.startsWith('vless://')) return null;
+    try {
+      final uri  = Uri.parse(vlessLink);
+      final uuid = uri.userInfo;
+      final host = uri.host;
+      final port = uri.port > 0 ? uri.port : 443;
+      if (uuid.isEmpty || host.isEmpty) return null;
+      final q       = uri.queryParameters;
+      final liveSni = (sni != null && sni.isNotEmpty)
+          ? sni
+          : (q['sni']?.isNotEmpty == true ? q['sni'] : null);
+      final cfg = buildXhttpConfig(
+        host: host, port: port, uuid: uuid,
+        sni:  liveSni,
+        fp:   q['fp'],
+      );
+      return jsonEncode(cfg);
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── xHTTP Config Builder (НОВЫЙ транспорт 2026) ─────────────────────────────
   // xHTTP — лучший TCP-транспорт апрель 2026. Выглядит как HTTP multipart upload.
   // ТСПУ не детектирует: нет характерных паттернов TLS VPN, только обычный HTTP.
