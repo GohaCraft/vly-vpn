@@ -556,6 +556,38 @@ class StealthEngine {
     }
   }
 
+  // ── Мост: vless-ссылка → честный VLESS+Reality+Vision конфиг ────────────────
+  // Стратегия vless_xtls_vision раньше шла как обычный Reality через маркер
+  // #whitelist_df=. Теперь, если в ссылке есть pbk+sid, строим гарантированно
+  // корректный конфиг из чистого шаблона (realitySettings + flow на user-уровне)
+  // через buildVlessVisionConfig — не зависим от парсинга reality в parseFromURL.
+  // null → нет pbk/sid (не настоящая Reality-нода) → фолбэк на стандартный путь.
+  static String? buildHonestVision(String vlessLink, {String? sni}) {
+    if (!vlessLink.startsWith('vless://')) return null;
+    try {
+      final uri  = Uri.parse(vlessLink);
+      final uuid = uri.userInfo;
+      final host = uri.host;
+      final port = uri.port > 0 ? uri.port : 443;
+      final q    = uri.queryParameters;
+      final pbk  = q['pbk'] ?? q['publicKey'] ?? '';
+      final sid  = q['sid'] ?? q['shortId']   ?? '';
+      // Vision требует Reality: без publicKey/shortId смысла строить нет
+      if (uuid.isEmpty || host.isEmpty || pbk.isEmpty) return null;
+      final liveSni = (sni != null && sni.isNotEmpty)
+          ? sni
+          : (q['sni']?.isNotEmpty == true ? q['sni'] : null);
+      final cfg = buildVlessVisionConfig(
+        host: host, port: port, uuid: uuid,
+        pbk: pbk, sid: sid,
+        sni: liveSni, fp: q['fp'],
+      );
+      return jsonEncode(cfg);
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── xHTTP Config Builder (НОВЫЙ транспорт 2026) ─────────────────────────────
   // xHTTP — лучший TCP-транспорт апрель 2026. Выглядит как HTTP multipart upload.
   // ТСПУ не детектирует: нет характерных паттернов TLS VPN, только обычный HTTP.

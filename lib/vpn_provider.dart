@@ -1096,6 +1096,10 @@ class VpnProvider extends ChangeNotifier {
         final after = _rawLink.split('#xhttp_sni=').last;
         _aiSni = Uri.decodeComponent(after.split('&').first);
         _aiMode = 'xhttp';
+      } else if (_rawLink.contains('#vision_sni=')) {
+        final after = _rawLink.split('#vision_sni=').last;
+        _aiSni = Uri.decodeComponent(after.split('&').first);
+        _aiMode = 'vision';
       } else if (_rawLink.contains('#grpc_sni=')) {
         final after = _rawLink.split('#grpc_sni=').last;
         _aiSni = Uri.decodeComponent(after.split('&').first);
@@ -1121,6 +1125,7 @@ class VpnProvider extends ChangeNotifier {
           .split('#fragment=').first
           .split('#hy2_fallback').first
           .split('#xhttp_sni=').first
+          .split('#vision_sni=').first
           .split('#grpc_sni=').first
           .split('#shadowtls_v3=').first;
 
@@ -1223,6 +1228,13 @@ class VpnProvider extends ChangeNotifier {
         if (built != null && built.isNotEmpty) {
           configStr = built;
           _log('🌐 xHTTP honest config (real transport)');
+        }
+      } else if (_aiMode == 'vision') {
+        // VLESS+Reality+Vision из чистого шаблона (если в ноде есть pbk/sid)
+        final built = StealthEngine.buildHonestVision(patchedCfg.link, sni: _aiSni);
+        if (built != null && built.isNotEmpty) {
+          configStr = built;
+          _log('🛡 VLESS+Vision honest config (clean reality template)');
         }
       }
 

@@ -453,7 +453,7 @@ class AiBypassAgent {
               sni: s.params['sni'] as String? ?? 'vk.com');
 
         case 'vless_xtls_vision':
-          return _patchReality(blocked,
+          return _patchVision(blocked,
               s.params['sni'] as String? ?? 'vk.com');
         case 'vless_reality_vk':
         case 'vless_reality_yandex':
@@ -587,6 +587,22 @@ class AiBypassAgent {
       _log('xHTTP patch error: $e');
       return null;
     }
+  }
+
+  // VLESS + Reality + XTLS-Vision — отдельный маркер для честного builder.
+  // _connectWith по #vision_sni= строит конфиг через buildVlessVisionConfig
+  // (гарантированно корректные realitySettings + flow), если в ноде есть pbk/sid.
+  VpnConfig? _patchVision(VpnConfig cfg, String sni) {
+    try {
+      final cleanLink = cfg.link
+          .split('#whitelist_df=').first
+          .split('#vision_sni=').first
+          .split('#xhttp_sni=').first
+          .split('#fragment=').first;
+      final patched = '$cleanLink#vision_sni=${Uri.encodeComponent(sni)}'
+          '&fp=${TlsFingerprint.kChrome134Fingerprint}';
+      return _makeCfg(cfg, patched, '[Vision:$sni]');
+    } catch (_) { return null; }
   }
 
   // VLESS + Reality + SNI из белого списка
