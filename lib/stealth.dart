@@ -45,10 +45,10 @@ class StealthEngine {
     // Ключ: НЕ фиксированные паттерны, вариативность похожа на реальный браузер
     // Источник: ntc.party + net4people/bbs анализ март 2026
     final fragProfiles = [
-      {'length': '25-55',  'interval': '7-17'},    // Chrome 136 профиль
-      {'length': '35-90',  'interval': '12-25'},   // Firefox 134 профиль
-      {'length': '18-42',  'interval': '5-14'},    // Safari 18/iOS профиль
-      {'length': '50-120', 'interval': '15-30'},   // Edge 134/Windows профиль
+      {'length': '25-55',  'interval': '7-17'},    // Chrome 138 профиль
+      {'length': '35-90',  'interval': '12-25'},   // Firefox 140 профиль
+      {'length': '18-42',  'interval': '5-14'},    // Safari 18.5/iOS профиль
+      {'length': '50-120', 'interval': '15-30'},   // Edge 138/Windows профиль
       {'length': '15-35',  'interval': '3-10'},    // Мобильный Chrome (плохая сеть)
     ];
     final prof = fragProfiles[_rng.nextInt(fragProfiles.length)];
@@ -265,32 +265,23 @@ class StealthEngine {
   }
 
   // ── 7. Рандомный User-Agent для warm-up ───────────────────────────────────
-  // Март 2026 — актуальные версии Chrome 136/Safari 18/Edge 134
-  // РКН и DPI блокируют запросы от Dart/2.x по умолчанию
-  static const _userAgents = [
-    // Android Chrome 136 — самый частый в РФ (40%+ трафика)
-    'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 13; Redmi Note 12 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.111 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 14; POCO X6 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.165 Mobile Safari/537.36',
-    // Windows Chrome 136
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Safari/537.36',
-    // iOS Safari 18
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1',
-    // Edge 134
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
-  ];
+  // Источник версий — единый пул kModernUserAgents (constants.dart, обновл. 28.06.2026).
+  // РКН и DPI блокируют запросы от Dart/2.x по умолчанию.
+  // ВАЖНО: UA должен быть консистентен с uTLS fingerprint ниже, иначе ML-детектор
+  // ТСПУ (слой 4) ловит рассинхрон «браузер в UA ≠ браузер в TLS handshake».
+  static const _userAgents = kModernUserAgents;
   static String _randomUserAgent() => _userAgents[_rng.nextInt(_userAgents.length)];
 
-  // uTLS fingerprints — актуализированы 22.03.2026
-  // ML-модель ТСПУ анализирует поведенческие паттерны TLS handshake
-  // 'random' = случайный из набора xray-core — максимально усложняет классификацию
+  // uTLS fingerprints — актуализированы 28.06.2026 (Chrome 138 / Edge 138 / Safari 18.5).
+  // ML-модель ТСПУ анализирует поведенческие паттерны TLS handshake.
+  // 'random' = случайный из набора xray-core — максимально усложняет классификацию.
+  // Профили подобраны под доли пула kModernUserAgents (Android Chrome — приоритет).
   static const List<String> _uTlsProfiles = [
-    'chrome',    // Chrome 136 — 62% рынка Android, самый надёжный
-    'edge',      // Edge 134 — Windows Update IP в whitelist ТСПУ
-    'safari',    // Safari 18.3 iOS — iPhone трафик
+    'chrome',    // Chrome 138 — ~45% пула, самый надёжный
+    'edge',      // Edge 138 — Windows Update IP в whitelist ТСПУ
+    'safari',    // Safari 18.5 iOS — iPhone трафик
     'ios',       // iOS native TLS stack — нативный мобильный
-    'firefox',   // Firefox 134 — desktop, другой ALPN паттерн
+    'firefox',   // Firefox 140 — desktop, другой ALPN паттерн
     'android',   // Android TLS — базовый мобильный паттерн
     'random',    // Случайный xray fingerprint — anti-ML behavioral analysis
   ];

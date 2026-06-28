@@ -61,9 +61,9 @@ class TspuCountermeasures2026 {
   // Добавляем рандомный User-Agent и фейковые заголовки
   static Map<String, String> antiEntropyHeaders() {
     final agents = [
-      'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/136.0.7103.60',
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3_2) AppleWebKit/605.1.15 Safari/604.1',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edge/134.0.3124.72',
+      'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/$kChromeFull',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS $kIosUaVersion) AppleWebKit/605.1.15 Safari/604.1',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edge/$kEdgeFull',
       'Dalvik/2.1.0 (Linux; Android 14; SM-S928B Build/UP1A.231005.007)',
     ];
     final ua = agents[_rng.nextInt(agents.length)];
@@ -135,29 +135,29 @@ class AdaptiveMimicryEngine {
   static _DigitalPersona generatePersona() {
     final personas = [
       _DigitalPersona(
-        device: 'Pixel 8 Pro', os: 'Android 14', browser: 'Chrome 137',
-        userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
+        device: 'Pixel 8 Pro', os: 'Android 14', browser: 'Chrome $kChromeMajor',
+        userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
         tlsFp: 'chrome', screenRes: '1344x2992', timezone: 'Europe/Moscow',
         language: 'ru-RU,ru;q=0.9,en;q=0.8', mtu: 1400, tcpWindow: 65535, ttl: 64,
         sessionMinutes: 15 + _rng.nextInt(45), requestInterval: const Duration(milliseconds: 800), idleChance: 0.15,
       ),
       _DigitalPersona(
-        device: 'Samsung S24 Ultra', os: 'Android 14', browser: 'Chrome 137',
-        userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.55 Mobile Safari/537.36',
+        device: 'Samsung S24 Ultra', os: 'Android 14', browser: 'Chrome $kChromeMajor',
+        userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
         tlsFp: 'chrome', screenRes: '1440x3120', timezone: 'Europe/Moscow',
         language: 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7', mtu: 1400, tcpWindow: 65535, ttl: 64,
         sessionMinutes: 20 + _rng.nextInt(60), requestInterval: const Duration(milliseconds: 600), idleChance: 0.12,
       ),
       _DigitalPersona(
-        device: 'iPhone 15 Pro', os: 'iOS 18.3', browser: 'Safari 18.3',
-        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1',
+        device: 'iPhone 15 Pro', os: 'iOS $kSafariVersion', browser: 'Safari $kSafariVersion',
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS $kIosUaVersion like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/$kSafariVersion Mobile/15E148 Safari/604.1',
         tlsFp: 'safari', screenRes: '1179x2556', timezone: 'Europe/Moscow',
         language: 'ru-RU,ru;q=0.9', mtu: 1500, tcpWindow: 131072, ttl: 64,
         sessionMinutes: 10 + _rng.nextInt(30), requestInterval: const Duration(milliseconds: 1200), idleChance: 0.20,
       ),
       _DigitalPersona(
-        device: 'Windows Desktop', os: 'Windows 11', browser: 'Edge 134',
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
+        device: 'Windows Desktop', os: 'Windows 11', browser: 'Edge $kChromeMajor',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Safari/537.36 Edg/$kEdgeFull',
         tlsFp: 'edge', screenRes: '1920x1080', timezone: 'Europe/Moscow',
         language: 'ru,en-US;q=0.9,en;q=0.8', mtu: 1500, tcpWindow: 65535, ttl: 128,
         sessionMinutes: 60 + _rng.nextInt(180), requestInterval: const Duration(milliseconds: 300), idleChance: 0.08,
@@ -262,15 +262,15 @@ class AntiVpnTariffEngine {
 
   static const List<Map<String, String>> _backgroundRequests = [
     {'url': 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css',
-     'ua': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/134.0.0.0', 'accept': 'text/css,*/*;q=0.1'},
+     'ua': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/$kChromeFull', 'accept': 'text/css,*/*;q=0.1'},
     {'url': 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap',
      'ua': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15', 'accept': 'text/css,*/*;q=0.1'},
     {'url': 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js',
-     'ua': 'Mozilla/5.0 (Linux; Android 14) Chrome/137.0.0.0', 'accept': '*/*'},
+     'ua': 'Mozilla/5.0 (Linux; Android 14) Chrome/$kChromeFull', 'accept': '*/*'},
     {'url': 'https://unpkg.com/react@18/umd/react.production.min.js',
-     'ua': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) Safari/604.1', 'accept': '*/*'},
+     'ua': 'Mozilla/5.0 (iPhone; CPU iPhone OS $kIosUaVersion like Mac OS X) Safari/604.1', 'accept': '*/*'},
     {'url': 'https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js',
-     'ua': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Firefox/136.0', 'accept': '*/*'},
+     'ua': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Firefox/$kFirefoxVersion', 'accept': '*/*'},
   ];
 
   static void enable({void Function(String)? log}) {

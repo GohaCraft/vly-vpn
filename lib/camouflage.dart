@@ -139,7 +139,7 @@ class TrafficCamouflageEngine {
 
   // ────────────────────────────────────────────────────────────────────────────
   // BROWSER: Chrome посещает Google.com
-  // WebSocket на 443, User-Agent Chrome 136, путь /search?q=...
+  // WebSocket на 443, User-Agent Chrome (kChromeFull), путь /search?q=...
   // ────────────────────────────────────────────────────────────────────────────
   static void _applyBrowser(Map<String, dynamic> j) {
     final searches = ['news', 'weather', 'maps', 'translate', 'mail'];
@@ -149,7 +149,7 @@ class TrafficCamouflageEngine {
         'path': path,
         'headers': {
           'Host':            'www.google.com',
-          'User-Agent':      'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
+          'User-Agent':      'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
           'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
           'Accept-Encoding': 'gzip, deflate, br',
@@ -229,7 +229,7 @@ class TrafficCamouflageEngine {
         'host': ['rr1---sn-ab5l6ne7.googlevideo.com'],
         'path': '/videoplayback?id=$videoId&itag=$itag&source=youtube',
         'headers': {
-          'User-Agent':      ['Mozilla/5.0 (Linux; Android 14) Chrome/136 YT/19.12.34'],
+          'User-Agent':      ['Mozilla/5.0 (Linux; Android 14) Chrome/$kChromeMajor YT/20.25.40'],
           'Accept':          ['*/*'],
           'Accept-Encoding': ['identity;q=1, *;q=0'],
           'Range':           ['bytes=0-'],
@@ -250,7 +250,7 @@ class TrafficCamouflageEngine {
         'headers': {
           'Host':       'gateway.discord.gg',
           'Origin':     'https://discord.com',
-          'User-Agent': 'Mozilla/5.0 (Android 14; Mobile) Chrome/136 Discord/228.0',
+          'User-Agent': 'Mozilla/5.0 (Android 14; Mobile) Chrome/$kChromeMajor Discord/241.0',
           'Sec-WebSocket-Version':  '13',
           'Sec-WebSocket-Protocol': 'binary',
         },
@@ -329,7 +329,7 @@ class TrafficCamouflageEngine {
         'path': '/',
         'method': 'CONNECT',
         'headers': {
-          'User-Agent':      ['Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/136.0.7103.60'],
+          'User-Agent':      ['Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/$kChromeFull'],
           'Accept':          ['text/html,application/xhtml+xml'],
           'Accept-Language': ['ru-RU,ru;q=0.9,en;q=0.8'],
           'Proxy-Connection':['keep-alive'],

@@ -53,6 +53,40 @@ const List<String> kDeadDropMirrors = [
 ];
 const String kDeadDropDnsTxt = 'nodes.auravpn.app';
 
+// ── Browser identity — ЕДИНЫЙ источник правды ────────────────────────────────
+// Обновлено 28.06.2026. Раньше версии Chrome (134/135/136/137) и User-Agent
+// были захардкожены и разбросаны по 5 файлам (networking/stealth/camouflage/
+// tspu_2026). Они рассинхронизировались между собой и с uTLS fingerprint.
+// Рассинхрон UA ↔ TLS fingerprint = готовый признак для ML-классификатора ТСПУ
+// (слой 4 — поведенческий анализ). При обновлении браузеров правим ТОЛЬКО здесь.
+const String kChromeMajor    = '138';
+const String kChromeFull     = '138.0.7204.97';
+const String kEdgeFull       = '138.0.3351.65';
+const String kIosUaVersion   = '18_5';   // подчёркивания — формат внутри UA
+const String kSafariVersion  = '18.5';
+const String kFirefoxVersion = '140.0';
+
+// Канонический пул реалистичных User-Agent (доли рынка РФ, июнь 2026):
+// Android Chrome ~45% · iOS Safari ~30% · Windows Chrome/Edge ~20% · прочее ~5%.
+// Используется и для warm-up запросов, и для HTTP-камуфляжа outbound'ов.
+const List<String> kModernUserAgents = [
+  // Android Chrome — самый частый клиент в РФ
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 14; 23049PCD8G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
+  // iOS Safari
+  'Mozilla/5.0 (iPhone; CPU iPhone OS $kIosUaVersion like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/$kSafariVersion Mobile/15E148 Safari/604.1',
+  // Windows Chrome
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Safari/537.36',
+  // Windows Edge
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Safari/537.36 Edg/$kEdgeFull',
+];
+
+// Случайный реалистичный User-Agent из канонического пула.
+final Random _kUaRng = Random();
+String randomUserAgent() => kModernUserAgents[_kUaRng.nextInt(kModernUserAgents.length)];
+
 // Reality SNI пул — высокоавторитетные домены (в белом списке РКН)
 // SNI-пул актуализирован 28.03.2026
 // Источник: анализ CIDR белых списков ТСПУ + net4people/bbs #490 + XTLS/Xray-examples
@@ -176,8 +210,8 @@ const String kBackupMagic       = 'VLY_VPN_BACKUP_V1';
 // ─── COLORS ──────────────────────────────────────────────────────────────────
 
 // ── Версия приложения ────────────────────────────────────────────────────────
-const kAppVersion = '6.3.0';
-const kAppBuild   = '20260414';
+const kAppVersion = '6.4.0';
+const kAppBuild   = '20260628';
 
 // ── Responsive breakpoints ────────────────────────────────────────────────────
 // phone < 600  |  tablet 600-840  |  desktop > 840
@@ -201,30 +235,16 @@ extension AuraLayout on BuildContext {
   int get nodeColumns => isDesktop ? 3 : (isTablet && isLandscape ? 2 : 1);
 }
 
-// FIX v3.0: нейтральный User-Agent для всех исходящих HTTP запросов
-// 'AuraVPN/5.6.0' мгновенно идентифицирует трафик системами РКН/ТСПУ
-// Используем Chrome Android — самый распространённый UA в мире
-// Актуальные User-Agent строки (март 2026)
-// Chrome 136 — текущая стабильная версия на Android
-// РКН блокирует запросы от Dart/2.x — используем реальные браузерные UA
+// Нейтральный User-Agent для всех исходящих HTTP запросов (Dead Drop, DoH, warm-up).
+// 'AuraVPN/5.6.0' мгновенно идентифицирует трафик системами РКН/ТСПУ.
+// Версия привязана к единому источнику kChromeFull (обновл. 28.06.2026).
 const kStealthUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) '
     'AppleWebKit/537.36 (KHTML, like Gecko) '
-    'Chrome/136.0.7103.60 Mobile Safari/537.36';
+    'Chrome/$kChromeFull Mobile Safari/537.36';
 
-// Пул UA для ротации — каждый запрос выглядит как другое устройство
-const kStealthUAPool = [
-  // Chrome 137 Mobile (март 2026) — актуальные JA4+ fingerprint не под блокировкой
-  'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.55 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; SM-A556B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; Redmi Note 13 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 13; POCOF5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.55 Mobile Safari/537.36',
-  // Chrome 136 — запасной (менее новый но работает)
-  'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.125 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.125 Mobile Safari/537.36',
-
-];
+// Пул UA для ротации — каждый запрос выглядит как другое устройство.
+// Берём из единого канонического пула (см. kModernUserAgents выше).
+const kStealthUAPool = kModernUserAgents;
 
 // Акцентные цвета — управляются через AuraSkin (динамические)
 // Дефолтные значения — используются до инициализации скина

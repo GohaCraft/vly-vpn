@@ -3,17 +3,10 @@ part of 'main.dart';
 
 class SelfHealingMirror {
   static final _rng = Random();
-  static const _uas = [
-    // FIX v3.0: нейтральные User-Agent — не раскрываем что это VPN клиент
-    // 'AuraVPN/5.6.0' идентифицировал трафик для систем мониторинга РКН
-    // Актуализировано 28.03.2026: Chrome 136 / Safari 18.3 / Edge 134
-    'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 13; Redmi Note 12 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.111 Mobile Safari/537.36',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
-  ];
+  // Нейтральные User-Agent — не раскрываем что это VPN клиент.
+  // 'AuraVPN/5.6.0' идентифицировал трафик для систем мониторинга РКН.
+  // Источник версий — единый пул kModernUserAgents (constants.dart, обновл. 28.06.2026).
+  static const _uas = kModernUserAgents;
   static String get _ua => _uas[_rng.nextInt(_uas.length)];
 
   // Метка источника для логирования
@@ -184,7 +177,7 @@ class BlockDetector {
       final client = HttpClient()..connectionTimeout = _t;
       final req    = await client.getUrl(
           Uri.parse('https://connectivitycheck.gstatic.com/generate_204'));
-      req.headers.set('User-Agent', 'Mozilla/5.0 Chrome/124.0.0.0');
+      req.headers.set('User-Agent', randomUserAgent());
       final resp = await req.close().timeout(_t);
       await resp.drain<void>();
       client.close();

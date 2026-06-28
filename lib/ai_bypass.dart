@@ -192,17 +192,18 @@ class WhitelistBypassEngine {
   }
 }
 
-// ── TLS Fingerprint (Chrome 134 актуальный) ────────────────────────────────
+// ── TLS Fingerprint (Chrome — единая версия kChromeFull) ─────────────────────
 class TlsFingerprint {
-  // JA4 fingerprint Chrome 134.0 — март 2026
-  // Если ТСПУ видит этот fingerprint — считает трафик легитимным Chrome
+  // JA4 fingerprint Chrome (uTLS 'chrome' профиль xray-core).
+  // Если ТСПУ видит этот fingerprint — считает трафик легитимным Chrome.
+  // Имена констант исторические (kChrome134*), значение привязано к kChromeFull.
   static const kChrome134Fingerprint = 'chrome';
 
-  // Chrome 134 User-Agent для TLS Hello
+  // Chrome User-Agent для TLS Hello — версия из единого источника (28.06.2026)
   static const kChrome134UA =
     'Mozilla/5.0 (Linux; Android 14; Pixel 8) '
     'AppleWebKit/537.36 (KHTML, like Gecko) '
-    'Chrome/134.0.6998.135 Mobile Safari/537.36';
+    'Chrome/$kChromeFull Mobile Safari/537.36';
 
   // GREASE значения (случайные "мусорные" расширения Chrome)
   static List<int> getGreaseValues() {
