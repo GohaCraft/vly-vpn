@@ -2,27 +2,38 @@
 part of 'main.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  AI BYPASS ENGINE v5.0 — Апрель 2026
-//  Актуальные методы (проверено на МТС/Билайн/МегаФон):
-//  ✅ VLESS + Reality + xHTTP        — лучший (ТСПУ не детектирует)
-//  ✅ VLESS + Reality + gRPC          — хорошо
-//  ✅ Hysteria2 + UDP Hop              — отличный (UDP, ТСПУ хуже анализирует)
-//  ✅ ShadowTLS v3 + Shadowsocks      — работает
-//  ✅ VLESS + Reality (VK/Yandex SNI) — для белых списков мобильного
-//  ❌ VLESS + WebSocket               — детектируется с ноября 2025
-//  ❌ VLESS + TCP plain TLS           — заблокирован с февраля 2026
-//  ❌ OpenVPN/WireGuard               — детектируется на первом байте
+//  AI BYPASS ENGINE v6.0 — актуализировано 28.06.2026
+//  Источники: ntc.rkn.quest, net4people, XTLS/Xray-core discussions, habr.
+//
+//  СТАТУС МЕТОДОВ (июнь 2026):
+//  ✅ VLESS + Reality + xHTTP   — ЛУЧШИЙ. Reality detection stable-low.
+//  ✅ VLESS + Reality + gRPC     — хорошо.
+//  ✅ VLESS + Reality + RAW(tcp) + Vision — надёжно.
+//  ⚠️ Hysteria2 (QUIC)          — ДЕГРАДИРУЕТ: ~40% детекта (КНР, май 2026),
+//                                  QUIC-fingerprint отличим от Chrome.
+//                                  НЕ совместим с Reality (нужен LE/selfsigned).
+//  ❌ VLESS + WebSocket          — HTTP Upgrade детектируется давно и надёжно.
+//  ❌ ShadowTLS                  — НЕ поддерживается xray-core (только sing-box).
+//  ❌ OpenVPN / WireGuard plain  — детект на первом байте.
+//
+//  🔑 ВАЖНО (ограничение Reality): Reality работает ТОЛЬКО с транспортами
+//     RAW(tcp) / xHTTP / gRPC. С WebSocket и Hysteria2 — несовместим.
+//
+//  🔑 ДЫРА FINGERPRINT (post-quantum): ~57% Chrome ClientHello несут key share
+//     X25519MLKEM768 (+1088 байт). Его ОТСУТСТВИЕ при UA=Chrome — прямой
+//     fingerprint-mismatch, срабатывает ДО первого байта HTTP. Нужен свежий
+//     xray-core с PQ-fingerprint (mlkem768 / mldsa65 в Reality). См. constants.
 //
 //  ТСПУ работает в 4 слоя:
 //  1. Сигнатурный (первые 16-32 байта) — убивает SS/OpenVPN/WG
-//  2. JA3/JA4 TLS fingerprint          — убивает плохой VLESS
+//  2. JA3/JA4 + PQ key share            — убивает плохой/устаревший VLESS
 //  3. IP/ASN несоответствие (SNI vs IP) — проверяет реальность
 //  4. Поведенческий ML (энтропия, паттерны пакетов)
 //
-//  МТС белый список апрель 2026 (~120 доменов):
-//  vk.com, yandex.ru, sber.ru, gosuslugi.ru, alfabank.ru, vtb.ru,
-//  ozon.ru, wildberries.ru, rzd.ru, aeroflot.ru, rbc.ru, ria.ru,
-//  mail.ru, ok.ru, 2gis.ru, mts.ru, gazprombank.ru, raiffeisen.ru
+//  Белые списки (мобильный, июнь 2026): пропускают трафик ТОЛЬКО на whitelisted
+//  IP (Яндекс/VK/Госуслуги/банки). Cloudflare НЕ в списке → CDN-фронтинг
+//  работает лишь на Wi-Fi. Для мобильного нужен сервер на whitelisted-ASN.
+//  SNI обязан быть из российского whitelist, иначе не проходит даже handshake.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Режим байпаса ──────────────────────────────────────────────────────────
@@ -72,16 +83,18 @@ extension BypassModeInfo on BypassMode {
   }
   String get status {
     switch (this) {
-      case BypassMode.auto:      return '✅ Рекомендуется — апрель 2026';
-      case BypassMode.hysteria2: return '✅ Актуально — лучший выбор';
-      case BypassMode.xhttp:     return '✅ Актуально — новый 2026';
-      case BypassMode.realityVk: return '✅ Актуально — белый список';
-      case BypassMode.grpc:      return '✅ Актуально — стабильный';
-      case BypassMode.shadowtls: return '✅ Актуально — сложно детектировать';
-      case BypassMode.whitelist: return '⚠️ Только при активных белых списках';
+      case BypassMode.auto:      return '✅ Рекомендуется — июнь 2026';
+      case BypassMode.hysteria2: return '⚠️ Деградирует — ~40% детекта (май 2026)';
+      case BypassMode.xhttp:     return '✅ Лучший — Reality-совместим';
+      case BypassMode.realityVk: return '✅ Лучший — Reality detection stable-low';
+      case BypassMode.grpc:      return '✅ Актуально — Reality + gRPC';
+      case BypassMode.shadowtls: return '❌ Не поддерживается xray-core → Reality';
+      case BypassMode.whitelist: return '⚠️ Белые списки: нужен whitelisted-IP сервер';
     }
   }
-  bool get isRecommended => this == BypassMode.auto || this == BypassMode.hysteria2 || this == BypassMode.xhttp;
+  // Reality-методы (xHTTP/Reality) — приоритет: detection stable-low.
+  // Hysteria2 убран из «рекомендуемых» — QUIC-fingerprint деградирует.
+  bool get isRecommended => this == BypassMode.auto || this == BypassMode.xhttp || this == BypassMode.realityVk;
 }
 
 // ── Blacklist стратегий (память) ───────────────────────────────────────────
@@ -479,64 +492,62 @@ class AiBypassAgent {
         : WhitelistBypassEngine.kWifiSniList;
     String nextSni(int offset) => sniList[(DateTime.now().millisecondsSinceEpoch + offset) % sniList.length];
 
+    // Порядок актуализирован 28.06.2026: ведём Reality/xHTTP (detection
+    // stable-low), Hysteria2 понижен — его QUIC-fingerprint деградирует (~40%).
     return [
-      // ═══ Приоритет 1: Hysteria2 — лучший апрель 2026 ═══
-      BypassStrategy(priority: 1, type: 'hysteria2_fallback',
-          params: {'udp_hop': true, 'brutal': false}),
-
-      // ═══ Приоритет 2: VLESS + xHTTP — новый транспорт ═══
-      BypassStrategy(priority: 2, type: 'vless_xhttp',
+      // ═══ 1: VLESS + Reality + xHTTP — ЛУЧШИЙ метод июня 2026 ═══
+      BypassStrategy(priority: 1, type: 'vless_xhttp',
           params: {'path': '/api/v${DateTime.now().minute % 9 + 1}/stream', 'mode': 'packet-up',
                    'sni': sni, 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ Приоритет 3: XTLS Vision (максимальная маскировка) ═══
-      BypassStrategy(priority: 3, type: 'vless_xtls_vision',
-          params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
-      
-      // ═══ Приоритет 4: Reality + VK SNI ═══
-      BypassStrategy(priority: 4, type: 'vless_reality_vk',
+      // ═══ 2: VLESS + Reality + RAW + XTLS-Vision ═══
+      BypassStrategy(priority: 2, type: 'vless_xtls_vision',
           params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // (vless_reality_ipv6 убран: не было обработчика в _applyStrategy →
-      //  стратегия всегда падала в default:null и засоряла blacklist. Клиент
-      //  не может форсировать IPv6 сервера на xray-core — нереализуемо.)
+      // ═══ 3: Reality + VK SNI ═══
+      BypassStrategy(priority: 3, type: 'vless_reality_vk',
+          params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ Приоритет 4: Reality + Yandex SNI ═══
+      // ═══ 4: Reality + Yandex SNI ═══
       BypassStrategy(priority: 4, type: 'vless_reality_yandex',
           params: {'sni': 'yandex.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ Приоритет 5: Reality + gRPC ═══
+      // ═══ 5: Reality + gRPC ═══
       BypassStrategy(priority: 5, type: 'vless_grpc_reality',
           params: {'service': 'GrpcService', 'sni': sni,
                    'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // (ShadowTLS убран: xray-core не поддерживает shadowtls-outbound —
-      //  стратегия была мёртвой, лишь меняла SNI. См. _patchShadowTls.)
-
-      // ═══ Приоритет 7: xHTTP другой путь ═══
-      BypassStrategy(priority: 7, type: 'vless_xhttp_alt',
+      // ═══ 6: xHTTP другой путь ═══
+      BypassStrategy(priority: 6, type: 'vless_xhttp_alt',
           params: {'path': '/upload/chunk/${DateTime.now().second}', 'mode': 'stream',
                    'sni': nextSni(200)}),
 
-      // ═══ Приоритет 8: Reality + другой Tier-0 SNI ═══
+      // ═══ 7: Hysteria2 (QUIC) — понижен: деградирует, но иногда проходит ═══
+      BypassStrategy(priority: 7, type: 'hysteria2_fallback',
+          params: {'udp_hop': true, 'brutal': false}),
+
+      // ═══ 8: Reality + Sber SNI ═══
       BypassStrategy(priority: 8, type: 'vless_reality_sber',
           params: {'sni': 'sber.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ Приоритет 9: Фрагментация (обходит поведенческий анализ) ═══
+      // ═══ 9: Фрагментация ClientHello (обход поведенческого анализа) ═══
       BypassStrategy(priority: 9, type: 'vless_fragmented',
           params: {'min': 1, 'max': 5, 'interval': '20-100ms', 'sni': sni}),
 
-      // ═══ Приоритет 10: Reality + MTS SNI (оператор в белом списке!) ═══
+      // ═══ 10: Reality + MTS SNI (оператор в белом списке) ═══
       BypassStrategy(priority: 10, type: 'vless_reality_mts',
           params: {'sni': 'mts.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ Приоритет 11: Hysteria2 другой порт ═══
-      BypassStrategy(priority: 11, type: 'hysteria2_alt_port',
+      // ═══ 11: gRPC без Reality (fallback) ═══
+      BypassStrategy(priority: 11, type: 'vless_grpc_plain',
+          params: {'service': 'TunService', 'sni': nextSni(300)}),
+
+      // ═══ 12: Hysteria2 другой порт — последний резерв ═══
+      BypassStrategy(priority: 12, type: 'hysteria2_alt_port',
           params: {'port_hint': 8443, 'udp_hop': true}),
 
-      // ═══ Приоритет 12: gRPC без Reality (fallback) ═══
-      BypassStrategy(priority: 12, type: 'vless_grpc_plain',
-          params: {'service': 'TunService', 'sni': nextSni(300)}),
+      // (убраны как нереализуемые на xray-core: vless_reality_ipv6 — нет
+      //  обработчика/нельзя форсировать IPv6; ShadowTLS — не поддерживается.)
     ];
   }
 

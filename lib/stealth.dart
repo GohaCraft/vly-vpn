@@ -323,16 +323,10 @@ class StealthEngine {
           ss[key] = tlsSettings;
           ob['streamSettings'] = ss;
 
-          // XTLS-Vision flow: КРИТИЧНО для обхода ML-детектора ТСПУ (март 2026)
-          // Vision убирает двойное TLS-шифрование + добавляет padding случайного размера
-          // Применяем только для VLESS+Reality — самая эффективная комбинация
-          // НЕ применяем для VMess/Trojan — они используют другой механизм шифрования
-          if (proto == 'vless' && sec == 'reality') {
-            final currentFlow = ob['flow'] as String? ?? '';
-            if (currentFlow.isEmpty) {
-              ob['flow'] = 'xtls-rprx-vision';
-            }
-          }
+          // XTLS-Vision flow для VLESS+Reality применяется НИЖЕ, на уровне
+          // vnext[].users[].flow (xray читает flow только оттуда). Раньше здесь
+          // была инъекция ob['flow'] на уровне outbound — xray её игнорирует,
+          // т.е. это был мёртвый код. Корректная инъекция — в sockopt-цикле ниже.
         }
       }
 

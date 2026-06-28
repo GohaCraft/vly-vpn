@@ -87,6 +87,18 @@ const List<String> kModernUserAgents = [
 final Random _kUaRng = Random();
 String randomUserAgent() => kModernUserAgents[_kUaRng.nextInt(kModernUserAgents.length)];
 
+// ── Post-Quantum fingerprint (дыра обнаружена 28.06.2026) ────────────────────
+// ~57% Chrome ClientHello несут key share X25519MLKEM768 (+1088 байт). Его
+// ОТСУТСТВИЕ при UA=Chrome — прямой fingerprint-mismatch, срабатывает ДО HTTP:
+// DPI/CDN сверяют наличие PQ-keyshare с User-Agent. Старый uTLS 'chrome' без
+// PQ-keyshare выдаёт VPN. Реальный PQ-handshake делает НАТИВНЫЙ xray-core —
+// из Dart мы это не контролируем, поэтому требование к движку, не к клиенту:
+//   • нужен свежий xray-core (PQ-fingerprint: mlkem768 / mldsa65 в Reality);
+//   • Reality-сервер должен иметь PQ-ключи (xray x25519 --pq / mldsa65).
+// Здесь — флаг и заметка, чтобы UI/диагностика показывали статус требования.
+const bool   kRequiresPqFingerprint = true;
+const String kPqKeyShare            = 'X25519MLKEM768';
+
 // Reality SNI пул — высокоавторитетные домены (в белом списке РКН)
 // SNI-пул актуализирован 28.03.2026
 // Источник: анализ CIDR белых списков ТСПУ + net4people/bbs #490 + XTLS/Xray-examples
