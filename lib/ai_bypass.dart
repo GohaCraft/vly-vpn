@@ -405,9 +405,8 @@ class AiBypassAgent {
           params: {'service': 'GrpcService', 'sni': sni,
                    'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ Приоритет 6: ShadowTLS v3 ═══
-      BypassStrategy(priority: 6, type: 'shadowtls_v3',
-          params: {'server_name': nextSni(100), 'version': 3}),
+      // (ShadowTLS убран: xray-core не поддерживает shadowtls-outbound —
+      //  стратегия была мёртвой, лишь меняла SNI. См. _patchShadowTls.)
 
       // ═══ Приоритет 7: xHTTP другой путь ═══
       BypassStrategy(priority: 7, type: 'vless_xhttp_alt',
@@ -630,34 +629,17 @@ class AiBypassAgent {
     } catch (_) { return null; }
   }
 
-  // ShadowTLS v3
+  // ShadowTLS v3 — ЧЕСТНОЕ ПОВЕДЕНИЕ.
+  // ВАЖНО: flutter_v2ray работает на xray-core, у которого НЕТ нативного
+  // shadowtls-outbound (это фича sing-box / shadowsocks-rust). Поэтому на этом
+  // стеке настоящий ShadowTLS-туннель построить нельзя — он бы не запустился.
+  // Реалистичный эквивалент «настоящий TLS к легитимному домену» — это Reality
+  // c whitelist-SNI. Делегируем туда, не притворяясь отдельным транспортом.
+  // ShadowTLS убран из авто-каскада (_buildCascade); этот метод оставлен для
+  // ручного режима BypassMode.shadowtls, чтобы подключение всё равно прошло.
   VpnConfig? _patchShadowTls(VpnConfig cfg, {String serverName = 'vk.com'}) {
-    try {
-      // ЗАДАЧА 6: ShadowTLS v3 полная реализация
-      // ShadowTLS v3 использует реальный TLS handshake с легитимным сервером
-      // ТСПУ видит настоящий TLS к vk.com/yandex.ru — пропускает
-      // После handshake трафик идёт через туннель
-      
-      final link = cfg.link.split('#').first;
-      
-      // Выбираем TLS сервер из белого списка — физически близкий к VPN серверу
-      final tlsServers = [
-        serverName,
-        'vk.com',          // Tier 0 — никогда не блокируется
-        'yandex.ru',       // Tier 0
-        'www.microsoft.com', // Международный Tier 0
-        'sber.ru',         // Банк — не блокируется
-      ];
-      final tls = tlsServers[DateTime.now().millisecondsSinceEpoch % tlsServers.length];
-      
-      // ShadowTLS v3 параметры
-      final patched = '$link'
-          '#shadowtls_v3=${Uri.encodeComponent(tls)}'
-          '&stls_strict=true'   // Строгий режим v3 — обязательная аутентификация
-          '&stls_alpn=h2';      // ALPN как у Chrome
-      
-      return _makeCfg(cfg, patched, '[ShadowTLS3:$tls]');
-    } catch (_) { return null; }
+    _log('ℹ ShadowTLS недоступен на xray-core → Reality c SNI: $serverName');
+    return _patchReality(cfg, serverName);
   }
 
   // Fragmented TLS (1-5 байт фрагменты — обходит поведенческий анализ)
