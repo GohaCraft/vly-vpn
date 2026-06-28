@@ -60,6 +60,8 @@ class VpnProvider extends ChangeNotifier {
   bool   siberiaShield          = true;   // защита от Сибирской блокировки
   int    stealthHandshakeFails  = 0;      // счётчик провалов handshake
   String stealthStatus          = '';     // статус для UI
+  bool   _userInitiatedStop     = false;  // true = отключил пользователь (не обрыв)
+  int    _killSwitchReconnects  = 0;      // счётчик авто-реконнектов при обрыве
 
   // ── Proxy Chain (DerevVPN-style) — TUN → SOCKS5 → VPN ─────────────────────
   bool   proxyModeEnabled       = false;  // выключен по умолчанию
@@ -276,6 +278,7 @@ class VpnProvider extends ChangeNotifier {
         _failCount = 0; _isRotating = false; aiStatus = 'IDLE';
         _bypassAttempt = 0; _bypassNodeIdx = selectedIndex;
         stealthHandshakeFails = 0;
+        _killSwitchReconnects = 0;
         _cancelWd();
         _connectedAt = DateTime.now();
         _startTrafficTimer();
@@ -300,7 +303,20 @@ class VpnProvider extends ChangeNotifier {
           if (_failCount >= maxFails) _scheduleBypass();
         }
         if (prev == 'CONNECTED') {
-          _sendNotification('🔓 VPN отключён', 'Сессия завершена');
+          // Неожиданный обрыв (не ручное отключение). При включённом Kill Switch
+          // окно, пока туннель упал, = утечка реального IP. Минимизируем его —
+          // авто-реконнект к текущей ноде. Ограничено 3 попытками, чтобы не зациклить;
+          // если не вышло — дальше включается обычная failover-логика (_failCount).
+          if (!_userInitiatedStop && killSwitch && _configs.isNotEmpty &&
+              _killSwitchReconnects < 3 && !_isRotating) {
+            _killSwitchReconnects++;
+            _log('🛡 Kill Switch: обрыв туннеля — авто-реконнект #$_killSwitchReconnects/3');
+            Future.delayed(const Duration(milliseconds: 700), () {
+              if (!_disposed && !_userInitiatedStop && !isConnected) _connectCurrent();
+            });
+          } else {
+            _sendNotification('🔓 VPN отключён', 'Сессия завершена');
+          }
         }
       }
       _notify();
@@ -988,7 +1004,7 @@ class VpnProvider extends ChangeNotifier {
             }
           }
           // tcpFastOpen + domainStrategy
-          (ss as Map)['sockopt'] = {
+          ss['sockopt'] = {
             'tcpFastOpen': true,
             'domainStrategy': 'UseIPv4v6',
           };
@@ -1075,6 +1091,7 @@ class VpnProvider extends ChangeNotifier {
 
   Future<void> _connectWith(VpnConfig cfg) async {
     _log('⚡ ${cfg.displayName}');
+    _userInitiatedStop = false; // это попытка подключения, не ручное отключение
     try {
       // ── БЫСТРЫЙ ПУТЬ: макс 5 сек до startV2Ray ────────────────────────────
       // FIX: ForegroundServiceDidNotStartInTimeException — Android убивает
@@ -1312,12 +1329,19 @@ class VpnProvider extends ChangeNotifier {
       if (!granted) { _log('✗ Permission denied'); _isRotating = false; return; }
 
       // Шаг 6: ЗАПУСКАЕМ V2RAY — Android требует вызова внутри 5 сек
+      // proxyOnly=true означает «только локальный прокси, БЕЗ системного VPN-туннеля»
+      // (из доков flutter_v2ray). Раньше тут было proxyOnly: killSwitch — это была
+      // ИНВЕРСИЯ: включение kill switch отключало перехват всего трафика, т.е. давало
+      // самый незащищённый режим. Для full-tunnel VPN (и для любой kill-switch семантики,
+      // где TUN блокирует трафик при падении) нужен системный туннель → proxyOnly=false.
+      // Прокси-режим — отдельная осознанная опция пользователя (proxyModeEnabled —
+      // это цепочка TUN→SOCKS5→VPN, всё равно с туннелем, поэтому тоже не proxyOnly).
       await _v2ray.startV2Ray(
         remark:        cfg.displayName,
         config:        configStr,
         blockedApps:   _splitArgsForConnect(),
         bypassSubnets: null,
-        proxyOnly:     killSwitch,
+        proxyOnly:     false,
       );
 
       stealthHandshakeFails = 0;
@@ -1397,6 +1421,7 @@ class VpnProvider extends ChangeNotifier {
   Future<void> toggle() async {
     if (isConnected || status == 'CONNECTING') {
       // Принудительно останавливаем всё — bypass, AI, rotation
+      _userInitiatedStop = true; // отключил пользователь → не авто-реконнектить
       _isRotating = false;
       _aiAgent.stop();   // останавливаем AI bypass если висит
       _cancelWd();
