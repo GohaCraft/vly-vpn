@@ -409,7 +409,21 @@ class AiBypassAgent {
     const kMaxAttempts = 12;
     final cascade = await _buildCascade(bt, whitelistActive, isMobile);
     final limited = cascade.take(kMaxAttempts).toList();
-    _log('🤖 E-2006: Cascade: ${limited.length} стратегий');
+
+    // Обучение: победившую в прошлый раз стратегию пробуем первой.
+    // Сети стабильны в рамках сессии — то, что сработало, обычно работает снова.
+    final pref = _lastWinnerType;
+    if (pref != null) {
+      limited.sort((a, b) {
+        if (a.type == pref && b.type != pref) return -1;
+        if (b.type == pref && a.type != pref) return 1;
+        return 0;
+      });
+    }
+    _log('🤖 E-2006: Cascade: ${limited.length} стратегий'
+        '${pref != null ? " (приоритет: $pref)" : ""}');
+
+    VpnConfig? firstBuilt;   // best-effort на случай, если ни один не пройдёт пробу
 
     for (int i = 0; i < limited.length; i++) {
       if (!_isRunning) return null;
@@ -424,15 +438,35 @@ class AiBypassAgent {
 
       final result = await _applyStrategy(blocked, s);
       if (result != null) {
-        _log('✅ E-2007: Найден обход: ${s.type}');
-        return result;
+        firstBuilt ??= result;
+        // ВЕРИФИКАЦИЯ: реально ли подключается этот вариант. Раньше каскад
+        // принимал первый ПОСТРОЕННЫЙ конфиг без проверки связи — обход был
+        // «наугад». Теперь пробуем реальный TLS-коннект к ноде и принимаем
+        // только то, что измеримо работает.
+        final ok = await BypassProber.probe(result)
+            .timeout(const Duration(seconds: 3), onTimeout: () => false);
+        if (ok) {
+          _lastWinnerType = s.type;
+          _log('✅ E-2007: Обход проверен и работает: ${s.type}');
+          return result;
+        }
+        _log('· ${s.type}: конфиг построен, проба связи не прошла');
       }
       StrategyBlacklist.markFailed(s.type);
     }
 
+    // Ни один кандидат не прошёл пробу. Не теряем шанс: отдаём первый
+    // построенный конфиг как best-effort (старое поведение, сеть безопасности).
+    if (firstBuilt != null) {
+      _log('⚠ E-2008: ни один вариант не прошёл пробу — best-effort');
+      return firstBuilt;
+    }
     _log('✗ E-2008: Все методы не прошли — смена ноды');
     return null;
   }
+
+  // Последняя сработавшая стратегия — для приоритизации в следующем каскаде.
+  static String? _lastWinnerType;
 
   // ── Построение каскада стратегий ──────────────────────────────────────────
   Future<List<BypassStrategy>> _buildCascade(
