@@ -1385,6 +1385,11 @@ class VpnProvider extends ChangeNotifier {
         if (stealthMode && stealthRealitySni) {
           unawaited(StealthEngine.pickLiveSni());
         }
+        // Авто-discovery рабочих фронтов белого списка — переоткрываем заранее,
+        // чтобы следующий коннект/ротация взяли уже измеренный живой фронт.
+        if (stealthMode) {
+          unawaited(WhitelistBypassEngine.autoRediscover(log: _log));
+        }
       } catch (_) {}
     });
   }

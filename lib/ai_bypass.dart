@@ -165,12 +165,85 @@ class WhitelistBypassEngine {
     'vk.com', 'yandex.ru', 'mail.ru',
   ];
 
-  // Получить рабочий SNI в зависимости от типа сети
+  // ═══ ИЗМЕРЯЕМЫЙ АВТО-DISCOVERY ФРОНТОВ ════════════════════════════════════
+  // Раньше getBestSni() возвращал СЛУЧАЙНЫЙ SNI (millisecond % len) — наугад,
+  // без проверки, работает ли он сейчас. Это «как у всех». Здесь — измерение:
+  // параллельно проверяем реальную доступность каждого whitelist-фронта в ТЕКУЩЕЙ
+  // сети, ранжируем по задержке, кэшируем на TTL и переоткрываем заново когда
+  // фронты прикрывают. Это фундамент адаптивного обхода белых списков.
+  static final Map<String, int> frontLatencyMs = {};   // sni -> ms (-1 = мёртв)
+  static List<String>           _rankedFronts  = [];
+  static DateTime?              _lastDiscovery;
+  static const _discoveryTtl = Duration(minutes: 4);    // фронты прикрывают быстро
+
+  static bool   get isDiscoveryFresh => _lastDiscovery != null &&
+      DateTime.now().difference(_lastDiscovery!) < _discoveryTtl;
+  static List<String> get rankedFronts => List.unmodifiable(_rankedFronts);
+
+  // Пробинг пула: реальный TLS-handshake к каждому фронту, замер задержки.
+  // Возвращает живые фронты, отсортированные по скорости (быстрые — первыми).
+  static Future<List<String>> discoverWorkingFronts({
+    bool mobile = true, int max = 12, void Function(String)? log,
+  }) async {
+    final candidates = (mobile ? kMobileSniWhitelist : kWifiSniList)
+        .toSet().take(max).toList();
+    final probed = <MapEntry<String, int>>[];
+    await Future.wait(candidates.map((sni) async {
+      final sw = Stopwatch()..start();
+      try {
+        final s = await SecureSocket.connect(
+          sni, 443,
+          timeout: const Duration(milliseconds: 1800),
+          onBadCertificate: (_) => true,    // важен сам handshake, не сертификат
+        );
+        sw.stop();
+        await s.close();
+        probed.add(MapEntry(sni, sw.elapsedMilliseconds));
+      } catch (_) {
+        probed.add(MapEntry(sni, -1));      // фронт недоступен/прикрыт в этой сети
+      }
+    }));
+    frontLatencyMs
+      ..clear()
+      ..addEntries(probed);
+    final working = probed.where((e) => e.value >= 0).toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+    _rankedFronts  = working.map((e) => e.key).toList();
+    _lastDiscovery = DateTime.now();
+    log?.call('🔎 Discovery: ${_rankedFronts.length}/${candidates.length} фронтов живы'
+        '${_rankedFronts.isNotEmpty ? " · быстрейший: ${_rankedFronts.first} (${working.first.value}ms)" : ""}');
+    return _rankedFronts;
+  }
+
+  // Фоновое переоткрытие — дёргается из stealth-background и при обрыве.
+  static Future<void> autoRediscover({void Function(String)? log}) async {
+    final mobile = await isMobileNetwork()
+        .timeout(const Duration(seconds: 1), onTimeout: () => true);
+    await discoverWorkingFronts(mobile: mobile, log: log)
+        .timeout(const Duration(seconds: 4), onTimeout: () => _rankedFronts);
+  }
+
+  // Лучший ИЗМЕРЕННЫЙ фронт. Если кэш протух — пробуем discovery (с потолком по
+  // времени, чтобы не тормозить коннект), иначе мгновенно отдаём из кэша/фолбэк.
   static Future<String> getBestSni() async {
-    final isMobile = await isMobileNetwork();
+    final isMobile = await isMobileNetwork()
+        .timeout(const Duration(seconds: 1), onTimeout: () => true);
+    if (!isDiscoveryFresh || _rankedFronts.isEmpty) {
+      try {
+        await discoverWorkingFronts(mobile: isMobile)
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {}
+    }
+    if (_rankedFronts.isNotEmpty) return _rankedFronts.first;
+    // Фолбэк: статический список, если discovery не успел/не дал результата
     final list = isMobile ? kMobileSniWhitelist : kWifiSniList;
-    final idx = DateTime.now().millisecondsSinceEpoch % list.length;
-    return list[idx];
+    return list[DateTime.now().millisecondsSinceEpoch % list.length];
+  }
+
+  // Топ-N измеренных фронтов для ротации в каскаде (быстрые — приоритетнее).
+  static List<String> topFronts(int n) {
+    if (_rankedFronts.isNotEmpty) return _rankedFronts.take(n).toList();
+    return kMobileSniWhitelist.take(n).toList();
   }
 
   // Эндпоинты для whitelist стратегии
