@@ -1697,12 +1697,15 @@ class VpnProvider extends ChangeNotifier {
 
   // ── Ping (TCP, parallel 8) ────────────────────────────────────────────────
 
-  Future<void> pingNode(int i) async {
+  // silent=true — не дёргать _notify() на каждую ноду (для batch-пинга в pingAll:
+  // раньше при пинге N нод было ~2N полных перерисовок дерева — джанк. Теперь
+  // pingAll делает один _notify() на батч).
+  Future<void> pingNode(int i, {bool silent = false}) async {
     if (_disposed) return;
     if (i < 0 || i >= _configs.length) return;
     final cfg = _configs[i];
     if (cfg.isPinging) return;
-    cfg.isPinging = true; _notify();
+    cfg.isPinging = true; if (!silent) _notify();
     try {
       final ms = await VpnConfig.tcpPing(cfg.link);
       if (_disposed) return; // проверяем после await — провайдер мог быть удалён
@@ -1715,7 +1718,7 @@ class VpnProvider extends ChangeNotifier {
       cfg.ping = 'ERR'; cfg.pingMs = 9999;
     }
     cfg.isPinging = false;
-    if (!_disposed) _notify();
+    if (!_disposed && !silent) _notify();
   }
 
   Future<void> pingAll() async {
@@ -1727,7 +1730,8 @@ class VpnProvider extends ChangeNotifier {
     for (int i = 0; i < total; i += 32) {
       if (_disposed) { isPingAllRunning = false; _notify(); return; }
       final batch = (i + 32 <= total) ? 32 : total - i; // 32 ноды параллельно
-      await Future.wait(List.generate(batch, (j) => pingNode(i + j)));
+      await Future.wait(List.generate(batch, (j) => pingNode(i + j, silent: true)));
+      if (!_disposed) _notify(); // один раз на батч вместо ~2 на ноду
     }
     isPingAllRunning = false;
     sortByPing();
@@ -1806,9 +1810,9 @@ class VpnProvider extends ChangeNotifier {
       for (int i = 0; i < total; i += 8) {
         if (_disposed || !isAutoMode) break;
         final batch = (i + 8 <= total) ? 8 : total - i;
-        await Future.wait(List.generate(batch, (j) => pingNode(i + j)));
+        await Future.wait(List.generate(batch, (j) => pingNode(i + j, silent: true)));
         autoStatus = 'Пингую… ${((i + batch) / total * 100).toInt()}%';
-        _notify();
+        _notify(); // один раз на батч (pingNode silent — без двойного notify на ноду)
       }
 
       if (!isAutoMode) { isAutoRunning = false; _notify(); return; }
