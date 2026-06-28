@@ -390,12 +390,10 @@ class AiBypassAgent {
       BypassStrategy(priority: 4, type: 'vless_reality_vk',
           params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
+      // (vless_reality_ipv6 убран: не было обработчика в _applyStrategy →
+      //  стратегия всегда падала в default:null и засоряла blacklist. Клиент
+      //  не может форсировать IPv6 сервера на xray-core — нереализуемо.)
 
-      // ЗАДАЧА 7: IPv6 Reality — ТСПУ хуже анализирует IPv6
-      // Добавляем IPv6 вариант Reality в каскад
-      BypassStrategy(priority: 4, type: 'vless_reality_ipv6',
-          params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint,
-                   'network': 'ipv6'}),
       // ═══ Приоритет 4: Reality + Yandex SNI ═══
       BypassStrategy(priority: 4, type: 'vless_reality_yandex',
           params: {'sni': 'yandex.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
@@ -476,6 +474,9 @@ class AiBypassAgent {
               sni: s.params['sni'] as String? ?? 'vk.com');
 
         default:
+          // Стратегия без обработчика — раньше молча проваливалась (null) и
+          // засоряла blacklist. Теперь это видно в логах для отладки каскада.
+          _log('⚠ Нет обработчика стратегии: ${s.type} — пропуск');
           return null;
       }
     } catch (e) {
