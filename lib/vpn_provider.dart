@@ -1088,6 +1088,7 @@ class VpnProvider extends ChangeNotifier {
       // Извлекаем параметры из AI-суффиксов перед очисткой
       String? _aiSni;
       String? _aiMode;
+      String  _aiGrpcSvc = 'GrpcService';
       if (_rawLink.contains('#whitelist_df=')) {
         final after = _rawLink.split('#whitelist_df=').last;
         _aiSni = Uri.decodeComponent(after.split('&').first);
@@ -1099,6 +1100,9 @@ class VpnProvider extends ChangeNotifier {
         final after = _rawLink.split('#grpc_sni=').last;
         _aiSni = Uri.decodeComponent(after.split('&').first);
         _aiMode = 'grpc';
+        if (after.contains('svc=')) {
+          _aiGrpcSvc = Uri.decodeComponent(after.split('svc=').last.split('&').first);
+        }
       } else if (_rawLink.contains('#shadowtls_v3=')) {
         final after = _rawLink.split('#shadowtls_v3=').last;
         _aiSni = Uri.decodeComponent(after.split('&').first);
@@ -1181,6 +1185,23 @@ class VpnProvider extends ChangeNotifier {
       } else if (_aiSni != null) {
         // AI выбрал SNI но stealth mode выключен — применяем напрямую
         finalLink = StealthEngine.injectRealityWithSni(finalLink, _aiSni!);
+      }
+
+      // Honest transport: режим gRPC реально переключает транспорт на type=grpc.
+      // Раньше стратегия gRPC меняла только SNI — parseFromURL строил исходный
+      // type=tcp. Теперь инжектим type=grpc&serviceName в ссылку, и v2ray строит
+      // настоящий gRPC-стрим. Только vless/trojan (vmess base64 — пропускаем).
+      if (_aiMode == 'grpc' &&
+          (finalLink.startsWith('vless://') || finalLink.startsWith('trojan://'))) {
+        try {
+          final u = Uri.parse(finalLink);
+          final q = Map<String, String>.from(u.queryParameters);
+          q['type']        = 'grpc';
+          q['serviceName'] = _aiGrpcSvc;
+          q['mode']        = q['mode'] ?? 'gun';
+          finalLink = u.replace(queryParameters: q).toString();
+          _log('📡 gRPC honest transport (svc=$_aiGrpcSvc)');
+        } catch (e) { _log('⚠ gRPC inject fail: $e'); }
       }
 
       final patchedCfg = VpnConfig(
