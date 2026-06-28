@@ -112,23 +112,32 @@ class StrategyBlacklist {
 
 // ── Детектор белых списков ──────────────────────────────────────────────────
 class WhitelistBypassEngine {
-  // Тест: пробуем достучаться до зарубежного IP напрямую
-  // Если не получается но RU-домены работают — белый список активен
+  // Детект режима белого списка. Усилено 28.06.2026: вместо одиночной пробы
+  // (1.1.1.1 — мог дать ложняк при флуктуации одного IP) пробуем НЕСКОЛЬКО
+  // не-whitelisted зарубежных endpoint'ов параллельно. Whitelist = НИ ОДИН
+  // зарубежный недоступен, НО российский whitelist-домен жив (иначе это просто
+  // отсутствие сети, а не белый список).
+  static const _foreignProbes = [
+    ['1.1.1.1', 443], ['8.8.8.8', 443], ['9.9.9.9', 443], ['208.67.222.222', 443],
+  ];
   static Future<bool> isWhitelistActive() async {
-    try {
-      // Пробуем Cloudflare DNS (1.1.1.1) — он не в белом списке
-      final s = await Socket.connect('1.1.1.1', 443,
-          timeout: const Duration(seconds: 2));
-      s.destroy();
-      return false; // Если прошло — белых списков нет
-    } catch (_) {
-      // Не прошло — проверяем что VK работает (чтобы отличить от полного отключения)
+    int reachable = 0;
+    await Future.wait(_foreignProbes.map((e) async {
       try {
-        final addrs = await InternetAddress.lookup('vk.com');
-        return addrs.isNotEmpty; // VK работает, зарубежный нет = белый список
-      } catch (_) {
-        return false; // Вообще нет интернета
-      }
+        final s = await Socket.connect(e[0] as String, e[1] as int,
+            timeout: const Duration(milliseconds: 1500));
+        s.destroy();
+        reachable++;
+      } catch (_) {}
+    }));
+    if (reachable > 0) return false; // хоть один зарубежный доступен → не whitelist
+    // Все зарубежные мертвы — отличаем whitelist от полного отсутствия сети.
+    try {
+      final addrs = await InternetAddress.lookup('vk.com')
+          .timeout(const Duration(seconds: 2));
+      return addrs.isNotEmpty;
+    } catch (_) {
+      return false; // сети нет вообще
     }
   }
 

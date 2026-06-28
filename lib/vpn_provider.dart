@@ -1189,7 +1189,7 @@ class VpnProvider extends ChangeNotifier {
         finalLink = StealthEngine.injectRealityWithSni(finalLink, sni);
       } else if (_aiSni != null) {
         // AI выбрал SNI но stealth mode выключен — применяем напрямую
-        finalLink = StealthEngine.injectRealityWithSni(finalLink, _aiSni!);
+        finalLink = StealthEngine.injectRealityWithSni(finalLink, _aiSni);
       }
 
       // Honest transport: режим gRPC реально переключает транспорт на type=grpc.

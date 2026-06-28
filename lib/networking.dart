@@ -508,7 +508,7 @@ class BypassRulesEngine {
         }
       }
     }
-    all.sort((a, b) => (a as BypassStrategy).priority.compareTo((b as BypassStrategy).priority));
+    all.sort((a, b) => a.priority.compareTo(b.priority));
     return all;
   }
 
