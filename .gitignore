@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Локальные golden-превью дизайна (пути к шрифтам зависят от среды, не для CI)
+/test/goldens/
+/test/connect_hero_golden_test.dart

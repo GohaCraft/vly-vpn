@@ -25,6 +25,9 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Run unit tests (логика обхода)
+        run: flutter test test/bypass_logic_test.dart
+
       - name: Set Gradle heap
         run: |
           echo "org.gradle.jvmargs=-Xmx6g -Xms2g -XX:MaxMetaspaceSize=2g -XX:+UseG1GC -Dfile.encoding=UTF-8" > android/gradle.properties
