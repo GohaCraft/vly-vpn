@@ -457,9 +457,12 @@ class _AuraBlobBgState extends State<AuraBlobBg> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    final app     = _AppProviderRef.instance;
-    final _skinId = app?.skinId ?? AuraSkinId.crimson;
-    final activeSkin = AuraSkin.byId(_skinId);
+    // FIX тем: слушаем AppProvider (listen:true) — иначе при смене темы фон не
+    // пересобирался (HomeScreen в IndexedStack — const, не ребилдился на AppProvider).
+    final app     = Provider.of<AppProvider>(context);
+    // app.skin корректно отдаёт кастомную тему (раньше AuraSkin.byId(custom)
+    // возвращал Midnight — фон не соответствовал выбранной теме).
+    final activeSkin = app.skin;
     final skinBg  = activeSkin.bgDark;
     final skinMid = activeSkin.bgGradientMid;
     final bg = widget.isLight
@@ -468,8 +471,17 @@ class _AuraBlobBgState extends State<AuraBlobBg> with SingleTickerProviderStateM
             ? Color.lerp(skinBg, Colors.black, 0.12)!
             : skinBg);
 
-    final hasMedia = app != null && app.hasCustomMedia;
-    final mediaOpacity = app?.customMediaType == 'video' ? 0.45 : 0.40;
+    // FIX тем: перекрашиваем анимированные блобы под АКТИВНУЮ тему. Раньше брался
+    // фиксированный _darkBlobs → фон не менял цвет при смене темы (главная «кривизна»).
+    final palette = widget.isLight ? _lightBlobs : activeSkin.blobs;
+    if (palette.isNotEmpty) {
+      for (int i = 0; i < _blobs.length; i++) {
+        _blobs[i].color = palette[i % palette.length];
+      }
+    }
+
+    final hasMedia = app.hasCustomMedia;
+    final mediaOpacity = app.customMediaType == 'video' ? 0.45 : 0.40;
 
     return Stack(children: [
       Container(color: bg),
