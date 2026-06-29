@@ -46,4 +46,4 @@ app.*.map.json
 
 # Локальные golden-превью дизайна (пути к шрифтам зависят от среды, не для CI)
 /test/goldens/
-/test/connect_hero_golden_test.dart
+/test/*_golden_test.dart
