@@ -2640,47 +2640,28 @@ class _SkinPicker extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
-          childAspectRatio: 1.1,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
+          childAspectRatio: 1.15,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
         ),
         itemCount: AuraSkin.all.length + 1,
         itemBuilder: (ctx, i) {
           if (i == AuraSkin.all.length) {
             return _SkinGridTile(
-              name: 'My Theme',
-              emoji: '🎨',
-              accent: app.skin.accent,
-              bgColor: const Color(0xFF1A1A2E),
               selected: app.skinId == AuraSkinId.custom,
+              customAccent: app.skin.accent,
               onTap: () => Navigator.push(context, PageRouteBuilder(
                 pageBuilder: (_, a, __) => const _CustomThemeEditor(),
                 transitionsBuilder: (_, a, __, c) => SlideTransition(
                   position: Tween(begin: const Offset(0,1), end: Offset.zero)
                       .animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
                   child: c))),
-              customChild: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.palette_outlined, color: app.skin.accent, size: 28),
-                  const SizedBox(height: 6),
-                  Text('My Theme', style: TextStyle(
-                    fontSize: 11, color: app.skin.accent,
-                    fontWeight: FontWeight.w600)),
-                  if (app.skinId == AuraSkinId.custom)
-                    const SizedBox(height: 4),
-                  if (app.skinId == AuraSkinId.custom)
-                    Text('активна', style: TextStyle(
-                      fontSize: 9, color: app.skin.accent.withOpacity(0.7))),
-                ]),
             );
           }
           final skin = AuraSkin.all[i];
-          final sel  = app.skinId == skin.id;
           return _SkinGridTile(
-            name: skin.name, emoji: skin.emoji,
-            accent: skin.accent, bgColor: skin.bgDark,
-            selected: sel,
+            skin: skin,
+            selected: app.skinId == skin.id,
             onTap: () => app.setSkin(skin.id),
           );
         },
@@ -2689,78 +2670,95 @@ class _SkinPicker extends StatelessWidget {
   }
 }
 
-// Плитка темы в сетке
+// Плитка темы — РЕАЛЬНОЕ мини-превью (градиент + акцентные блобы), без эмодзи.
+// Если skin == null — это плитка «My Theme» (кастомный редактор).
 class _SkinGridTile extends StatelessWidget {
-  final String   name, emoji;
-  final Color    accent, bgColor;
-  final bool     selected;
+  final AuraSkin?    skin;          // null = кастомная плитка
+  final bool         selected;
   final VoidCallback onTap;
-  final Widget?  customChild;
+  final Color?       customAccent;  // акцент для рамки кастомной плитки
 
   const _SkinGridTile({
-    required this.name, required this.emoji,
-    required this.accent, required this.bgColor,
-    required this.selected, required this.onTap,
-    this.customChild,
+    this.skin,
+    required this.selected,
+    required this.onTap,
+    this.customAccent,
   });
 
   @override
   Widget build(BuildContext context) {
+    final a = skin?.accent ?? customAccent ?? const Color(0xFF00E5FF);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: bgColor,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [
-              accent.withOpacity(selected ? 0.25 : 0.08),
-              bgColor.withOpacity(0.95),
-            ]),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: selected ? accent : accent.withOpacity(0.2),
-            width: selected ? 1.8 : 0.8),
-          boxShadow: selected ? [
-            BoxShadow(color: accent.withOpacity(0.4), blurRadius: 12, spreadRadius: 1),
-            BoxShadow(color: accent.withOpacity(0.2), blurRadius: 24),
-          ] : [],
+            color: selected ? a : Colors.white.withOpacity(0.08),
+            width: selected ? 2 : 1),
+          boxShadow: selected
+            ? [BoxShadow(color: a.withOpacity(0.45), blurRadius: 18, spreadRadius: 1)]
+            : [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 8,
+                offset: const Offset(0, 3))],
         ),
-        child: customChild ?? Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Превью фона — мини блобы
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  accent.withOpacity(0.7),
-                  accent.withOpacity(0.1),
-                ])),
-              child: Center(child: Text(emoji,
-                  style: const TextStyle(fontSize: 18)))),
-            const SizedBox(height: 8),
-            Text(name, style: TextStyle(
-              fontSize: 11,
-              color: selected ? accent : Colors.white.withOpacity(0.7),
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center),
-            if (selected) ...[
-              const SizedBox(height: 4),
-              Container(
-                width: 20, height: 2,
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(1))),
-            ],
-          ]),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: skin == null ? _customPreview(a) : _themePreview(skin!, a, selected),
+        ),
       ),
     );
   }
+
+  // Превью реальной темы
+  static Widget _themePreview(AuraSkin s, Color a, bool selected) {
+    Color blob(int i) => i < s.blobs.length ? s.blobs[i] : s.accentSecondary;
+    return Stack(fit: StackFit.expand, children: [
+      DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: [s.bgDark, s.bgGradientMid, s.bgGradientEnd]))),
+      Positioned(left: -18, top: -14, child: _blob(blob(2), 64)),
+      Positioned(right: -22, bottom: 16, child: _blob(blob(3), 76)),
+      Positioned(right: 12, top: -10, child: _blob(s.accentSecondary, 38)),
+      Align(alignment: Alignment.bottomCenter, child: Container(height: 44,
+        decoration: BoxDecoration(gradient: LinearGradient(
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [Colors.transparent, Colors.black.withOpacity(0.55)])))),
+      Positioned(left: 11, right: 11, bottom: 10, child: Row(children: [
+        Container(width: 9, height: 9, decoration: BoxDecoration(shape: BoxShape.circle,
+          color: a, boxShadow: [BoxShadow(color: a.withOpacity(0.6), blurRadius: 6)])),
+        const SizedBox(width: 7),
+        Expanded(child: Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: Colors.white.withOpacity(0.95),
+            fontSize: 12, fontWeight: FontWeight.w700))),
+      ])),
+      if (selected) Positioned(right: 8, top: 8, child: Container(
+        width: 22, height: 22, decoration: BoxDecoration(shape: BoxShape.circle,
+          color: a, boxShadow: [BoxShadow(color: a.withOpacity(0.6), blurRadius: 8)]),
+        child: const Icon(Icons.check_rounded, size: 15, color: Colors.white))),
+    ]);
+  }
+
+  // Превью кастомной плитки
+  static Widget _customPreview(Color a) => Stack(fit: StackFit.expand, children: [
+    DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
+      begin: Alignment.topLeft, end: Alignment.bottomRight,
+      colors: [const Color(0xFF15151F), a.withOpacity(0.18), const Color(0xFF15151F)]))),
+    Center(child: Icon(Icons.palette_outlined, color: a.withOpacity(0.9), size: 30)),
+    Align(alignment: Alignment.bottomCenter, child: Container(height: 40,
+      decoration: BoxDecoration(gradient: LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [Colors.transparent, Colors.black.withOpacity(0.5)])))),
+    Positioned(left: 11, right: 11, bottom: 10, child: Text('My Theme',
+      maxLines: 1, overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: Colors.white.withOpacity(0.95),
+        fontSize: 12, fontWeight: FontWeight.w700))),
+  ]);
+
+  static Widget _blob(Color c, double s) => Container(width: s, height: s,
+    decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(
+      colors: [c.withOpacity(0.55), c.withOpacity(0.0)])));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
