@@ -97,15 +97,50 @@ extension BypassModeInfo on BypassMode {
   bool get isRecommended => this == BypassMode.auto || this == BypassMode.xhttp || this == BypassMode.realityVk;
 }
 
-// ── Blacklist стратегий (память) ───────────────────────────────────────────
-class StrategyBlacklist {
-  static final _failed = <String>{};
-  static bool   _enabled = true;
+// ── Self-healing blacklist стратегий ───────────────────────────────────────
+// КЛЮЧЕВАЯ защита от саморазрушения ИИ: провалившаяся стратегия НЕ убивается
+// навсегда (иначе ИИ постепенно перебанит всё и обход умрёт). Вместо этого она
+// уходит в cooldown с экспоненциальным backoff и АВТОМАТИЧЕСКИ возвращается в
+// строй, когда cooldown истёк. Сеть/блокировки меняются — то, что не работало
+// 10 минут назад, может заработать сейчас. markSuccess() мгновенно снимает бан.
+class _BanEntry {
+  final DateTime until;
+  final int fails;
+  const _BanEntry(this.until, this.fails);
+}
 
-  static bool isFailed(String type) => _enabled && _failed.contains(type);
-  static void markFailed(String type) { if (_enabled) _failed.add(type); }
-  static void clear() { _failed.clear(); }
-  static List<String> get allBlocked => _failed.toList();
+class StrategyBlacklist {
+  static final Map<String, _BanEntry> _banned = {};
+  static bool _enabled = true;
+  static const _baseCooldown = Duration(minutes: 8);
+  static const _maxCooldown  = Duration(hours: 2);
+
+  static bool isFailed(String type) {
+    if (!_enabled) return false;
+    final e = _banned[type];
+    if (e == null) return false;
+    if (DateTime.now().isAfter(e.until)) { _banned.remove(type); return false; } // cooldown истёк
+    return true;
+  }
+
+  static void markFailed(String type) {
+    if (!_enabled) return;
+    final fails = (_banned[type]?.fails ?? 0) + 1;
+    // Экспоненциальный backoff: 8м → 16м → 32м → 1ч4м → ... до потолка 2ч.
+    var d = _baseCooldown * (1 << (fails - 1).clamp(0, 4));
+    if (d > _maxCooldown) d = _maxCooldown;
+    _banned[type] = _BanEntry(DateTime.now().add(d), fails);
+  }
+
+  // Стратегия сработала — снимаем бан немедленно (само-восстановление).
+  static void markSuccess(String type) => _banned.remove(type);
+
+  static void clear() => _banned.clear();
+
+  // Активно забаненные (с непросроченным cooldown) — для диагностики/UI.
+  static List<String> get allBlocked =>
+      _banned.keys.where((t) => isFailed(t)).toList();
+
   static bool get isEnabled => _enabled;
   static void setEnabled(bool v) { _enabled = v; }
 }
@@ -445,6 +480,14 @@ class AiBypassAgent {
     _log('🤖 E-2006: Cascade: ${limited.length} стратегий'
         '${pref != null ? " (приоритет: $pref)" : ""}');
 
+    // ПАНИК-ФЛОР: если ВСЕ кандидаты сейчас в cooldown — значит ИИ временно
+    // забанил всё. Не оставляем пользователя без обхода: чистим блеклист и
+    // пробуем заново. Это страховка «ИИ не должна расхерачить все системы».
+    if (limited.isNotEmpty && limited.every((s) => StrategyBlacklist.isFailed(s.type))) {
+      _log('🛟 Все стратегии в cooldown — паник-режим: сбрасываю блеклист');
+      StrategyBlacklist.clear();
+    }
+
     VpnConfig? firstBuilt;   // best-effort на случай, если ни один не пройдёт пробу
 
     for (int i = 0; i < limited.length; i++) {
@@ -469,6 +512,7 @@ class AiBypassAgent {
             .timeout(const Duration(seconds: 3), onTimeout: () => false);
         if (ok) {
           _lastWinnerType = s.type;
+          StrategyBlacklist.markSuccess(s.type); // сработало → снять возможный бан
           _log('✅ E-2007: Обход проверен и работает: ${s.type}');
           return result;
         }

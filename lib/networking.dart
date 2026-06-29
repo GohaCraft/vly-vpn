@@ -342,17 +342,26 @@ class BypassRulesEngine {
   Future<void> syncFromServer(void Function(String) log) async {
     await _loadCache();
 
-    // 1. Основные bypass-правила (стратегии)
+    // 1. Основные bypass-правила (стратегии) — подгружаются С СЕРВЕРА без
+    //    обновления приложения. ВАЖНО: применяем только ВАЛИДНЫЙ payload, иначе
+    //    кривой/злонамеренный ответ мог бы отравить движок. Built-in правила
+    //    всегда остаются «полом» (см. getStrategies: [..._rules, ..._builtin]),
+    //    поэтому пустой/битый remote = безопасно, не ломает обход.
     try {
       final res = await PinnedHttpClient.get(kBypassRulesUrl, timeout: const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final j  = jsonDecode(res.body) as Map<String, dynamic>;
         final sv = j['version'] as int? ?? 0;
         if (sv > _version) {
-          _rules   = List<Map<String,dynamic>>.from(j['rules'] ?? []);
-          _version = sv;
-          await _saveCache(res.body);
-          log('✔ Bypass rules updated v$_version');
+          final validated = _validateRemoteRules(j['rules']);
+          if (validated != null) {
+            _rules   = validated;
+            _version = sv;
+            await _saveCache(res.body);
+            log('✔ Bypass rules updated v$_version (${validated.length} правил)');
+          } else {
+            log('⚠ Remote rules v$sv отклонены валидацией — оставляю текущие');
+          }
         }
       }
     } catch (e) { log('⚠ Rules sync: $e'); }
@@ -363,6 +372,32 @@ class BypassRulesEngine {
         now.difference(_lastDomainSync!) > const Duration(hours: 6)) {
       await _syncDomainList(log);
     }
+  }
+
+  // Валидация удалённых правил перед применением. Структурная санитизация:
+  // каждое правило должно иметь непустые triggers и хотя бы одну стратегию с
+  // непустым 'type'. Возвращает нормализованный список или null (payload не годен —
+  // движок оставляет текущие правила; built-in floor всё равно работает).
+  static List<Map<String, dynamic>>? _validateRemoteRules(dynamic raw) {
+    if (raw is! List || raw.isEmpty) return null;
+    final out = <Map<String, dynamic>>[];
+    for (final r in raw) {
+      if (r is! Map) continue;
+      final triggers   = r['triggers'];
+      final strategies = r['strategies'];
+      if (triggers is! List || triggers.isEmpty) continue;
+      if (strategies is! List || strategies.isEmpty) continue;
+      final validStrats = strategies.where((s) =>
+          s is Map && s['type'] is String && (s['type'] as String).isNotEmpty).toList();
+      if (validStrats.isEmpty) continue;
+      out.add({
+        'id':         r['id']?.toString() ?? 'remote',
+        'triggers':   triggers.map((t) => t.toString()).toList(),
+        'strategies': List<Map<String, dynamic>>.from(
+            validStrats.map((s) => Map<String, dynamic>.from(s as Map))),
+      });
+    }
+    return out.isEmpty ? null : out;
   }
 
   Future<void> _syncDomainList(void Function(String) log) async {
