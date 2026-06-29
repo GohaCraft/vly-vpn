@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "updated": "2026-06-28",
+  "note": "Дефолтные правила обхода, вшиты в приложение. Сервер (kBypassRulesUrl) может прислать version выше — клиент подтянет и заменит. Built-in правила в коде всегда остаются полом.",
+  "rules": [
+    {
+      "id": "tls_reset_default",
+      "triggers": ["tcpReset", "tlsFingerprint"],
+      "strategies": [
+        {"priority": 1, "type": "rotate_reality_sni", "params": {}},
+        {"priority": 2, "type": "add_reality_sni",    "params": {"sni": "www.yandex.ru"}},
+        {"priority": 3, "type": "add_reality_sni",    "params": {"sni": "vk.com"}},
+        {"priority": 4, "type": "change_transport",   "params": {"transport": "grpc", "service": "gun"}},
+        {"priority": 5, "type": "change_port",        "params": {"port": 443}},
+        {"priority": 6, "type": "trojan_ws_fallback", "params": {"port": 443, "path": "/api/v1"}}
+      ]
+    },
+    {
+      "id": "dns_default",
+      "triggers": ["dnsPoisoning"],
+      "strategies": [
+        {"priority": 1, "type": "set_doh", "params": {"url": "https://1.1.1.1/dns-query"}},
+        {"priority": 2, "type": "set_doh", "params": {"url": "https://dns.google/dns-query"}},
+        {"priority": 3, "type": "set_doh", "params": {"url": "https://dns.quad9.net/dns-query"}}
+      ]
+    },
+    {
+      "id": "port_default",
+      "triggers": ["portBlocked"],
+      "strategies": [
+        {"priority": 1, "type": "change_port", "params": {"port": 443}},
+        {"priority": 2, "type": "change_port", "params": {"port": 2053}},
+        {"priority": 3, "type": "change_port", "params": {"port": 2087}},
+        {"priority": 4, "type": "change_port", "params": {"port": 8443}}
+      ]
+    },
+    {
+      "id": "full_default",
+      "triggers": ["ipBlocked", "timeout", "serviceBlocked"],
+      "strategies": [
+        {"priority": 1, "type": "rotate_reality_sni", "params": {}},
+        {"priority": 2, "type": "add_reality_sni",    "params": {"sni": "www.yandex.ru"}},
+        {"priority": 3, "type": "add_reality_sni",    "params": {"sni": "vk.com"}},
+        {"priority": 4, "type": "shadow_fallback",     "params": {}},
+        {"priority": 5, "type": "cdn_fallback",        "params": {"url": "aura-vpn.workers.dev"}}
+      ]
+    }
+  ]
+}

@@ -447,6 +447,24 @@ class BypassRulesEngine {
         if (dts != null) _lastDomainSync = DateTime.tryParse(dts);
       }
     } catch (_) {}
+    // Если правил нет (первый запуск, нет кэша) — берём дефолт из вшитого asset,
+    // чтобы движок работал из коробки ещё ДО ответа сервера. Сервер с более
+    // высоким version потом заменит. Built-in правила в коде — всегда пол.
+    if (_rules.isEmpty) await _loadBundledRules();
+  }
+
+  // Загрузка дефолтных правил из вшитого asset (assets/bypass_rules.json).
+  Future<void> _loadBundledRules() async {
+    try {
+      final raw = await rootBundle.loadString('assets/bypass_rules.json');
+      final j   = jsonDecode(raw) as Map<String, dynamic>;
+      final validated = _validateRemoteRules(j['rules']);
+      if (validated != null) {
+        _rules = validated;
+        final v = j['version'] as int? ?? 0;
+        if (v > _version) _version = v;
+      }
+    } catch (_) {}
   }
 
   Future<void> _saveCache(String raw) async {

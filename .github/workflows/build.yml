@@ -2,7 +2,8 @@
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'claude/**' ]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -42,6 +43,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: aura-vpn-apk
+          name: vly-vpn-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 7
+          retention-days: 30
