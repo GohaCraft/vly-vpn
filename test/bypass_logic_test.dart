@@ -109,4 +109,39 @@ void main() {
       expect(engine.isBlocked('yandex.ru'), isFalse);
     });
   });
+
+  group('Пер-сервисный обход (per-app)', () {
+    test('detect определяет сервис по хосту и поддоменам', () {
+      expect(ServiceBypassProfiles.detect('rr1.googlevideo.com')?.id, 'youtube');
+      expect(ServiceBypassProfiles.detect('youtube.com')?.id, 'youtube');
+      expect(ServiceBypassProfiles.detect('t.me')?.id, 'telegram');
+      expect(ServiceBypassProfiles.detect('api.telegram.org')?.id, 'telegram');
+      expect(ServiceBypassProfiles.detect('byteoversea.com')?.id, 'tiktok');
+      expect(ServiceBypassProfiles.detect('yandex.ru'), isNull); // не сервис
+    });
+
+    test('форки Telegram покрыты профилем telegram (общие серверы)', () {
+      // AyuGram/ExtraGram/Nicegram ходят на те же домены/DC Telegram
+      final tg = ServiceBypassProfiles.telegram;
+      expect(tg.domains, contains('telegram.org'));
+      expect(tg.domains, contains('t.me'));
+      expect(tg.ips.any((c) => c.startsWith('149.154.160')), isTrue);
+    });
+
+    test('каждый профиль валиден (домены + стратегия)', () {
+      for (final p in ServiceBypassProfiles.all) {
+        expect(p.domains, isNotEmpty, reason: '${p.id}: нет доменов');
+        expect(p.strategy, isNotEmpty, reason: '${p.id}: нет стратегии');
+      }
+    });
+
+    test('buildRoutingRules даёт валидные xray-правила на proxy', () {
+      final rules = ServiceBypassProfiles.buildRoutingRules();
+      expect(rules, isNotEmpty);
+      expect(rules.every((r) => r['outboundTag'] == 'proxy'), isTrue);
+      // есть и доменные, и IP-правила (для Telegram)
+      expect(rules.any((r) => r.containsKey('domain')), isTrue);
+      expect(rules.any((r) => r.containsKey('ip')), isTrue);
+    });
+  });
 }

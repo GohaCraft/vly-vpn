@@ -1337,6 +1337,18 @@ class _StealthPage extends StatelessWidget {
         onChanged: (v) => vpn.setSiberiaShield(v),
         hint: 'Защита от «Сибирской блокировки»: ТСПУ блокирует сервер при 2+ SYN за 8 сек. Siberia Shield: пейсит соединения (1 за 8 сек), шлёт decoy HTTPS трафик к белым доменам между сессиями.'),
 
+      const SizedBox(height: 8),
+      _SwitchRow(
+        icon: Icons.apps_rounded, iconColor: const Color(0xFF7C4DFF),
+        title: 'Per-App обход 📱',
+        subtitle: 'Telegram · YouTube · TikTok · Instagram · Discord · X',
+        value: vpn.perAppBypass,
+        onChanged: (v) => vpn.setPerAppBypass(v),
+        hint: 'Определяет сервис по доменам/IP назначения и применяет точный обход '
+              'под каждое приложение: Telegram (+форки AyuGram/ExtraGram — общие серверы), '
+              'YouTube, TikTok, Instagram, Discord, X. Трафик этих сервисов гарантированно '
+              'идёт через VPN. Включено по умолчанию.'),
+
       const SizedBox(height: 16),
       _SubSection('SNI ПУЛ'),
       ...kRealitySniPool.asMap().entries.map((e) => Padding(

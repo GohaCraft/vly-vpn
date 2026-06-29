@@ -58,6 +58,7 @@ class VpnProvider extends ChangeNotifier {
   bool   stealthFragment        = true;   // TLS фрагментация
   bool   stealthRealitySni      = true;   // авто-ротация Reality SNI
   bool   siberiaShield          = true;   // защита от Сибирской блокировки
+  bool   perAppBypass           = true;   // пер-сервисный обход (TG/YT/TikTok…)
   int    stealthHandshakeFails  = 0;      // счётчик провалов handshake
   String stealthStatus          = '';     // статус для UI
   bool   _userInitiatedStop     = false;  // true = отключил пользователь (не обрыв)
@@ -344,6 +345,7 @@ class VpnProvider extends ChangeNotifier {
   void setStealthRealitySni(bool v) { stealthRealitySni = v; _saveStealthPrefs(); _notify(); }
   void setStealthWarmup(bool v)     { stealthWarmup     = v; _saveStealthPrefs(); _notify(); }
   void setSiberiaShield(bool v)     { siberiaShield     = v; _saveStealthPrefs(); _notify(); }
+  void setPerAppBypass(bool v)      { perAppBypass      = v; _saveStealthPrefs(); _notify(); }
 
   Future<void> _saveStealthPrefs() async {
     try {
@@ -353,6 +355,7 @@ class VpnProvider extends ChangeNotifier {
       await p.setBool('stealth_reality_sni', stealthRealitySni);
       await p.setBool('stealth_warmup',      stealthWarmup);
       await p.setBool('siberia_shield',      siberiaShield);
+      await p.setBool('per_app_bypass',      perAppBypass);
       await p.setBool('proxy_mode',          proxyModeEnabled);
       await p.setInt('proxy_port',           proxyPort);
       await p.setBool('proxy_mode',          proxyModeEnabled);
@@ -368,8 +371,7 @@ class VpnProvider extends ChangeNotifier {
       stealthRealitySni = p.getBool('stealth_reality_sni') ?? true;
       stealthWarmup     = p.getBool('stealth_warmup')      ?? true;
       siberiaShield     = p.getBool('siberia_shield')      ?? true;
-      proxyModeEnabled  = p.getBool('proxy_mode')          ?? false;
-      proxyPort         = p.getInt('proxy_port')           ?? 1080;
+      perAppBypass      = p.getBool('per_app_bypass')      ?? true;
       proxyModeEnabled  = p.getBool('proxy_mode')          ?? false;
       proxyPort         = p.getInt('proxy_port')           ?? 1080;
     } catch (_) {}
@@ -1294,7 +1296,17 @@ class VpnProvider extends ChangeNotifier {
         final jRoute = jsonDecode(configStr) as Map<String, dynamic>;
         final existingRules = (jRoute['routing']?['rules'] as List?)?.length ?? 0;
         if (existingRules <= 1) {
-          jRoute['routing'] = _bypassRules.buildRussiaRoutingRules();
+          final route = _bypassRules.buildRussiaRoutingRules();
+          // Пер-сервисный обход: точные правила для TG/YouTube/TikTok/… ставим
+          // в начало (приоритет), чтобы трафик этих сервисов гарантированно шёл
+          // через VPN с нужным обходом. Форки Telegram покрыты автоматически.
+          if (perAppBypass) {
+            final rules = (route['rules'] as List?)?.cast<dynamic>() ?? <dynamic>[];
+            rules.insertAll(0, ServiceBypassProfiles.buildRoutingRules());
+            route['rules'] = rules;
+            _log('📱 Per-app bypass: ${ServiceBypassProfiles.all.length} сервисов');
+          }
+          jRoute['routing'] = route;
           final obs = jRoute['outbounds'] as List? ?? [];
           if (!obs.any((o) => o is Map && o['tag'] == 'direct')) {
             obs.add({'tag': 'direct', 'protocol': 'freedom', 'settings': {}});
