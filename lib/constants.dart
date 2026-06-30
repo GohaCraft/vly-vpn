@@ -3,13 +3,13 @@ part of 'main.dart';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-const String kControlPlaneUrl   = 'https://api.auravpn.app';
+const String kControlPlaneUrl   = 'https://api.vlyvpn.app';
 
 // ── Certificate Pinning ───────────────────────────────────────────────────────
-// SHA-256 отпечатки публичных ключей нашего сервера api.auravpn.app
+// SHA-256 отпечатки публичных ключей нашего сервера api.vlyvpn.app
 // Когда получишь реальный сертификат — замени PLACEHOLDER на настоящие SHA256
 // Формат: base64(sha256(SubjectPublicKeyInfo DER))
-// Команда для получения: openssl s_client -connect api.auravpn.app:443 |
+// Команда для получения: openssl s_client -connect api.vlyvpn.app:443 |
 //   openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER |
 //   openssl dgst -sha256 -binary | base64
 const kPinnedSha256 = [
@@ -19,7 +19,7 @@ const kPinnedSha256 = [
 
 // Домены для которых применяется cert pinning (только наши серверы)
 // Cloudflare, Google, antifilter.download — без pinning (у них своя цепочка)
-const kPinnedDomains = ['api.auravpn.app', 'auravpn.app'];
+const kPinnedDomains = ['api.vlyvpn.app', 'vlyvpn.app'];
 
 const String kBypassRulesUrl    = '$kControlPlaneUrl/bypass_rules.json';
 const String kTelemetryUrl      = '$kControlPlaneUrl/telemetry';
@@ -32,26 +32,26 @@ const List<String> kDeadDropMirrors = [
   // ── Tier 0: Яндекс — всегда белый список РКН (AS13238) ───────────────────
   // storage.yandexcloud.net: S3-совместимое Object Storage, Яндекс CDN
   // Не блокируется т.к. используется тысячами российских сайтов
-  'https://storage.yandexcloud.net/auravpn-nodes/nodes.json',
+  'https://storage.yandexcloud.net/vlyvpn-nodes/nodes.json',
   // Яндекс Диск public link (через get.disk.yandex.net — белый список)
-  'https://getfile.dokpub.com/yandex/get/https://disk.yandex.ru/d/auravpn-nodes',
+  'https://getfile.dokpub.com/yandex/get/https://disk.yandex.ru/d/vlyvpn-nodes',
 
   // ── Tier 1: VK — крупнейшая российская соцсеть (AS47541) ─────────────────
   // userapi.com / vk.com CDN — блокировка означает падение ВКонтакте
-  'https://vk.com/doc-auravpn_nodes',             // VK Documents (публичный)
-  'https://sun6-21.userapi.com/auravpn/nodes.json', // VK CDN edge
+  'https://vk.com/doc-vlyvpn_nodes',             // VK Documents (публичный)
+  'https://sun6-21.userapi.com/vlyvpn/nodes.json', // VK CDN edge
 
   // ── Tier 2: GitHub (международный, может быть заблокирован) ──────────────
-  'https://raw.githubusercontent.com/auravpn/nodes/main/nodes.json',
-  'https://gist.githubusercontent.com/auravpn/nodes/raw/nodes.json',
+  'https://raw.githubusercontent.com/vlyvpn/nodes/main/nodes.json',
+  'https://gist.githubusercontent.com/vlyvpn/nodes/raw/nodes.json',
 
   // ── Tier 3: jsDelivr CDN — зеркало GitHub через CDN ─────────────────────
   // jsDelivr использует Cloudflare + Fastly — сложнее заблокировать
-  'https://cdn.jsdelivr.net/gh/auravpn/nodes@main/nodes.json',
+  'https://cdn.jsdelivr.net/gh/vlyvpn/nodes@main/nodes.json',
 
-  // DNS TXT: dig TXT nodes.auravpn.app — содержит base64 списка нод
+  // DNS TXT: dig TXT nodes.vlyvpn.app — содержит base64 списка нод
 ];
-const String kDeadDropDnsTxt = 'nodes.auravpn.app';
+const String kDeadDropDnsTxt = 'nodes.vlyvpn.app';
 
 // ── Browser identity — ЕДИНЫЙ источник правды ────────────────────────────────
 // Обновлено 28.06.2026. Раньше версии Chrome (134/135/136/137) и User-Agent
@@ -156,8 +156,8 @@ const List<String> kRealitySniPool = [
 // CDN Workers URL для финального fallback
 // Трафик идёт через Cloudflare CDN — блокировка означает блокировку половины интернета
 const List<String> kCdnFallbackUrls = [
-  'https://aura-vpn.workers.dev',  // Cloudflare Workers
-  'https://aura-cdn.pages.dev',    // Cloudflare Pages
+  'https://vly-vpn.workers.dev',  // Cloudflare Workers
+  'https://vly-cdn.pages.dev',    // Cloudflare Pages
 ];
 
 // ── Hysteria2 настройки по умолчанию ────────────────────────────────────────
@@ -215,7 +215,7 @@ const List<String> kWarmupTargets = [
   // Cloudflare — CDN trace
   'https://1.1.1.1/cdn-cgi/trace',
 ];
-const String kSupportEmail      = 'support@auravpn.app';
+const String kSupportEmail      = 'support@vlyvpn.app';
 const int    kLocalRulesVersion = 0;
 const String kBackupMagic       = 'VLY_VPN_BACKUP_V1';
 
@@ -228,7 +228,7 @@ const kAppBuild   = '20260628';
 // ── Responsive breakpoints ────────────────────────────────────────────────────
 // phone < 600  |  tablet 600-840  |  desktop > 840
 // Все функции — extension на BuildContext для удобного доступа
-extension AuraLayout on BuildContext {
+extension VlyLayout on BuildContext {
   double get screenW   => MediaQuery.of(this).size.width;
   double get screenH   => MediaQuery.of(this).size.height;
   bool   get isTablet  => screenW >= 600;
@@ -248,7 +248,7 @@ extension AuraLayout on BuildContext {
 }
 
 // Нейтральный User-Agent для всех исходящих HTTP запросов (Dead Drop, DoH, warm-up).
-// 'AuraVPN/5.6.0' мгновенно идентифицирует трафик системами РКН/ТСПУ.
+// 'VlyVPN/5.6.0' мгновенно идентифицирует трафик системами РКН/ТСПУ.
 // Версия привязана к единому источнику kChromeFull (обновл. 28.06.2026).
 const kStealthUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) '
     'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -258,7 +258,7 @@ const kStealthUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) '
 // Берём из единого канонического пула (см. kModernUserAgents выше).
 const kStealthUAPool = kModernUserAgents;
 
-// Акцентные цвета — управляются через AuraSkin (динамические)
+// Акцентные цвета — управляются через VlySkin (динамические)
 // Дефолтные значения — используются до инициализации скина
 Color _accent     = const Color(0xFF00E5FF);
 Color _accentBlue = const Color(0xFF4FC3F7);

@@ -17,8 +17,8 @@ class BypassArsenal {
     {'id': 9,  'name': 'SNI: dl.google.com',         'type': 'add_reality_sni',     'priority': 9,  'params': {'sni':'dl.google.com'}},
     {'id': 10, 'name': 'SNI: update.microsoft.com', 'type': 'add_reality_sni',     'priority': 10, 'params': {'sni':'update.microsoft.com'}},
     // ── TIER 2: CDN обход ────────────────────────────────────────────────────
-    {'id': 11, 'name': 'CF Workers CDN',             'type': 'cdn_fallback',        'priority': 11, 'params': {'url':'aura-vpn.workers.dev'}},
-    {'id': 12, 'name': 'CF Pages CDN',               'type': 'cdn_fallback',        'priority': 12, 'params': {'url':'aura-cdn.pages.dev'}},
+    {'id': 11, 'name': 'CF Workers CDN',             'type': 'cdn_fallback',        'priority': 11, 'params': {'url':'vly-vpn.workers.dev'}},
+    {'id': 12, 'name': 'CF Pages CDN',               'type': 'cdn_fallback',        'priority': 12, 'params': {'url':'vly-cdn.pages.dev'}},
     {'id': 13, 'name': 'Trojan WS 443',              'type': 'trojan_ws_fallback',  'priority': 13, 'params': {'port':443,'path':'/'}},
     {'id': 14, 'name': 'Trojan WS /api',             'type': 'trojan_ws_fallback',  'priority': 14, 'params': {'port':443,'path':'/api/v1'}},
     {'id': 15, 'name': 'Shadow WS fallback',         'type': 'shadow_fallback',     'priority': 15, 'params': {}},
@@ -94,9 +94,9 @@ class BypassArsenal {
     {'id': 79, 'name': 'WS /updates',               'type': 'change_transport',    'priority': 79, 'params': {'transport':'ws','path':'/updates'}},
     {'id': 80, 'name': 'WS /notifications',          'type': 'change_transport',    'priority': 80, 'params': {'transport':'ws','path':'/notifications'}},
     // ── TIER 9: CDN вариации ─────────────────────────────────────────────────
-    {'id': 81, 'name': 'CF Workers v2',              'type': 'cdn_fallback',        'priority': 81, 'params': {'url':'aura-vpn-proxy.workers.dev'}},
-    {'id': 82, 'name': 'CF Pages v2',                'type': 'cdn_fallback',        'priority': 82, 'params': {'url':'aura-proxy.pages.dev'}},
-    {'id': 83, 'name': 'CF Workers v3',              'type': 'cdn_fallback',        'priority': 83, 'params': {'url':'aura-bypass.workers.dev'}},
+    {'id': 81, 'name': 'CF Workers v2',              'type': 'cdn_fallback',        'priority': 81, 'params': {'url':'vly-vpn-proxy.workers.dev'}},
+    {'id': 82, 'name': 'CF Pages v2',                'type': 'cdn_fallback',        'priority': 82, 'params': {'url':'vly-proxy.pages.dev'}},
+    {'id': 83, 'name': 'CF Workers v3',              'type': 'cdn_fallback',        'priority': 83, 'params': {'url':'vly-bypass.workers.dev'}},
     {'id': 84, 'name': 'WS /api/stream',             'type': 'change_transport',    'priority': 84, 'params': {'transport':'ws','path':'/api/stream'}},
     {'id': 85, 'name': 'gRPC /stream',               'type': 'change_transport',    'priority': 85, 'params': {'transport':'grpc','service':'stream'}},
     {'id': 86, 'name': 'Port 1443',                  'type': 'change_port',         'priority': 86, 'params': {'port':1443}},

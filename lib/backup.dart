@@ -74,7 +74,7 @@ class BackupEngine {
     return true;
   }
 
-  static String export(List<AuraProfile> profiles, String activeId, String password) {
+  static String export(List<VlyProfile> profiles, String activeId, String password) {
     final payload = jsonEncode({
       'magic':    kBackupMagic,
       'version':  4,
@@ -132,11 +132,11 @@ class BackupEngine {
 //  Защита от MITM: РКН или провайдер не смогут подменить SSL-сертификат
 //  и подсунуть фальшивые ноды или выключить приложение удалённо.
 //
-//  Применяется ТОЛЬКО к kPinnedDomains (api.auravpn.app).
+//  Применяется ТОЛЬКО к kPinnedDomains (api.vlyvpn.app).
 //  Cloudflare DoH, antifilter.download, GitHub — без pinning (доверяем их цепочке).
 //
 //  ВАЖНО: Замени kPinnedSha256 на реальные SHA-256 когда развернёшь сервер.
-//  Команда: openssl s_client -connect api.auravpn.app:443 |
+//  Команда: openssl s_client -connect api.vlyvpn.app:443 |
 //           openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER |
 //           openssl dgst -sha256 -binary | base64
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -154,7 +154,7 @@ class PinnedHttpClient {
 
     // TODO: полный cert pinning через SHA-256 — добавить когда будет реальный сертификат
     // Dart X509Certificate не даёт доступ к DER bytes без сторонних пакетов.
-    // Команда для получения SHA-256: openssl s_client -connect api.auravpn.app:443 |
+    // Команда для получения SHA-256: openssl s_client -connect api.vlyvpn.app:443 |
     //   openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER |
     //   openssl dgst -sha256 -binary | base64
     client.badCertificateCallback = (cert, host, port) {

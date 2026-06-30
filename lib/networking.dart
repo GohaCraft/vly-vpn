@@ -4,7 +4,7 @@ part of 'main.dart';
 class SelfHealingMirror {
   static final _rng = Random();
   // Нейтральные User-Agent — не раскрываем что это VPN клиент.
-  // 'AuraVPN/5.6.0' идентифицировал трафик для систем мониторинга РКН.
+  // 'VlyVPN/5.6.0' идентифицировал трафик для систем мониторинга РКН.
   // Источник версий — единый пул kModernUserAgents (constants.dart, обновл. 28.06.2026).
   static const _uas = kModernUserAgents;
   static String get _ua => _uas[_rng.nextInt(_uas.length)];
@@ -270,7 +270,7 @@ class BypassRulesEngine {
       {'priority': 12,'type': 'hysteria2_fallback',  'params': {'obfs': 'salamander'}},
       // Zapret: локальный DPI bypass как последний рубеж перед CDN
       {'priority': 13,'type': 'zapret_bypass',       'params': {'strategy': 'disorder'}},
-      {'priority': 14,'type': 'cdn_fallback',         'params': {'url': 'aura-vpn.workers.dev'}},
+      {'priority': 14,'type': 'cdn_fallback',         'params': {'url': 'vly-vpn.workers.dev'}},
     ]},
     // DNS отравление
     {'id': 'dns', 'triggers': ['dnsPoisoning'], 'strategies': [
@@ -301,8 +301,8 @@ class BypassRulesEngine {
       {'priority': 7, 'type': 'hysteria2_fallback',   'params': {'obfs': 'salamander'}},
       // Zapret DPI bypass перед CDN
       {'priority': 8, 'type': 'zapret_bypass',        'params': {'strategy': 'fake_sni'}},
-      {'priority': 9, 'type': 'cdn_fallback',          'params': {'url': 'aura-vpn.workers.dev'}},
-      {'priority': 10,'type': 'cdn_fallback',          'params': {'url': 'aura-cdn.pages.dev'}},
+      {'priority': 9, 'type': 'cdn_fallback',          'params': {'url': 'vly-vpn.workers.dev'}},
+      {'priority': 10,'type': 'cdn_fallback',          'params': {'url': 'vly-cdn.pages.dev'}},
       {'priority': 11,'type': 'shadow_fallback',       'params': {}},
     ]},
     // Stealth: TLS fingerprint / сервисная блокировка
@@ -319,7 +319,7 @@ class BypassRulesEngine {
       {'priority': 10,'type': 'trojan_ws_fallback',   'params': {'port': 443, 'path': '/stream'}},
       // Zapret fake_sni: маскировка под разрешённый домен
       {'priority': 11,'type': 'zapret_bypass',        'params': {'strategy': 'fake_sni'}},
-      {'priority': 12,'type': 'cdn_fallback',          'params': {'url': 'aura-vpn.workers.dev'}},
+      {'priority': 12,'type': 'cdn_fallback',          'params': {'url': 'vly-vpn.workers.dev'}},
     ]},
     // Stealth: TCP reset (активная блокировка ТСПУ)
     {'id': 'stealth_reset', 'triggers': ['tcpReset'], 'strategies': [
@@ -665,9 +665,9 @@ class BypassRulesEngine {
         try {
           final uri    = Uri.parse(link);
           final q      = Map<String, String>.from(uri.queryParameters);
-          final cdnUrl = p['url'] as String? ?? 'aura-vpn.workers.dev';
+          final cdnUrl = p['url'] as String? ?? 'vly-vpn.workers.dev';
           q['type']       = 'ws';
-          q['path']       = '/aura-vpn-cdn';
+          q['path']       = '/vly-vpn-cdn';
           q['host']       = cdnUrl;
           q['security']   = 'tls';
           q['sni']        = cdnUrl;

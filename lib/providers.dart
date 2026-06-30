@@ -2,9 +2,9 @@
 part of 'main.dart';
 
 class AppProvider extends ChangeNotifier {
-  AuraTheme  _theme  = AuraTheme.system;
-  AuraLocale _locale = AuraLocale.en;
-  AuraSkinId _skinId = AuraSkinId.crimson;
+  VlyTheme  _theme  = VlyTheme.system;
+  VlyLocale _locale = VlyLocale.en;
+  VlySkinId _skinId = VlySkinId.crimson;
   bool _disposed = false;
 
   // Пользовательская тема
@@ -16,10 +16,10 @@ class AppProvider extends ChangeNotifier {
   String _customMediaPath  = ''; // путь к фото/GIF
   String _customMediaType  = ''; // 'photo' | 'gif' | ''
 
-  AuraTheme  get theme  => _theme;
-  AuraLocale get locale => _locale;
-  AuraSkinId get skinId => _skinId;
-  AuraSkin   get skin   => _skinId == AuraSkinId.custom ? _buildCustomSkin() : AuraSkin.byId(_skinId);
+  VlyTheme  get theme  => _theme;
+  VlyLocale get locale => _locale;
+  VlySkinId get skinId => _skinId;
+  VlySkin   get skin   => _skinId == VlySkinId.custom ? _buildCustomSkin() : VlySkin.byId(_skinId);
   
   // Custom theme getters
   Color  get customAccent    => _customAccent;
@@ -31,8 +31,8 @@ class AppProvider extends ChangeNotifier {
   String get customMediaType => _customMediaType;
   bool   get hasCustomMedia  => _customMediaPath.isNotEmpty && File(_customMediaPath).existsSync();
 
-  AuraSkin _buildCustomSkin() => AuraSkin(
-    id: AuraSkinId.custom,
+  VlySkin _buildCustomSkin() => VlySkin(
+    id: VlySkinId.custom,
     name: 'My Theme',
     emoji: '🎨',
     accent: _customAccent,
@@ -43,9 +43,9 @@ class AppProvider extends ChangeNotifier {
 
   ThemeMode get themeMode {
     switch (_theme) {
-      case AuraTheme.dark:   return ThemeMode.dark;
-      case AuraTheme.light:  return ThemeMode.light;
-      case AuraTheme.system: return ThemeMode.system;
+      case VlyTheme.dark:   return ThemeMode.dark;
+      case VlyTheme.light:  return ThemeMode.light;
+      case VlyTheme.system: return ThemeMode.system;
     }
   }
 
@@ -53,10 +53,10 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();
-    final ts  = p.getString('aura_theme') ?? 'system';
-    final sid = p.getString('aura_skin')  ?? 'crimson';
-    _theme  = AuraTheme.values.firstWhere((e) => e.name == ts,  orElse: () => AuraTheme.system);
-    _skinId = AuraSkinId.values.firstWhere((e) => e.name == sid, orElse: () => AuraSkinId.crimson);
+    final ts  = p.getString('vly_theme') ?? 'system';
+    final sid = p.getString('vly_skin')  ?? 'crimson';
+    _theme  = VlyTheme.values.firstWhere((e) => e.name == ts,  orElse: () => VlyTheme.system);
+    _skinId = VlySkinId.values.firstWhere((e) => e.name == sid, orElse: () => VlySkinId.crimson);
     // Загружаем кастомную тему
     _customAccent   = Color(p.getInt('ct_accent')   ?? 0xFF00E5FF);
     _customAccent2  = Color(p.getInt('ct_accent2')  ?? 0xFF4FC3F7);
@@ -71,18 +71,18 @@ class AppProvider extends ChangeNotifier {
     _safeNotify();
   }
 
-  Future<void> setTheme(AuraTheme t) async {
+  Future<void> setTheme(VlyTheme t) async {
     _theme = t;
     final p = await SharedPreferences.getInstance();
-    await p.setString('aura_theme', t.name);
+    await p.setString('vly_theme', t.name);
     _safeNotify();
   }
 
-  Future<void> setSkin(AuraSkinId id) async {
+  Future<void> setSkin(VlySkinId id) async {
     _skinId = id;
     _applySkin(skin); // skin getter уже учитывает custom
     final p = await SharedPreferences.getInstance();
-    await p.setString('aura_skin', id.name);
+    await p.setString('vly_skin', id.name);
     _safeNotify();
   }
 
@@ -98,7 +98,7 @@ class AppProvider extends ChangeNotifier {
     if (blob2     != null) _customBlob2     = blob2;
     if (mediaPath != null) _customMediaPath = mediaPath;
     if (mediaType != null) _customMediaType = mediaType;
-    _skinId = AuraSkinId.custom;
+    _skinId = VlySkinId.custom;
     _applySkin(_buildCustomSkin());
     final p = await SharedPreferences.getInstance();
     await p.setInt('ct_accent',   _customAccent.value);
@@ -108,7 +108,7 @@ class AppProvider extends ChangeNotifier {
     await p.setInt('ct_blob2',    _customBlob2.value);
     await p.setString('ct_media_path', _customMediaPath);
     await p.setString('ct_media_type', _customMediaType);
-    await p.setString('aura_skin', 'custom');
+    await p.setString('vly_skin', 'custom');
     _safeNotify();
   }
 
@@ -121,7 +121,7 @@ class AppProvider extends ChangeNotifier {
     _safeNotify();
   }
 
-  Future<void> setLocale(AuraLocale l) async {
+  Future<void> setLocale(VlyLocale l) async {
     _locale = l;
     await S.setLocale(l);
     _safeNotify();
@@ -171,7 +171,7 @@ const _darkBlobs  = [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF01579B), Co
 //  PROFILE  (v3.0)
 // ═══════════════════════════════════════════════════════════════
 
-class AuraProfile {
+class VlyProfile {
   String id;
   String name;
   List<Map<String, dynamic>> configsJson;
@@ -212,7 +212,7 @@ class AuraProfile {
   String pingType;  // 'tcp' | 'proxy' | 'icmp'
   String pingUrl;   // URL для теста пинга
 
-  AuraProfile({
+  VlyProfile({
     required this.id,
     required this.name,
     this.configsJson      = const [],
@@ -239,7 +239,7 @@ class AuraProfile {
     this.subPingOnOpen    = true,
     this.subConnectOnOpen = false,
     this.subSortMode      = 'none',
-    this.subUserAgent     = 'AuraVPN/$kAppVersion/Android',
+    this.subUserAgent     = 'VlyVPN/$kAppVersion/Android',
     this.subAllowDuplicates = false,
     // Ping
     this.pingType          = 'tcp',
@@ -278,7 +278,7 @@ class AuraProfile {
     'camouflageMode': camouflageMode,
   };
 
-  factory AuraProfile.fromJson(Map<String, dynamic> j) => AuraProfile(
+  factory VlyProfile.fromJson(Map<String, dynamic> j) => VlyProfile(
     id: j['id'] ?? _uid(),
     name: j['name'] ?? 'Profile',
     configsJson: List<Map<String,dynamic>>.from(j['configs'] ?? []),
@@ -305,7 +305,7 @@ class AuraProfile {
     subPingOnOpen: j['subPingOnOpen'] ?? true,
     subConnectOnOpen: j['subConnectOnOpen'] ?? false,
     subSortMode: j['subSortMode'] ?? 'none',
-    subUserAgent: j['subUserAgent'] ?? 'AuraVPN/$kAppVersion/Android',
+    subUserAgent: j['subUserAgent'] ?? 'VlyVPN/$kAppVersion/Android',
     subAllowDuplicates: j['subAllowDuplicates'] ?? false,
     pingType: j['pingType'] ?? 'tcp',
     pingUrl: j['pingUrl'] ?? 'https://www.gstatic.com/generate_204',

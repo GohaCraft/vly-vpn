@@ -10,7 +10,7 @@ class HomeScreen extends StatelessWidget {
     final light    = Theme.of(context).brightness == Brightness.light;
     final isTablet = context.isTablet;
 
-    return AuraBlobBg(connected: vpn.isConnected, isLight: light,
+    return VlyBlobBg(connected: vpn.isConnected, isLight: light,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         extendBodyBehindAppBar: true,
@@ -654,7 +654,7 @@ class _IpCheckScreenState extends State<IpCheckScreen> {
   @override
   Widget build(BuildContext context) {
     final light = Theme.of(context).brightness == Brightness.light;
-    return AuraBlobBg(isLight: light, child: Scaffold(
+    return VlyBlobBg(isLight: light, child: Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
         top: false, // CupertinoSliverNavigationBar сам учитывает статус-бар
@@ -3034,7 +3034,7 @@ class _QrScanScreenState extends State<QrScanScreen> {
     // Нижний отступ: навигационная полоска + 30px зазор
     final bottomPad = mq.padding.bottom + 30.0;
 
-    return AuraBlobBg(isLight: light, child: Scaffold(
+    return VlyBlobBg(isLight: light, child: Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
         title: Text(S.t('qr_scanner'), style: TextStyle(

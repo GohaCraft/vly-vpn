@@ -74,7 +74,7 @@ class VpnProvider extends ChangeNotifier {
   bool   appStoreStealth        = false;
   // Режим обхода — выбирается пользователем в настройках
   BypassMode bypassMode = BypassMode.auto;  // скрыть VPN-ключевые слова из UI
-  String stealthAppName        = 'Aura';  // нейтральное название приложения
+  String stealthAppName        = 'Vly';  // нейтральное название приложения
 
   // ── App Store Obfuscation (05.04.2026) ─────────────────────────────────────
   // Apple удалила 20+ VPN из App Store РФ. Скрываем VPN-название приложения.
@@ -93,11 +93,11 @@ class VpnProvider extends ChangeNotifier {
   List<ConnectionRecord> connectionHistory = [];
 
   // ── Профили (v3.0) ────────────────────────────────────────────────────────
-  List<AuraProfile> profiles      = [];
+  List<VlyProfile> profiles      = [];
   String            activeProfileId = '';
 
   // ── Текущий профиль — удобные геттеры ─────────────────────────────────────
-  AuraProfile get _prof {
+  VlyProfile get _prof {
     if (profiles.isEmpty) { _ensureDefaultProfile(); }
     return profiles.firstWhere((p) => p.id == activeProfileId,
         orElse: () => profiles.first);
@@ -248,7 +248,7 @@ class VpnProvider extends ChangeNotifier {
   String groupDisplayName(String sourceUrl) {
     if (sourceUrl == '__favourites__') return '⭐  ${S.t('favourites')}';
     if (sourceUrl == 'manual')  return 'Manual Keys';
-    if (sourceUrl == 'server')  return 'Aura Servers';
+    if (sourceUrl == 'server')  return 'Vly Servers';
     if (sourceUrl == 'other')   return 'Other';
     if (subNames.containsKey(sourceUrl)) return subNames[sourceUrl]!;
     try { return Uri.parse(sourceUrl).host.replaceAll('www.', ''); }
@@ -543,9 +543,9 @@ class VpnProvider extends ChangeNotifier {
   // ── Notifications (v4.0) ──────────────────────────────────────────────────
   // Нативный Android notification через platform channel (без доп. пакетов)
 
-  static const _notifChannel  = MethodChannel('aura_vpn/notifications');
-  static const _tileChannel   = MethodChannel('aura_vpn/tile');
-  static const _cmdChannel    = MethodChannel('aura_vpn/commands');
+  static const _notifChannel  = MethodChannel('vly_vpn/notifications');
+  static const _tileChannel   = MethodChannel('vly_vpn/tile');
+  static const _cmdChannel    = MethodChannel('vly_vpn/commands');
   // Публичный доступ для _CustomThemeEditorState
   static const cmdChannel = _cmdChannel;
 
@@ -658,7 +658,7 @@ class VpnProvider extends ChangeNotifier {
 
   void _ensureDefaultProfile() {
     if (profiles.isEmpty) {
-      final def = AuraProfile(id: 'default', name: 'Default', splitMode: SplitTunnelMode.bypass);
+      final def = VlyProfile(id: 'default', name: 'Default', splitMode: SplitTunnelMode.bypass);
       profiles = [def];
       activeProfileId = def.id;
     }
@@ -667,7 +667,7 @@ class VpnProvider extends ChangeNotifier {
   Future<void> createProfile(String name) async {
     final trimmed = name.trim().isEmpty ? 'Profile' : name.trim();
     final limited = trimmed.length > 20 ? trimmed.substring(0, 20) : trimmed;
-    final p = AuraProfile(id: AuraProfile._uid(), name: limited);
+    final p = VlyProfile(id: VlyProfile._uid(), name: limited);
     profiles.add(p);
     await saveNow(); _notify();
   }
@@ -736,7 +736,7 @@ class VpnProvider extends ChangeNotifier {
     if (data == null) return false;
     try {
       profiles = (data['profiles'] as List)
-          .map((j) => AuraProfile.fromJson(j as Map<String, dynamic>))
+          .map((j) => VlyProfile.fromJson(j as Map<String, dynamic>))
           .toList();
       if (profiles.isEmpty) { _ensureDefaultProfile(); }
       activeProfileId = data['activeId'] ?? profiles.first.id;
@@ -880,7 +880,7 @@ class VpnProvider extends ChangeNotifier {
         _isRotating   = false;
         aiStatus      = 'FAILED';
         stealthStatus = '';
-        _log('🤖 ${AuraErrorCode.e1030.code}: bypass loop limit');
+        _log('🤖 ${VlyErrorCode.e1030.code}: bypass loop limit');
         _notify(); return;
       }
     }
@@ -1693,12 +1693,12 @@ class VpnProvider extends ChangeNotifier {
       int added = 0;
       for (final l in nodeLinks) {
         if (!l.contains('://') || _configs.any((c) => c.link == l)) continue;
-        String name = 'Aura Node';
+        String name = 'Vly Node';
         if (l.contains('#')) {
           try { name = Uri.decodeFull(l.split('#').last).replaceAll('+', ' ').trim(); } catch (_) {}
         }
         _configs.add(VpnConfig(name: name, link: l,
-            groupName: 'Aura Servers', sourceUrl: 'server'));
+            groupName: 'Vly Servers', sourceUrl: 'server'));
         added++;
       }
       if (added > 0) { _log('✔ +$added server nodes (Self-Healing)'); saveToDisk(); _notify(); }
@@ -1721,12 +1721,12 @@ class VpnProvider extends ChangeNotifier {
         for (final line in raw.split(RegExp(r'[\n\r]+'))) {
           final l = line.trim();
           if (!l.contains('://') || _configs.any((c) => c.link == l)) continue;
-          String name = 'Aura Node';
+          String name = 'Vly Node';
           if (l.contains('#')) {
             try { name = Uri.decodeFull(l.split('#').last).replaceAll('+', ' ').trim(); } catch (_) {}
           }
           _configs.add(VpnConfig(name: name, link: l,
-              groupName: 'Aura Servers', sourceUrl: 'server'));
+              groupName: 'Vly Servers', sourceUrl: 'server'));
           added++;
         }
         if (added > 0) { _log('✔ +$added server nodes'); saveToDisk(); _notify(); }
@@ -1997,7 +1997,7 @@ class VpnProvider extends ChangeNotifier {
 
   // Статичный обфускатор для хранилища — не настоящее шифрование,
   // но защищает от случайного чтения через adb backup / file manager
-  static const _storageKey = 'AuraVPN\$t0r4g3K3y2026';
+  static const _storageKey = 'VlyVPN\$t0r4g3K3y2026';
   static String _obfuscate(String json) {
     final bytes = utf8.encode(json);
     final key   = utf8.encode(_storageKey);
@@ -2045,8 +2045,8 @@ class VpnProvider extends ChangeNotifier {
       _prof.configsJson = _configs.map((c) => c.toMap()).toList();
       final p    = await SharedPreferences.getInstance();
       final json = jsonEncode(profiles.map((x) => x.toJson()).toList());
-      await p.setString('aura_profiles',       _obfuscate(json));
-      await p.setString('aura_active_profile',  activeProfileId);
+      await p.setString('vly_profiles',       _obfuscate(json));
+      await p.setString('vly_active_profile',  activeProfileId);
       await p.setInt('selected_index',          selectedIndex);
       await p.setBool('stealth_mode',           stealthMode);
       await p.setBool('stealth_fragment',       stealthFragment);
@@ -2058,14 +2058,14 @@ class VpnProvider extends ChangeNotifier {
   Future<void> loadFromDisk() async {
     try {
       final p = await SharedPreferences.getInstance();
-      final profilesRaw = _deobfuscate(p.getString('aura_profiles'));
+      final profilesRaw = _deobfuscate(p.getString('vly_profiles'));
       if (profilesRaw != null) {
         profiles = (jsonDecode(profilesRaw) as List)
-            .map((j) => AuraProfile.fromJson(j as Map<String, dynamic>))
+            .map((j) => VlyProfile.fromJson(j as Map<String, dynamic>))
             .toList();
       }
       _ensureDefaultProfile();
-      activeProfileId = p.getString('aura_active_profile') ?? profiles.first.id;
+      activeProfileId = p.getString('vly_active_profile') ?? profiles.first.id;
       if (!profiles.any((x) => x.id == activeProfileId)) {
         activeProfileId = profiles.first.id;
       }

@@ -1,34 +1,34 @@
 // ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last
 part of 'main.dart';
 
-enum AuraLocale { en, ru, zh, de, fr, es, ar, fa, tr, pt, ja, ko, uk, it, kz, be }
+enum VlyLocale { en, ru, zh, de, fr, es, ar, fa, tr, pt, ja, ko, uk, it, kz, be }
 
 class S {
-  static AuraLocale _locale = AuraLocale.en;
-  static AuraLocale get locale => _locale;
+  static VlyLocale _locale = VlyLocale.en;
+  static VlyLocale get locale => _locale;
 
   static Future<void> init() async {
     final p = await SharedPreferences.getInstance();
-    final saved = p.getString('aura_locale');
+    final saved = p.getString('vly_locale');
     if (saved != null) {
-      _locale = AuraLocale.values.firstWhere((e) => e.name == saved, orElse: () => AuraLocale.en);
+      _locale = VlyLocale.values.firstWhere((e) => e.name == saved, orElse: () => VlyLocale.en);
     } else {
       final tag = ui.PlatformDispatcher.instance.locale.languageCode;
-      _locale = AuraLocale.values.firstWhere((e) => e.name == tag, orElse: () => AuraLocale.en);
+      _locale = VlyLocale.values.firstWhere((e) => e.name == tag, orElse: () => VlyLocale.en);
     }
   }
 
-  static Future<void> setLocale(AuraLocale l) async {
+  static Future<void> setLocale(VlyLocale l) async {
     _locale = l;
     final p = await SharedPreferences.getInstance();
-    await p.setString('aura_locale', l.name);
+    await p.setString('vly_locale', l.name);
   }
 
   static String t(String key) =>
-      _strings[_locale]?[key] ?? _strings[AuraLocale.en]![key] ?? key;
+      _strings[_locale]?[key] ?? _strings[VlyLocale.en]![key] ?? key;
 
-  static const Map<AuraLocale, Map<String, String>> _strings = {
-    AuraLocale.en: {
+  static const Map<VlyLocale, Map<String, String>> _strings = {
+    VlyLocale.en: {
       'app_name': 'VLY', 'connected': 'CONNECTED', 'connecting': 'CONNECTING…',
       'disconnected': 'DISCONNECTED', 'error': 'ERROR', 'no_nodes': 'NO NODES',
       'add_via_qr': 'Add via QR, key or subscription', 'scan_qr': 'SCAN QR',
@@ -122,7 +122,7 @@ class S {
       'tun_fakedns': 'FakeDNS', 'tun_fakedns_sub': 'DNS intercept — reduces leaks',
       'dns_address': 'DNS Address',
     },
-    AuraLocale.ru: {
+    VlyLocale.ru: {
       'app_name': 'VLY', 'connected': 'ПОДКЛЮЧЕНО', 'connecting': 'ПОДКЛЮЧЕНИЕ…',
       'disconnected': 'ОТКЛЮЧЕНО', 'error': 'ОШИБКА', 'no_nodes': 'НЕТ УЗЛОВ',
       'add_via_qr': 'Добавьте через QR, ключ или подписку', 'scan_qr': 'СКАНИРОВАТЬ QR',
@@ -218,7 +218,7 @@ class S {
       'dns_address': 'DNS адрес',
     },
     // остальные языки — ключи из en (fallback автоматический)
-    AuraLocale.zh: {
+    VlyLocale.zh: {
       'app_name': 'VLY', 'connected': '已连接', 'connecting': '连接中…',
       'disconnected': '已断开', 'error': '错误', 'no_nodes': '无节点',
       'add_via_qr': '通过二维码、密钥或订阅添加', 'scan_qr': '扫描二维码',
@@ -348,7 +348,7 @@ class S {
         'tun_fakedns_sub': 'DNS 拦截 — 减少泄漏',
         'dns_address': 'DNS 地址',
     },
-    AuraLocale.de: {
+    VlyLocale.de: {
       'app_name': 'VLY', 'connected': 'VERBUNDEN', 'connecting': 'VERBINDE…',
       'disconnected': 'GETRENNT', 'error': 'FEHLER', 'no_nodes': 'KEINE KNOTEN',
       'add_via_qr': 'Über QR-Code, Schlüssel oder Abo hinzufügen', 'scan_qr': 'QR SCANNEN',
@@ -485,7 +485,7 @@ class S {
         'tun_fakedns_sub': 'DNS-Abfang — reduziert Lecks',
         'dns_address': 'DNS-Adresse',
     },
-    AuraLocale.fr: {
+    VlyLocale.fr: {
       'app_name': 'VLY', 'connected': 'CONNECTÉ', 'connecting': 'CONNEXION…',
       'disconnected': 'DÉCONNECTÉ', 'error': 'ERREUR', 'no_nodes': 'AUCUN NŒUD',
       'add_via_qr': 'Ajouter via QR, clé ou abonnement', 'scan_qr': 'SCANNER QR',
@@ -622,7 +622,7 @@ class S {
         'tun_fakedns_sub': 'Interception DNS — réduit les fuites',
         'dns_address': 'Adresse DNS',
     },
-    AuraLocale.es: {
+    VlyLocale.es: {
       'app_name': 'VLY', 'connected': 'CONECTADO', 'connecting': 'CONECTANDO…',
       'disconnected': 'DESCONECTADO', 'error': 'ERROR', 'no_nodes': 'SIN NODOS',
       'add_via_qr': 'Agregar via QR, clave o suscripción', 'scan_qr': 'ESCANEAR QR',
@@ -759,7 +759,7 @@ class S {
         'tun_fakedns_sub': 'Interceptación DNS — reduce fugas',
         'dns_address': 'Dirección DNS',
     },
-    AuraLocale.ar: {
+    VlyLocale.ar: {
       'app_name': 'VLY', 'connected': 'متصل', 'connecting': 'جارٍ الاتصال…',
       'disconnected': 'غير متصل', 'error': 'خطأ', 'no_nodes': 'لا توجد عقد',
       'add_via_qr': 'أضف عبر QR أو مفتاح أو اشتراك', 'scan_qr': 'مسح QR',
@@ -894,7 +894,7 @@ class S {
         'tun_fakedns_sub': 'اعتراض DNS — يقلل التسريبات',
         'dns_address': 'عنوان DNS',
     },
-    AuraLocale.fa: {
+    VlyLocale.fa: {
       'app_name': 'VLY', 'connected': 'متصل', 'connecting': 'در حال اتصال…',
       'disconnected': 'قطع شد', 'error': 'خطا', 'no_nodes': 'هیچ نودی وجود ندارد',
       'add_via_qr': 'از طریق QR، کلید یا اشتراک اضافه کنید', 'scan_qr': 'اسکن QR',
@@ -1029,7 +1029,7 @@ class S {
         'tun_fakedns_sub': 'رهگیری DNS — کاهش نشت',
         'dns_address': 'آدرس DNS',
     },
-    AuraLocale.tr: {
+    VlyLocale.tr: {
       'app_name': 'VLY', 'connected': 'BAĞLANDI', 'connecting': 'BAĞLANIYOR…',
       'disconnected': 'KESİLDİ', 'error': 'HATA', 'no_nodes': 'DÜĞÜM YOK',
       'add_via_qr': 'QR kodu, anahtar veya abonelik ile ekle', 'scan_qr': 'QR TARA',
@@ -1164,7 +1164,7 @@ class S {
         'tun_fakedns_sub': 'DNS durdurma — sızıntıları azaltır',
         'dns_address': 'DNS Adresi',
     },
-    AuraLocale.pt: {
+    VlyLocale.pt: {
       'app_name': 'VLY', 'connected': 'CONECTADO', 'connecting': 'CONECTANDO…',
       'disconnected': 'DESCONECTADO', 'error': 'ERRO', 'no_nodes': 'SEM NÓS',
       'add_via_qr': 'Adicionar via QR, chave ou assinatura', 'scan_qr': 'ESCANEAR QR',
@@ -1300,7 +1300,7 @@ class S {
         'tun_fakedns_sub': 'Interceptação DNS — reduz vazamentos',
         'dns_address': 'Endereço DNS',
     },
-    AuraLocale.ja: {
+    VlyLocale.ja: {
       'app_name': 'VLY', 'connected': '接続済み', 'connecting': '接続中…',
       'disconnected': '切断', 'error': 'エラー', 'no_nodes': 'ノードなし',
       'add_via_qr': 'QR・キー・サブスクで追加', 'scan_qr': 'QRスキャン',
@@ -1437,7 +1437,7 @@ class S {
         'tun_fakedns_sub': 'DNSインターセプト — リーク削減',
         'dns_address': 'DNSアドレス',
     },
-    AuraLocale.ko: {
+    VlyLocale.ko: {
       'app_name': 'VLY', 'connected': '연결됨', 'connecting': '연결 중…',
       'disconnected': '연결 끊김', 'error': '오류', 'no_nodes': '노드 없음',
       'add_via_qr': 'QR코드, 키 또는 구독으로 추가', 'scan_qr': 'QR 스캔',
@@ -1573,7 +1573,7 @@ class S {
         'tun_fakedns_sub': 'DNS 차단 — 누출 감소',
         'dns_address': 'DNS 주소',
     },
-    AuraLocale.uk: {
+    VlyLocale.uk: {
       'app_name': 'VLY', 'connected': 'ПІДКЛЮЧЕНО', 'connecting': 'ПІДКЛЮЧЕННЯ…',
       'disconnected': 'ВІДКЛЮЧЕНО', 'error': 'ПОМИЛКА', 'no_nodes': 'НЕМАЄ ВУЗЛІВ',
       'add_via_qr': 'Додати через QR, ключ або підписку', 'scan_qr': 'СКАНУВАТИ QR',
@@ -1709,7 +1709,7 @@ class S {
         'tun_fakedns_sub': 'Перехоплення DNS — зменшує витоки',
         'dns_address': 'Адреса DNS',
     },
-    AuraLocale.it: {
+    VlyLocale.it: {
       'app_name': 'VLY', 'connected': 'CONNESSO', 'connecting': 'CONNESSIONE…',
       'disconnected': 'DISCONNESSO', 'error': 'ERRORE', 'no_nodes': 'NESSUN NODO',
       'add_via_qr': 'Aggiungi tramite QR, chiave o abbonamento', 'scan_qr': 'SCANSIONA QR',
@@ -1844,7 +1844,7 @@ class S {
         'tun_fakedns_sub': 'Intercettazione DNS — riduce le fughe',
         'dns_address': 'Indirizzo DNS',
     },
-        AuraLocale.kz: {
+        VlyLocale.kz: {
         'app_name': 'VLY',
         'connected': 'ҚОСЫЛДЫ',
         'connecting': 'ҚОСЫЛУДА…',
@@ -2021,7 +2021,7 @@ class S {
         'tun_fakedns_sub': 'DNS ұстап алу — ағып кетуді азайтады',
         'dns_address': 'DNS мекенжайы',
     },
-        AuraLocale.be: {
+        VlyLocale.be: {
         'app_name': 'VLY',
         'connected': 'ПАДКЛЮЧАНА',
         'connecting': 'ПАДКЛЮЧЭННЕ…',
@@ -2200,12 +2200,12 @@ class S {
     },
   };
 
-  static const Map<AuraLocale, String> localeNames = {
-    AuraLocale.en: 'English', AuraLocale.ru: 'Русский', AuraLocale.zh: '中文',
-    AuraLocale.de: 'Deutsch', AuraLocale.fr: 'Français', AuraLocale.es: 'Español',
-    AuraLocale.ar: 'العربية', AuraLocale.fa: 'فارسی', AuraLocale.tr: 'Türkçe',
-    AuraLocale.pt: 'Português', AuraLocale.ja: '日本語', AuraLocale.ko: '한국어',
-    AuraLocale.uk: 'Українська', AuraLocale.it: 'Italiano',
-    AuraLocale.kz: 'Қазақша', AuraLocale.be: 'Беларуская',
+  static const Map<VlyLocale, String> localeNames = {
+    VlyLocale.en: 'English', VlyLocale.ru: 'Русский', VlyLocale.zh: '中文',
+    VlyLocale.de: 'Deutsch', VlyLocale.fr: 'Français', VlyLocale.es: 'Español',
+    VlyLocale.ar: 'العربية', VlyLocale.fa: 'فارسی', VlyLocale.tr: 'Türkçe',
+    VlyLocale.pt: 'Português', VlyLocale.ja: '日本語', VlyLocale.ko: '한국어',
+    VlyLocale.uk: 'Українська', VlyLocale.it: 'Italiano',
+    VlyLocale.kz: 'Қазақша', VlyLocale.be: 'Беларуская',
   };
 }

@@ -7,7 +7,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final light = Theme.of(context).brightness == Brightness.light;
-    return AuraBlobBg(isLight: light, child: Scaffold(
+    return VlyBlobBg(isLight: light, child: Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
         title: Text(S.t('settings'), style: TextStyle(
@@ -210,7 +210,7 @@ class SettingsScreen extends StatelessWidget {
         ),  // ListView
         ),  // ConstrainedBox
       ),    // Align
-    ));     // Scaffold + AuraBlobBg
+    ));     // Scaffold + VlyBlobBg
   }
 
   void _push(BuildContext context, Widget page) {
@@ -1544,10 +1544,10 @@ class _AppearancePage extends StatelessWidget {
           color: light ? Colors.white.withOpacity(0.7) : Colors.white.withOpacity(0.06),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white.withOpacity(0.10))),
-        child: Row(children: AuraTheme.values.map((t) {
+        child: Row(children: VlyTheme.values.map((t) {
           final sel = app.theme == t;
-          final label = t == AuraTheme.dark ? S.t('theme_dark')
-              : t == AuraTheme.light ? S.t('theme_light') : S.t('theme_system');
+          final label = t == VlyTheme.dark ? S.t('theme_dark')
+              : t == VlyTheme.light ? S.t('theme_light') : S.t('theme_system');
           return Expanded(child: GestureDetector(
             onTap: () => app.setTheme(t),
             child: AnimatedContainer(
@@ -1579,7 +1579,7 @@ class _LanguagePage extends StatelessWidget {
     final app = Provider.of<AppProvider>(context);
     return _SubPage(title: S.t('language'), child: Wrap(
       spacing: 8, runSpacing: 8,
-      children: AuraLocale.values.map((loc) {
+      children: VlyLocale.values.map((loc) {
         final sel = app.locale == loc;
         return GestureDetector(
           onTap: () => app.setLocale(loc),
@@ -1902,7 +1902,7 @@ class _DevDashboardState extends State<_DevDashboard> {
   Widget build(BuildContext context) {
     final vpn   = Provider.of<VpnProvider>(context);
     final light = Theme.of(context).brightness == Brightness.light;
-    return AuraBlobBg(isLight: light, child: Scaffold(
+    return VlyBlobBg(isLight: light, child: Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
         title: Text('🛠 Dev Dashboard', style: TextStyle(
@@ -2054,7 +2054,7 @@ class _DevDashboardState extends State<_DevDashboard> {
 
   // ── Errors Tab ────────────────────────────────────────────────────────────
   Widget _buildErrorsTab() {
-    final codes = AuraErrorCode.values;
+    final codes = VlyErrorCode.values;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _DevSection('ERROR CODES (${codes.length})'),
       ...codes.map((e) => Padding(
@@ -2201,7 +2201,7 @@ class _SubPage extends StatelessWidget {
   final String title; final Widget child; final Widget? trailing;
   const _SubPage({required this.title, required this.child, this.trailing});
   @override
-  Widget build(BuildContext context) => AuraScaffold(
+  Widget build(BuildContext context) => VlyScaffold(
     title: title,
     trailing: trailing,
     body: ListView(
@@ -2437,7 +2437,7 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
 
   @override
   Widget build(BuildContext context) {
-    return AuraScaffold(
+    return VlyScaffold(
       title: 'Тест белых списков',
       trailing: GestureDetector(
         onTap: _testing ? null : _runTest,
@@ -2656,11 +2656,11 @@ class _SkinPicker extends StatelessWidget {
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
         ),
-        itemCount: AuraSkin.all.length + 1,
+        itemCount: VlySkin.all.length + 1,
         itemBuilder: (ctx, i) {
-          if (i == AuraSkin.all.length) {
+          if (i == VlySkin.all.length) {
             return _SkinGridTile(
-              selected: app.skinId == AuraSkinId.custom,
+              selected: app.skinId == VlySkinId.custom,
               customAccent: app.skin.accent,
               onTap: () => Navigator.push(context, PageRouteBuilder(
                 pageBuilder: (_, a, __) => const _CustomThemeEditor(),
@@ -2670,7 +2670,7 @@ class _SkinPicker extends StatelessWidget {
                   child: c))),
             );
           }
-          final skin = AuraSkin.all[i];
+          final skin = VlySkin.all[i];
           return _SkinGridTile(
             skin: skin,
             selected: app.skinId == skin.id,
@@ -2685,7 +2685,7 @@ class _SkinPicker extends StatelessWidget {
 // Плитка темы — РЕАЛЬНОЕ мини-превью (градиент + акцентные блобы), без эмодзи.
 // Если skin == null — это плитка «My Theme» (кастомный редактор).
 class _SkinGridTile extends StatelessWidget {
-  final AuraSkin?    skin;          // null = кастомная плитка
+  final VlySkin?    skin;          // null = кастомная плитка
   final bool         selected;
   final VoidCallback onTap;
   final Color?       customAccent;  // акцент для рамки кастомной плитки
@@ -2724,7 +2724,7 @@ class _SkinGridTile extends StatelessWidget {
   }
 
   // Превью реальной темы
-  static Widget _themePreview(AuraSkin s, Color a, bool selected) {
+  static Widget _themePreview(VlySkin s, Color a, bool selected) {
     Color blob(int i) => i < s.blobs.length ? s.blobs[i] : s.accentSecondary;
     return Stack(fit: StackFit.expand, children: [
       DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
@@ -2842,7 +2842,7 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
   @override
   Widget build(BuildContext context) {
     final app = Provider.of<AppProvider>(context);
-    return AuraBlobBg(child: Scaffold(
+    return VlyBlobBg(child: Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
         title: const Text('Моя тема',
@@ -2852,7 +2852,7 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
           // Сохранить
           TextButton(
             onPressed: () {
-              app.setSkin(AuraSkinId.custom);
+              app.setSkin(VlySkinId.custom);
               Navigator.pop(context);
             },
             child: Text('Сохранить',
@@ -2987,7 +2987,7 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
           // ── ПРИМЕНИТЬ ────────────────────────────────────────────────────
           GestureDetector(
             onTap: () {
-              app.setSkin(AuraSkinId.custom);
+              app.setSkin(VlySkinId.custom);
               Navigator.pop(context);
             },
             child: Container(

@@ -6,9 +6,9 @@ part of 'main.dart';
 //  ERROR CODES
 // ═══════════════════════════════════════════════════════════════
 
-enum AuraErrorCode {
+enum VlyErrorCode {
   // ── Подключение ──────────────────────────────────────────────────────────
-  e1001('E-1001', 'Permission denied',        'VPN permission denied. Settings → Apps → Aura VPN → Permissions.'),
+  e1001('E-1001', 'Permission denied',        'VPN permission denied. Settings → Apps → Vly VPN → Permissions.'),
   e1002('E-1002', 'Connection timeout',       'VPN tunnel failed. Server may be down or DPI-blocked.'),
   e1003('E-1003', 'Config empty',             'getFullConfiguration() returned empty. Re-import this node.'),
   e1004('E-1004', 'Config parse error',       'Node config is malformed JSON. Try re-importing.'),
@@ -112,11 +112,11 @@ enum AuraErrorCode {
   e1083('E-1083', 'App Store detection risk', 'VPN-related keywords detected in app. Risk of removal.');
 
   final String code, title, description;
-  const AuraErrorCode(this.code, this.title, this.description);
+  const VlyErrorCode(this.code, this.title, this.description);
 
   /// Lookup по коду — для диагностики в логах
-  static AuraErrorCode? fromCode(String code) {
-    try { return AuraErrorCode.values.firstWhere((e) => e.code == code); }
+  static VlyErrorCode? fromCode(String code) {
+    try { return VlyErrorCode.values.firstWhere((e) => e.code == code); }
     catch (_) { return null; }
   }
 
@@ -139,7 +139,7 @@ enum AuraErrorCode {
   }
 }
 
-Future<void> showAuraError(BuildContext ctx, AuraErrorCode err, List<String> logs) async {
+Future<void> showVlyError(BuildContext ctx, VlyErrorCode err, List<String> logs) async {
   if (!ctx.mounted) return;
   final logText = logs.join('\n');
   await showDialog(
@@ -203,11 +203,11 @@ Future<void> showAuraError(BuildContext ctx, AuraErrorCode err, List<String> log
 // ═══════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  AURA SKIN SYSTEM  v5.3
+//  VLY SKIN SYSTEM  v5.3
 //  Скины меняют акцентный цвет + градиенты блобов + тинт карточек
 // ═══════════════════════════════════════════════════════════════════════════════
 
-enum AuraSkinId {
+enum VlySkinId {
   midnight,  // дефолт — циан
   ocean,     // синий
   forest,    // зелёный

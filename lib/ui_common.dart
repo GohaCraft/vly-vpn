@@ -13,8 +13,8 @@ class _Blob { double x, y, vx, vy, r; Color color; _Blob(this.x,this.y,this.vx,t
 //  Слабые телефоны работают плавно, сильные — красиво
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ── AppProvider singleton ref для AuraBlobBg ─────────────────────────────────
-// AuraBlobBg не имеет доступа к Provider — используем глобальную ссылку
+// ── AppProvider singleton ref для VlyBlobBg ─────────────────────────────────
+// VlyBlobBg не имеет доступа к Provider — используем глобальную ссылку
 class _AppProviderRef {
   static AppProvider? instance;
   static void register(AppProvider app) { instance = app; }
@@ -40,7 +40,7 @@ class _MediaBackgroundState extends State<_MediaBackground> {
   void initState() {
     super.initState();
     if (widget.type == 'gif') _loadGif();
-    // video: rendered natively via TextureView in AuraVpnService
+    // video: rendered natively via TextureView in VlyVpnService
     // We simply show a static poster frame for video type
   }
 
@@ -393,15 +393,15 @@ void startFpsMonitor() {
   SchedulerBinding.instance.addPersistentFrameCallback(FpsMonitor.onFrame);
 }
 
-class AuraBlobBg extends StatefulWidget {
+class VlyBlobBg extends StatefulWidget {
   final Widget child;
   final bool connected;
   final bool isLight;
-  const AuraBlobBg({super.key, required this.child, this.connected = false, this.isLight = false});
-  @override State<AuraBlobBg> createState() => _AuraBlobBgState();
+  const VlyBlobBg({super.key, required this.child, this.connected = false, this.isLight = false});
+  @override State<VlyBlobBg> createState() => _VlyBlobBgState();
 }
 
-class _AuraBlobBgState extends State<AuraBlobBg> with SingleTickerProviderStateMixin {
+class _VlyBlobBgState extends State<VlyBlobBg> with SingleTickerProviderStateMixin {
   late Ticker _ticker;
   late final List<_Blob> _blobs;
   bool _lowPerf = false;
@@ -460,7 +460,7 @@ class _AuraBlobBgState extends State<AuraBlobBg> with SingleTickerProviderStateM
     // FIX тем: слушаем AppProvider (listen:true) — иначе при смене темы фон не
     // пересобирался (HomeScreen в IndexedStack — const, не ребилдился на AppProvider).
     final app     = Provider.of<AppProvider>(context);
-    // app.skin корректно отдаёт кастомную тему (раньше AuraSkin.byId(custom)
+    // app.skin корректно отдаёт кастомную тему (раньше VlySkin.byId(custom)
     // возвращал Midnight — фон не соответствовал выбранной теме).
     final activeSkin = app.skin;
     final skinBg  = activeSkin.bgDark;
@@ -658,7 +658,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  AURA SCAFFOLD  —  Универсальная обёртка для ВСЕХ экранов
+//  VLY SCAFFOLD  —  Универсальная обёртка для ВСЕХ экранов
 //
 //  Решает сразу все проблемы с insets на любом устройстве:
 //  - Челки (Dynamic Island, punch-hole)
@@ -671,13 +671,13 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
 //  MainShell имеет свой SafeArea(bottom: false) + BottomNav со своим padding.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class AuraScaffold extends StatelessWidget {
+class VlyScaffold extends StatelessWidget {
   final String title;
   final Widget body;
   final Widget? trailing;
   final bool extendBehindAppBar;
 
-  const AuraScaffold({
+  const VlyScaffold({
     super.key,
     required this.title,
     required this.body,
@@ -690,7 +690,7 @@ class AuraScaffold extends StatelessWidget {
     final light = Theme.of(context).brightness == Brightness.light;
     final mq    = MediaQuery.of(context);
 
-    return AuraBlobBg(isLight: light, child: Scaffold(
+    return VlyBlobBg(isLight: light, child: Scaffold(
       backgroundColor: Colors.transparent,
       // Scaffold сам применяет padding.top к AppBar — не дублируем
       extendBodyBehindAppBar: extendBehindAppBar,
@@ -734,15 +734,15 @@ void main() async {
     ChangeNotifierProvider(create: (_) => AppProvider()),
     ChangeNotifierProvider(create: (_) => VpnProvider()),
     ChangeNotifierProvider.value(value: _autoConnect),
-  ], child: const AuraApp()));
+  ], child: const VlyApp()));
 }
 
-class AuraApp extends StatelessWidget {
-  const AuraApp({super.key});
+class VlyApp extends StatelessWidget {
+  const VlyApp({super.key});
   @override
   Widget build(BuildContext context) {
     final app = Provider.of<AppProvider>(context);
-    // Регистрируем singleton для AuraBlobBg (не имеет доступа к Provider)
+    // Регистрируем singleton для VlyBlobBg (не имеет доступа к Provider)
     _AppProviderRef.register(app);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -777,14 +777,14 @@ class _MainShellState extends State<MainShell> {
       backgroundColor: Colors.transparent,
       // SafeArea НЕ нужен здесь — каждый дочерний Scaffold сам управляет insets:
       // - GlassAppBar добавляет padding.top вручную (учитывает челку/Dynamic Island)
-      // - _AuraBottomNav добавляет padding.bottom (навигационная полоска)
+      // - _VlyBottomNav добавляет padding.bottom (навигационная полоска)
       // - Добавление SafeArea сюда вызовет двойной отступ сверху
       body: IndexedStack(index: _tab, children: const [
         HomeScreen(),
         ServersScreen(),
         SettingsScreen(),
       ]),
-      bottomNavigationBar: _AuraBottomNav(
+      bottomNavigationBar: _VlyBottomNav(
         current: _tab,
         onTap: (i) => setState(() => _tab = i),
         light: light,
@@ -795,9 +795,9 @@ class _MainShellState extends State<MainShell> {
 
 // ── Bottom Navigation ─────────────────────────────────────────────────────────
 
-class _AuraBottomNav extends StatelessWidget {
+class _VlyBottomNav extends StatelessWidget {
   final int current; final ValueChanged<int> onTap; final bool light;
-  const _AuraBottomNav({required this.current, required this.onTap, required this.light});
+  const _VlyBottomNav({required this.current, required this.onTap, required this.light});
 
   static const _items = [
     (Icons.vpn_key_rounded,       Icons.vpn_key_outlined,       'VPN'),
