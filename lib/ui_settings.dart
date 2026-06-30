@@ -1249,6 +1249,15 @@ class _AiBypassPage extends StatelessWidget {
         onChanged: vpn.stealthMode
             ? (v) { vpn.stealthWarmup = v; vpn.saveToDisk(); vpn.refresh(); }
             : null),
+      const SizedBox(height: 4),
+
+      _SwitchRow(
+        icon: Icons.apps_rounded,
+        iconColor: const Color(0xFF42A5F5),
+        title: 'Пер-сервисный обход',
+        subtitle: 'Свой обход для Telegram (+форки), YouTube, TikTok и др. по доменам/IP',
+        value: vpn.perAppBypass,
+        onChanged: (v) => vpn.setPerAppBypass(v)),
 
       const SizedBox(height: 16),
       _SubSection('ТЕКУЩИЙ SNI ПУЛ'),
