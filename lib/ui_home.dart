@@ -46,6 +46,8 @@ class HomeScreen extends StatelessWidget {
       if (vpn.isAutoMode)         SliverToBoxAdapter(child: _AutoModeBar(vpn: vpn)),
       if (!vpn.isConnected || vpn.whitelistBypassActive)
                                   SliverToBoxAdapter(child: _WhitelistBypassButton(vpn: vpn)),
+      if (vpn.isConnected && vpn.perAppBypass)
+                                  SliverToBoxAdapter(child: const _BypassHealthPanel()),
       if (vpn.configs.isNotEmpty) SliverToBoxAdapter(child: _HomeNodePreview(vpn: vpn)),
       // bottom: nav bar + safe area
       SliverToBoxAdapter(child: SizedBox(
@@ -3201,5 +3203,85 @@ class _LiquidGlassButtonState extends State<_LiquidGlassButton>
                 ))),
 
             ])))));
+  }
+}
+
+// ── Панель «Состояние обходов» — real-time здоровье сервисов ─────────────────
+// Читает BypassHealthMonitor (обновляется пока VPN подключён). Перерисовывается
+// с обычным notify провайдера (~1с), показывая мгновенно живой/тормозит/отключён.
+class _BypassHealthPanel extends StatelessWidget {
+  const _BypassHealthPanel();
+
+  Color _c(BypassHealth h) => switch (h) {
+        BypassHealth.healthy  => const Color(0xFF22D3A5),
+        BypassHealth.degraded => const Color(0xFFF59E0B),
+        BypassHealth.down     => const Color(0xFFFF5252),
+      };
+  String _label(ServiceBypassProfile p) {
+    switch (BypassHealthMonitor.stateOf(p.id)) {
+      case BypassHealth.healthy:
+        final ms = BypassHealthMonitor.latencyOf(p.id);
+        return ms > 0 ? '$ms мс' : 'OK';
+      case BypassHealth.degraded: return 'тормозит';
+      case BypassHealth.down:     return 'отключён';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final services = ServiceBypassProfiles.all;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          color: Colors.white.withOpacity(0.04),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(width: 8, height: 8, decoration: const BoxDecoration(
+              shape: BoxShape.circle, color: Color(0xFF22D3A5),
+              boxShadow: [BoxShadow(color: Color(0x6622D3A5), blurRadius: 8)])),
+            const SizedBox(width: 9),
+            Text('Состояние обходов', style: const TextStyle(color: Colors.white,
+              fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
+            const Spacer(),
+            Text('обновляется', style: TextStyle(
+              color: Colors.white.withOpacity(0.35), fontSize: 10.5)),
+          ]),
+          const SizedBox(height: 4),
+          for (final p in services) Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6.5),
+            child: Row(children: [
+              Container(width: 34, height: 34, decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _c(BypassHealthMonitor.stateOf(p.id)).withOpacity(0.14)),
+                child: Icon(p.icon, size: 18,
+                  color: _c(BypassHealthMonitor.stateOf(p.id)))),
+              const SizedBox(width: 12),
+              Text(p.name, style: const TextStyle(color: Colors.white,
+                fontSize: 13.5, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _c(BypassHealthMonitor.stateOf(p.id)).withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(20)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(width: 7, height: 7, decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _c(BypassHealthMonitor.stateOf(p.id)))),
+                  const SizedBox(width: 6),
+                  Text(_label(p), style: TextStyle(
+                    color: _c(BypassHealthMonitor.stateOf(p.id)),
+                    fontSize: 11.5, fontWeight: FontWeight.w700)),
+                ])),
+            ]),
+          ),
+        ]),
+      ),
+    );
   }
 }
