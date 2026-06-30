@@ -284,6 +284,11 @@ class VpnProvider extends ChangeNotifier {
         _cancelWd();
         _connectedAt = DateTime.now();
         _startTrafficTimer();
+        // Real-time мониторинг здоровья обходов — мгновенный детект отключения.
+        if (perAppBypass) {
+          BypassHealthMonitor.reset();
+          BypassHealthMonitor.start(log: _log, onServicesDown: _onBypassDown);
+        }
         final nodeName = (_configs.isNotEmpty && selectedIndex < _configs.length)
             ? _configs[selectedIndex].displayName : 'Vly';
         _sendNotification('🔒 VPN подключён', nodeName);
@@ -296,6 +301,7 @@ class VpnProvider extends ChangeNotifier {
         _cancelWd();
         _saveHistoryRecord();
         _stopTrafficTimer();
+        BypassHealthMonitor.stop();
         _dismissPersistentNotif();                       // убрать постоянное уведомление
         Future.delayed(const Duration(seconds: 2), () => _ipCheck.fetchCurrent(force: true)); // обновить IP
         _updateTile(active: false);                      // обновить тайл
@@ -777,6 +783,23 @@ class VpnProvider extends ChangeNotifier {
   }
 
   void _cancelWd() { _watchdog?.cancel(); _watchdog = null; }
+
+  // Реакция на МГНОВЕННЫЙ детект отключения обхода(ов) от HealthMonitor.
+  void _onBypassDown(List<String> downIds) {
+    if (_disposed) return;
+    final total   = ServiceBypassProfiles.all.length;
+    final downAll = BypassHealthMonitor.downServices.length;
+    stealthStatus = '🔴 Обход недоступен: ${downIds.join(", ")}';
+    _notify();
+    // Один сервис мёртв — мог быть точечно прикрыт его профиль. Но если упало
+    // >= половины сервисов — деградировал сам туннель/обход → мгновенный failover,
+    // не дожидаясь полного обрыва соединения.
+    if (downAll >= (total / 2).ceil() && !_isRotating) {
+      _log('🔴 Массовое падение обходов ($downAll/$total) → немедленный failover');
+      stealthHandshakeFails = 3; // форсируем путь обхода
+      _scheduleBypass();
+    }
+  }
 
   void _scheduleBypass() {
     if (_isRotating) return;

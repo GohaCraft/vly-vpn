@@ -32,6 +32,7 @@ part 'tspu_2026.dart';
 part 'camouflage.dart';
 part 'bypass_arsenal.dart';
 part 'service_bypass.dart';
+part 'health_monitor.dart';
 part 'stealth.dart';
 part 'networking.dart';
 part 'ai_bypass.dart';

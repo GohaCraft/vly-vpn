@@ -144,4 +144,39 @@ void main() {
       expect(rules.any((r) => r.containsKey('ip')), isTrue);
     });
   });
+
+  group('Health monitor — мгновенный детект отключения', () {
+    setUp(() => BypassHealthMonitor.reset());
+
+    test('2 провала подряд → сервис down (мгновенный детект)', () {
+      expect(BypassHealthMonitor.report('youtube', ok: false), isTrue); // healthy→degraded
+      expect(BypassHealthMonitor.stateOf('youtube'), BypassHealth.degraded);
+      final worsened = BypassHealthMonitor.report('youtube', ok: false); // degraded→down
+      expect(worsened, isTrue);
+      expect(BypassHealthMonitor.stateOf('youtube'), BypassHealth.down);
+      expect(BypassHealthMonitor.downServices, contains('youtube'));
+    });
+
+    test('успешная проба восстанавливает (само-восстановление)', () {
+      BypassHealthMonitor.report('telegram', ok: false);
+      BypassHealthMonitor.report('telegram', ok: false);
+      expect(BypassHealthMonitor.stateOf('telegram'), BypassHealth.down);
+      BypassHealthMonitor.report('telegram', ok: true, latencyMs: 120);
+      expect(BypassHealthMonitor.stateOf('telegram'), BypassHealth.healthy);
+      expect(BypassHealthMonitor.downServices, isNot(contains('telegram')));
+    });
+
+    test('высокая латентность = деградация (throttle)', () {
+      expect(BypassHealthMonitor.report('youtube', ok: true, latencyMs: 4000), isTrue);
+      expect(BypassHealthMonitor.stateOf('youtube'), BypassHealth.degraded);
+    });
+
+    test('видит, что НЕСКОЛЬКО обходов отключились', () {
+      for (final id in ['youtube', 'tiktok', 'x']) {
+        BypassHealthMonitor.report(id, ok: false);
+        BypassHealthMonitor.report(id, ok: false);
+      }
+      expect(BypassHealthMonitor.downServices.length, 3);
+    });
+  });
 }
