@@ -24,6 +24,11 @@ const kPinnedDomains = ['api.vlyvpn.app', 'vlyvpn.app'];
 const String kBypassRulesUrl    = '$kControlPlaneUrl/bypass_rules.json';
 const String kTelemetryUrl      = '$kControlPlaneUrl/telemetry';
 const String kNodesUrl          = '$kControlPlaneUrl/nodes.json';
+// Серверные mutation-программы для AI-каскада (обновляются без пересборки app).
+const String kAiMutationsUrl    = '$kControlPlaneUrl/ai_mutations.json';
+// Версия схемы mutation-программы, которую УМЕЕТ интерпретировать этот клиент.
+// Программа с min_client > этого значения отвергается (клиент слишком старый).
+const int    kAiCascadeSchema   = 1;
 
 // ── Stealth Engine 2.0 — Dead Drop зеркала ──────────────────────────────────
 // Если основной API недоступен — берём ноды из этих источников

@@ -657,13 +657,17 @@ class VpnProvider extends ChangeNotifier {
     // _autoConnect.load() - disabled
     // Долговременная память ИИ: победители по классам сетей + блеклист.
     AiMemory.load();
+    // Серверно-обновляемый AI-каскад (blueprint §4b): грузим кэш, тянем свежую.
+    MutationRegistry.load().then((_) => MutationRegistry.syncFromServer(_log));
     _bypassRules.syncFromServer(_log).then((_) => _notify());
     // Периодическое обновление стратегий обхода с сервера (без апдейта app).
     // Раньше правила тянулись только один раз при старте. Теперь — раз в час,
     // чтобы серверный «мозг» мог подкидывать свежие методы на лету.
     _rulesSyncTimer?.cancel();
     _rulesSyncTimer = Timer.periodic(const Duration(hours: 1), (_) {
-      if (!_disposed) _bypassRules.syncFromServer(_log).then((_) { if (!_disposed) _notify(); });
+      if (_disposed) return;
+      _bypassRules.syncFromServer(_log).then((_) { if (!_disposed) _notify(); });
+      MutationRegistry.syncFromServer(_log); // + свежие mutation-программы
     });
     // Синхронизируем статистику стратегий с сервером (фоново)
     // NewsAwareness.syncFromServer disabled (no server configured)

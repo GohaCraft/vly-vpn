@@ -276,4 +276,87 @@ void main() {
       expect(ms, lessThan(320));
     });
   });
+
+  group('Серверный AI-каскад (mutation-программы, blueprint §4b)', () {
+    setUp(() => MutationRegistry.reset());
+
+    Map<String, dynamic> validProgram({int version = 1, int? ttl, int? expiresAt,
+        int minClient = 1}) => {
+      'schema': 1, 'min_client': minClient, 'version': version,
+      if (ttl != null) 'ttl_seconds': ttl,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      'by_net': {
+        'wifi': [
+          {'priority': 1, 'type': 'vless_xhttp', 'params': {'sni': 'vk.com'}},
+          {'priority': 2, 'type': 'vless_reality_vk', 'params': {}},
+        ],
+      },
+      'generic': [
+        {'priority': 1, 'type': 'vless_grpc_reality', 'params': {}},
+      ],
+    };
+
+    test('валидная программа парсится и отдаёт стратегии по классу сети', () {
+      final p = MutationProgram.decode(validProgram(ttl: 3600))!;
+      expect(p.isUsable, isTrue);
+      final wifi = p.strategiesFor('wifi')!;
+      expect(wifi.length, 2);
+      expect(wifi.first.type, 'vless_xhttp');
+      expect(wifi.first.params['sni'], 'vk.com');
+    });
+
+    test('нет класса сети → отдаётся generic', () {
+      final p = MutationProgram.decode(validProgram(ttl: 3600))!;
+      expect(p.strategiesFor('mobile')!.single.type, 'vless_grpc_reality');
+    });
+
+    test('истёкшая по TTL программа не используется (auto-expire)', () {
+      final past = DateTime.now()
+          .subtract(const Duration(hours: 1)).millisecondsSinceEpoch;
+      final p = MutationProgram.decode(validProgram(expiresAt: past))!;
+      expect(p.isExpired, isTrue);
+      expect(p.isUsable, isFalse);
+      expect(p.strategiesFor('wifi'), isNull);
+    });
+
+    test('программа новее клиента (min_client) отвергается', () {
+      expect(MutationProgram.decode(
+          validProgram(minClient: kAiCascadeSchema + 1)), isNull);
+    });
+
+    test('битый/пустой payload → null (клиент откатится на вшитый каскад)', () {
+      expect(MutationProgram.decode('не map'), isNull);
+      expect(MutationProgram.decode({'schema': 0}), isNull);            // нет схемы
+      expect(MutationProgram.decode({'schema': 1, 'version': 1}), isNull); // пусто
+      // стратегии без type отбраковываются → программа пустая → null
+      expect(MutationProgram.decode({
+        'schema': 1, 'version': 1,
+        'generic': [{'priority': 1, 'params': {}}],
+      }), isNull);
+    });
+
+    test('registry.apply: новее — заменяет, равное/старее — отклоняется', () {
+      expect(MutationRegistry.apply(
+          MutationProgram.decode(validProgram(version: 5, ttl: 3600))!), isTrue);
+      expect(MutationRegistry.version, 5);
+      // Старее — не применяется.
+      expect(MutationRegistry.apply(
+          MutationProgram.decode(validProgram(version: 3, ttl: 3600))!), isFalse);
+      expect(MutationRegistry.version, 5);
+      // Новее — применяется.
+      expect(MutationRegistry.apply(
+          MutationProgram.decode(validProgram(version: 9, ttl: 3600))!), isTrue);
+      expect(MutationRegistry.version, 9);
+      expect(MutationRegistry.active, isNotNull);
+    });
+
+    test('registry.active скрывает истёкшую программу', () {
+      final past = DateTime.now()
+          .subtract(const Duration(minutes: 1)).millisecondsSinceEpoch;
+      // apply отклонит непригодную (истёкшую) программу.
+      expect(MutationRegistry.apply(
+          MutationProgram.decode(validProgram(expiresAt: past))!), isFalse);
+      expect(MutationRegistry.active, isNull);
+    });
+  });
 }

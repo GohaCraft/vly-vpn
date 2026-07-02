@@ -391,6 +391,174 @@ class AiMemory {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  MUTATION PROGRAM — серверно-обновляемый AI-каскад (без пересборки app)
+//
+//  Реализует «client integration» из blueprint §4b в форме, которая реально
+//  работает с xray-core: сервер (движок открытия стратегий) публикует
+//  mutation-программу — упорядоченный набор стратегий обхода по классу сети —
+//  а клиент подхватывает её на лету через тот же безопасный паттерн, что уже
+//  используется для bypass_rules (валидация + версионный гейт + кэш), ПЛЮС две
+//  вещи, которых там не было: TTL (протухшие программы авто-истекают) и
+//  schema/min_client-гейт (программа новее клиента отвергается).
+//
+//  🔒 ИНВАРИАНТ БЕЗОПАСНОСТИ: программа НЕ заменяет вшитый каскад целиком —
+//     серверные стратегии идут ПЕРВЫМИ, а статический каскад остаётся «полом»
+//     под ними (см. _buildCascade). Любая проблема (нет программы / истекла /
+//     несовместима / битый JSON) → decode вернёт null → работает вшитый каскад.
+//     Сервер физически не может оставить клиент без обхода.
+// ═══════════════════════════════════════════════════════════════════════════
+class MutationProgram {
+  final int schemaVersion;      // версия схемы программы
+  final int minClientSchema;    // требуемая версия интерпретатора клиента
+  final int programVersion;     // монотонная — заменяем только на более новую
+  final DateTime? expiresAt;    // TTL: после — программа не используется
+  final Map<String, List<BypassStrategy>> byNet; // net_class -> стратегии
+  final List<BypassStrategy> generic;            // если нет совпадения по сети
+
+  const MutationProgram({
+    required this.schemaVersion,
+    required this.minClientSchema,
+    required this.programVersion,
+    required this.expiresAt,
+    required this.byNet,
+    required this.generic,
+  });
+
+  bool get isExpired    => expiresAt != null && DateTime.now().isAfter(expiresAt!);
+  bool get isCompatible => minClientSchema <= kAiCascadeSchema;
+  bool get isUsable     => isCompatible && !isExpired &&
+      (generic.isNotEmpty || byNet.isNotEmpty);
+
+  // Стратегии для класса сети (или generic). null — программа непригодна.
+  List<BypassStrategy>? strategiesFor(String net) {
+    if (!isUsable) return null;
+    final s = byNet[net];
+    if (s != null && s.isNotEmpty) return s;
+    return generic.isNotEmpty ? generic : null;
+  }
+
+  // Строгий парсер: ЛЮБОЕ несоответствие → null (клиент откатится на вшитый
+  // каскад — инвариант безопасности сохранён). Никогда не бросает.
+  static MutationProgram? decode(dynamic raw) {
+    try {
+      if (raw is! Map) return null;
+      final schema = (raw['schema'] as num?)?.toInt() ?? 0;
+      if (schema <= 0) return null;
+      final minClient = (raw['min_client'] as num?)?.toInt() ?? schema;
+      if (minClient > kAiCascadeSchema) return null; // клиент слишком старый
+      final ver = (raw['version'] as num?)?.toInt() ?? 0;
+
+      DateTime? exp;
+      final expMs = (raw['expires_at'] as num?)?.toInt();
+      final ttl   = (raw['ttl_seconds'] as num?)?.toInt();
+      if (expMs != null) {
+        exp = DateTime.fromMillisecondsSinceEpoch(expMs);
+      } else if (ttl != null && ttl > 0) {
+        exp = DateTime.now().add(Duration(seconds: ttl));
+      }
+
+      List<BypassStrategy> parseList(dynamic l) {
+        if (l is! List) return const [];
+        final out = <BypassStrategy>[];
+        for (final e in l) {
+          if (e is! Map) continue;
+          final type = e['type'];
+          if (type is! String || type.isEmpty) continue;
+          out.add(BypassStrategy.fromJson(Map<String, dynamic>.from(e)));
+        }
+        return out;
+      }
+
+      final byNet = <String, List<BypassStrategy>>{};
+      final nets = raw['by_net'];
+      if (nets is Map) {
+        nets.forEach((k, v) {
+          final list = parseList(v);
+          if (list.isNotEmpty) byNet[k.toString()] = list;
+        });
+      }
+      final generic = parseList(raw['generic']);
+      if (byNet.isEmpty && generic.isEmpty) return null; // пустая = бесполезна
+
+      return MutationProgram(
+        schemaVersion: schema, minClientSchema: minClient,
+        programVersion: ver, expiresAt: exp, byNet: byNet, generic: generic);
+    } catch (_) { return null; }
+  }
+
+  Map<String, dynamic> _stratJson(BypassStrategy s) =>
+      {'priority': s.priority, 'type': s.type, 'params': s.params};
+
+  Map<String, dynamic> toCache() => {
+    'schema': schemaVersion, 'min_client': minClientSchema, 'version': programVersion,
+    if (expiresAt != null) 'expires_at': expiresAt!.millisecondsSinceEpoch,
+    'by_net': byNet.map((k, v) => MapEntry(k, v.map(_stratJson).toList())),
+    'generic': generic.map(_stratJson).toList(),
+  };
+}
+
+// Реестр активной mutation-программы: загрузка/кэш/синк + версионный гейт.
+class MutationRegistry {
+  static const _key = 'ai_mutations_v1';
+  static MutationProgram? _active;
+  static int _version = 0;
+
+  static int get version => _version;
+
+  // Активная программа — только если пригодна (совместима и не истекла).
+  static MutationProgram? get active =>
+      (_active != null && _active!.isUsable) ? _active : null;
+
+  // Применяем свежую программу только если она новее текущей и пригодна.
+  static bool apply(MutationProgram p) {
+    if (!p.isUsable) return false;
+    if (p.programVersion <= _version) return false;
+    _active = p;
+    _version = p.programVersion;
+    return true;
+  }
+
+  static void reset() { _active = null; _version = 0; }
+
+  static Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_key);
+      if (raw == null) return;
+      final p = MutationProgram.decode(jsonDecode(raw));
+      if (p != null && p.isUsable) { _active = p; _version = p.programVersion; }
+    } catch (_) {}
+  }
+
+  static Future<void> _save() async {
+    try {
+      final p = _active;
+      if (p == null) return;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_key, jsonEncode(p.toCache()));
+    } catch (_) {}
+  }
+
+  // Тянем свежую программу с control-plane. Канал аутентифицирован TLS-pinning
+  // (PinnedHttpClient); при любой ошибке молча остаёмся на текущей/вшитой.
+  static Future<bool> syncFromServer(void Function(String) log) async {
+    try {
+      final res = await PinnedHttpClient.get(kAiMutationsUrl,
+          timeout: const Duration(seconds: 8));
+      if (res.statusCode != 200) return false;
+      final p = MutationProgram.decode(jsonDecode(res.body));
+      if (p == null) { log('⚠ AI-mutations: payload отклонён валидацией'); return false; }
+      if (apply(p)) {
+        await _save();
+        log('🧬 AI-mutations v$_version применены (schema ${p.schemaVersion})');
+        return true;
+      }
+      return false;
+    } catch (e) { log('⚠ AI-mutations sync: $e'); return false; }
+  }
+}
+
 // ── Детектор белых списков ──────────────────────────────────────────────────
 class WhitelistBypassEngine {
   // Детект режима белого списка. Усилено 28.06.2026: вместо одиночной пробы
@@ -803,7 +971,7 @@ class AiBypassAgent {
 
     // Порядок актуализирован 28.06.2026: ведём Reality/xHTTP (detection
     // stable-low), Hysteria2 понижен — его QUIC-fingerprint деградирует (~40%).
-    return [
+    final staticCascade = [
       // ═══ 1: VLESS + Reality + xHTTP — ЛУЧШИЙ метод июня 2026 ═══
       BypassStrategy(priority: 1, type: 'vless_xhttp',
           params: {'path': '/api/v${DateTime.now().minute % 9 + 1}/stream', 'mode': 'packet-up',
@@ -858,6 +1026,21 @@ class AiBypassAgent {
       // (убраны как нереализуемые на xray-core: vless_reality_ipv6 — нет
       //  обработчика/нельзя форсировать IPv6; ShadowTLS — не поддерживается.)
     ];
+
+    // Серверная mutation-программа (blueprint §4b): её стратегии идут ПЕРВЫМИ,
+    // а вшитый каскад остаётся «полом» под ними (дедуп по type). Так сервер
+    // может пушить новые стратегии обхода без пересборки app, но НЕ способен
+    // оставить клиент без обхода — при любой проблеме active == null и работает
+    // только вшитый каскад. Неизвестные _applyStrategy типы просто пропускаются.
+    final net = AiMemory.netClass(isMobile, whitelistActive);
+    final remote = MutationRegistry.active?.strategiesFor(net);
+    if (remote != null && remote.isNotEmpty) {
+      final seen = remote.map((s) => s.type).toSet();
+      _log('🧬 Каскад: серверная mutation-программа v${MutationRegistry.version} '
+          '(${remote.length}) + вшитый пол');
+      return [...remote, ...staticCascade.where((s) => !seen.contains(s.type))];
+    }
+    return staticCascade;
   }
 
   // ── Применение стратегии ──────────────────────────────────────────────────
