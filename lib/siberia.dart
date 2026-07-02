@@ -10,11 +10,11 @@ class SiberiaShield {
   // Заблокированные IP: IP → время когда разблокируется
   static final Map<String, DateTime> _blockedUntil = {};
 
-  // Пороги детектора обновлены март 2026 (ntc.party анализ ТСПУ)
-  // ТСПУ усилил ML-детектор: теперь режет на 2-х SYN за 8 сек к одному IP
-  static const _maxConnsPerWindow = 1;    // 1 за окно (ТСПУ 2026: 2 → блок)
+  // Пороги детектора обновлены март 2026 (ntc.party анализ DPI)
+  // DPI усилил ML-детектор: теперь режет на 2-х SYN за 8 сек к одному IP
+  static const _maxConnsPerWindow = 1;    // 1 за окно (DPI 2026: 2 → блок)
   static const _windowSeconds     = 8;   // окно 8 сек (расширено с 5 до 8)
-  static const _cooldownMinutes   = 4;   // 4 мин cooldown (ТСПУ блокирует на 3)
+  static const _cooldownMinutes   = 4;   // 4 мин cooldown (DPI блокирует на 3)
   static const _pacingMs          = 3500; // 3.5 сек минимум между коннектами
 
   // ── 1. Connection Pacing — умный паузер ────────────────────────────────────
@@ -114,7 +114,7 @@ class SiberiaShield {
   }
 
   // ── 4. Decoy request — фоновый "обычный" трафик между VPN handshake ────────
-  // РКН видит: HTTP → пауза → HTTP → пауза → TLS (выглядит как браузер)
+  // провайдер видит: HTTP → пауза → HTTP → пауза → TLS (выглядит как браузер)
   // Без этого: тишина → TLS (явная сигнатура VPN)
   static Future<void> sendDecoy(void Function(String) log) async {
     final decoyUrls = [
@@ -170,7 +170,7 @@ class SiberiaShield {
 class TelegramProtocol {
   static final _rng = Random();
 
-  // Telegram DC IP диапазоны — трафик к ним детектируется РКН
+  // Telegram DC IP диапазоны — трафик к ним детектируется провайдер
   static const _tgCidrs = [
     '149.154.160.', '149.154.164.', '149.154.167.',
     '91.108.4.', '91.108.56.', '91.108.8.',
@@ -268,16 +268,16 @@ class TelegramProtocol {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  TSPU COUNTERMEASURES 2026
-//  Активные контрмеры против новых методов блокировок ТСПУ (март 2026)
+//  DPI COUNTERMEASURES 2026
+//  Активные контрмеры против новых методов блокировок DPI (март 2026)
 //
 //  Основано на:
-//  - ntc.party анализ поведения ТСПУ Q1 2026
+//  - ntc.party анализ поведения DPI Q1 2026
 //  - Xray-core v26.x Vision framework changelog
-//  - net4people/bbs #490: новые признаки ML-классификатора ТСПУ
+//  - net4people/bbs #490: новые признаки ML-классификатора DPI
 //  - boringssl fingerprint research (tlsfingerprint.io)
 //
-//  ML-DPI ТСПУ 2026 анализирует:
+//  ML-DPI DPI 2026 анализирует:
 //  1. Packet length distribution (типичный VPN имеет равномерное распределение)
 //  2. Inter-arrival time patterns (регулярные интервалы = машина, не браузер)
 //  3. TLS ClientHello entropy (VLESS без padding имеет низкую энтропию)

@@ -32,9 +32,9 @@ const int    kAiCascadeSchema   = 1;
 
 // ── Stealth Engine 2.0 — Dead Drop зеркала ──────────────────────────────────
 // Если основной API недоступен — берём ноды из этих источников
-// Порядок: сначала Яндекс/VK (белый список РКН) → потом GitHub → DNS TXT
+// Порядок: сначала Яндекс/VK (белый список провайдер) → потом GitHub → DNS TXT
 const List<String> kDeadDropMirrors = [
-  // ── Tier 0: Яндекс — всегда белый список РКН (AS13238) ───────────────────
+  // ── Tier 0: Яндекс — всегда белый список провайдер (AS13238) ───────────────────
   // storage.yandexcloud.net: S3-совместимое Object Storage, Яндекс CDN
   // Не блокируется т.к. используется тысячами российских сайтов
   'https://storage.yandexcloud.net/vlyvpn-nodes/nodes.json',
@@ -61,8 +61,8 @@ const String kDeadDropDnsTxt = 'nodes.vlyvpn.app';
 // ── Browser identity — ЕДИНЫЙ источник правды ────────────────────────────────
 // Обновлено 28.06.2026. Раньше версии Chrome (134/135/136/137) и User-Agent
 // были захардкожены и разбросаны по 5 файлам (networking/stealth/camouflage/
-// tspu_2026). Они рассинхронизировались между собой и с uTLS fingerprint.
-// Рассинхрон UA ↔ TLS fingerprint = готовый признак для ML-классификатора ТСПУ
+// netcond_2026). Они рассинхронизировались между собой и с uTLS fingerprint.
+// Рассинхрон UA ↔ TLS fingerprint = готовый признак для ML-классификатора DPI
 // (слой 4 — поведенческий анализ). При обновлении браузеров правим ТОЛЬКО здесь.
 const String kChromeMajor    = '138';
 const String kChromeFull     = '138.0.7204.97';
@@ -104,13 +104,13 @@ String randomUserAgent() => kModernUserAgents[_kUaRng.nextInt(kModernUserAgents.
 const bool   kRequiresPqFingerprint = true;
 const String kPqKeyShare            = 'X25519MLKEM768';
 
-// Reality SNI пул — высокоавторитетные домены (в белом списке РКН)
+// Reality SNI пул — высокоавторитетные домены (в белом списке провайдер)
 // SNI-пул актуализирован 28.03.2026
-// Источник: анализ CIDR белых списков ТСПУ + net4people/bbs #490 + XTLS/Xray-examples
-// Критерии: (1) IP в CIDR-whitelist РКН, (2) TLS1.3 + поддержка REALITY, (3) не блокируется в РФ
+// Источник: анализ CIDR белых списков DPI + net4people/bbs #490 + XTLS/Xray-examples
+// Критерии: (1) IP в CIDR-whitelist провайдер, (2) TLS1.3 + поддержка REALITY, (3) не блокируется в РФ
 // ВАЖНО: dest и serverName должны совпадать — XTLS-Vision требует реального TLS с этого сервера
 const List<String> kRealitySniPool = [
-  // ── Tier 0: ЯНДЕКС — 100% белый список РКН (AS13238, 77.88.0.0/18) ──────
+  // ── Tier 0: ЯНДЕКС — 100% белый список провайдер (AS13238, 77.88.0.0/18) ──────
   // Самый надёжный выбор для России — Яндекс никогда не блокируется
   'www.yandex.ru',               // Яндекс главная — иконический российский домен
   'mail.yandex.ru',              // Яндекс Почта — корпоративный whitelist
@@ -119,7 +119,7 @@ const List<String> kRealitySniPool = [
   'api.browser.yandex.com',      // Яндекс Браузер API — высокий трафик
 
   // ── Tier 1: VK / MAIL.RU GROUP (AS47541, 87.240.128.0/18) ───────────────
-  // Блокировка VK = социальный коллапс → ТСПУ никогда не тронет
+  // Блокировка VK = социальный коллапс → DPI никогда не тронет
   'vk.com',                      // ВКонтакте — крупнейшая соцсеть РФ
   'userapi.com',                 // VK CDN — медиа контент всех пользователей
   'mail.ru',                     // Mail.ru — почта, белый список
@@ -128,8 +128,8 @@ const List<String> kRealitySniPool = [
   // ── Tier 2: MICROSOFT — крупнейший CIDR whitelist (20.112.0.0/13) ────────
   'www.microsoft.com',           // Рекомендован XTLS-examples для России/Ирана
   'login.microsoft.com',         // Microsoft Login — высокий корпоративный трафик
-  'login.microsoftonline.com',   // Azure AD OAuth — в белом списке РКН
-  'update.microsoft.com',        // Windows Update — критически важен для РКН
+  'login.microsoftonline.com',   // Azure AD OAuth — в белом списке провайдер
+  'update.microsoft.com',        // Windows Update — критически важен для провайдер
   'office.com',                  // Microsoft Office Online
   'teams.microsoft.com',         // Microsoft Teams — корпоративный, всегда whitelist
 
@@ -166,7 +166,7 @@ const List<String> kCdnFallbackUrls = [
 ];
 
 // ── Hysteria2 настройки по умолчанию ────────────────────────────────────────
-// Hysteria2 использует QUIC (UDP) — ТСПУ плохо фильтрует UDP трафик
+// Hysteria2 использует QUIC (UDP) — DPI плохо фильтрует UDP трафик
 // Salamander: XOR обфускация QUIC пакетов — скрывает Hysteria fingerprint
 // Порт 443 — выглядит как QUIC/HTTP3 (Chrome, YouTube используют QUIC)
 const kHysteria2Defaults = {
@@ -184,17 +184,17 @@ const kHysteria2Defaults = {
 
 // ── Zapret интеграция ────────────────────────────────────────────────────────
 // Zapret — локальный инструмент обхода DPI (не VPN, работает на сетевом уровне)
-// Используется как ДОПОЛНЕНИЕ к VPN когда ТСПУ активно блокирует TLS handshake
+// Используется как ДОПОЛНЕНИЕ к VPN когда DPI активно блокирует TLS handshake
 // Режимы: fake_sni (подмена SNI) + disorder (переупорядочивание пакетов)
 // Источник: github.com/bol-van/zapret
 const kZapretConfig = {
   'enabled':     false,            // по умолчанию выключен — только если VPN упал
   'httpPort':    1080,             // локальный SOCKS5 порт Zapret
   'strategies': [
-    'fake_sni',     // подменяет SNI в ClientHello → ТСПУ видит разрешённый домен
+    'fake_sni',     // подменяет SNI в ClientHello → DPI видит разрешённый домен
     'disorder',     // переупорядочивает TLS пакеты → DPI не собирает fingerprint
     'split',        // split TLS ClientHello → аналог fragment в Xray
-    'ttl_trick',    // TTL=5 для первого пакета → ТСПУ не видит, сервер видит
+    'ttl_trick',    // TTL=5 для первого пакета → DPI не видит, сервер видит
   ],
   'fakeSniFallback': 'www.yandex.ru',  // SNI для подмены — Яндекс всегда в whitelist
 };
@@ -207,7 +207,7 @@ const String kZapretDefaultSni    = 'www.microsoft.com'; // SNI для fake_sni 
 // Warm-up домены — реальный HTTPS трафик перед VPN туннелем
 // Warm-up домены обновлены март 2026:
 // Используем те же URL что запрашивает Android при подключении к WiFi
-// ТСПУ не может заблокировать эти домены без отключения миллионов устройств
+// DPI не может заблокировать эти домены без отключения миллионов устройств
 const List<String> kWarmupTargets = [
   // Google — самый надёжный, отвечает 204 за ~10ms
   'https://connectivitycheck.gstatic.com/generate_204',
@@ -253,7 +253,7 @@ extension VlyLayout on BuildContext {
 }
 
 // Нейтральный User-Agent для всех исходящих HTTP запросов (Dead Drop, DoH, warm-up).
-// 'VlyVPN/5.6.0' мгновенно идентифицирует трафик системами РКН/ТСПУ.
+// 'VlyVPN/5.6.0' мгновенно идентифицирует трафик системами провайдер/DPI.
 // Версия привязана к единому источнику kChromeFull (обновл. 28.06.2026).
 const kStealthUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) '
     'AppleWebKit/537.36 (KHTML, like Gecko) '

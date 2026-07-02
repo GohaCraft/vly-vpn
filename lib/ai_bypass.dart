@@ -24,7 +24,7 @@ part of 'main.dart';
 //     fingerprint-mismatch, срабатывает ДО первого байта HTTP. Нужен свежий
 //     xray-core с PQ-fingerprint (mlkem768 / mldsa65 в Reality). См. constants.
 //
-//  ТСПУ работает в 4 слоя:
+//  DPI работает в 4 слоя:
 //  1. Сигнатурный (первые 16-32 байта) — убивает SS/OpenVPN/WG
 //  2. JA3/JA4 + PQ key share            — убивает плохой/устаревший VLESS
 //  3. IP/ASN несоответствие (SNI vs IP) — проверяет реальность
@@ -62,7 +62,7 @@ extension BypassModeInfo on BypassMode {
   String get description {
     switch (this) {
       case BypassMode.auto:      return 'Автоматически выбирает лучший метод. Пробует каскад из 10+ стратегий.';
-      case BypassMode.hysteria2: return 'UDP протокол — ТСПУ плохо анализирует UDP. Лучший выбор при белых списках.';
+      case BypassMode.hysteria2: return 'UDP протокол — DPI плохо анализирует UDP. Лучший выбор при белых списках.';
       case BypassMode.xhttp:    return 'Новый транспорт Xray 2026. Выглядит как обычный HTTP upload — не детектируется.';
       case BypassMode.realityVk: return 'SNI из белого списка МТС. Трафик выглядит как обращение к VK/Яндекс.';
       case BypassMode.grpc:      return 'gRPC транспорт. Хуже xHTTP но стабильнее при нестабильном соединении.';
@@ -628,7 +628,7 @@ class WhitelistBypassEngine {
 
   // SNI для WiFi (обычные блокировки, не белые списки)
   static const kWifiSniList = [
-    // Крупные CDN которые пропускает ТСПУ
+    // Крупные CDN которые пропускает DPI
     'www.microsoft.com', 'login.microsoftonline.com', 'dl.google.com', 'update.googleapis.com',
     'gateway.icloud.com', 'itunes.apple.com', 'cdn.cloudflare.com',
     'ajax.googleapis.com', 'fonts.googleapis.com',
@@ -739,7 +739,7 @@ class WhitelistBypassEngine {
 // ── TLS Fingerprint (Chrome — единая версия kChromeFull) ─────────────────────
 class TlsFingerprint {
   // JA4 fingerprint Chrome (uTLS 'chrome' профиль xray-core).
-  // Если ТСПУ видит этот fingerprint — считает трафик легитимным Chrome.
+  // Если DPI видит этот fingerprint — считает трафик легитимным Chrome.
   // Имена констант исторические (kChrome134*), значение привязано к kChromeFull.
   static const kChrome134Fingerprint = 'chrome';
 
@@ -759,10 +759,10 @@ class TlsFingerprint {
   }
 }
 
-// ── TSPU Detector ──────────────────────────────────────────────────────────
-class TspuBypassWindowDetector {
-  // Определяет временные окна когда ТСПУ перегружен (меньше блокирует)
-  // По наблюдениям: 03:00-06:00 МСК — минимальная нагрузка на ТСПУ
+// ── DPI Detector ──────────────────────────────────────────────────────────
+class RetryWindowDetector {
+  // Определяет временные окна когда DPI перегружен (меньше блокирует)
+  // По наблюдениям: 03:00-06:00 МСК — минимальная нагрузка на DPI
   static bool isLowLoadWindow() {
     final hour = DateTime.now().toUtc().add(const Duration(hours: 3)).hour;
     return hour >= 3 && hour <= 6;
@@ -793,7 +793,7 @@ class AiBypassAgent {
 
   void stop() { _isRunning = false; }
 
-  // Случайный CDN-подобный путь — ТСПУ думает что это обращение к CDN, не VPN
+  // Случайный CDN-подобный путь — DPI думает что это обращение к CDN, не VPN
   static String _randomCdnPath() {
     final ts = DateTime.now();
     final paths = [
@@ -918,7 +918,7 @@ class AiBypassAgent {
       _log('🤖 #${i+1}/${limited.length} · ${s.type}');
 
       // Задержка между попытками (имитирует браузер, не триггерит ML)
-      if (i > 0) await Future.delayed(TspuBypassWindowDetector.getRetryDelay(i));
+      if (i > 0) await Future.delayed(RetryWindowDetector.getRetryDelay(i));
 
       final result = await _applyStrategy(blocked, s);
       if (result != null) {
@@ -1097,7 +1097,7 @@ class AiBypassAgent {
 
 
   // ЗАДАЧА 8: Поведенческая маскировка трафика
-  // Имитирует браузерный паттерн — ТСПУ ML не находит VPN сигнатуру
+  // Имитирует браузерный паттерн — DPI ML не находит VPN сигнатуру
   static Future<void> applyTrafficMasking() async {
     // Случайная задержка 20-150мс между установкой соединения
     // Браузер тоже делает небольшие паузы при загрузке страниц
@@ -1136,7 +1136,7 @@ class AiBypassAgent {
       final uri = Uri.parse(cfg.link);
       if (uri.scheme.startsWith('hy2') || uri.scheme.startsWith('hysteria')) {
         // ЗАДАЧА 5: UDP Hop — меняем порт для обхода блокировки по порту
-        // ТСПУ блокирует конкретный UDP порт — hop перепрыгивает на новый
+        // DPI блокирует конкретный UDP порт — hop перепрыгивает на новый
         final basePort = uri.port > 0 ? uri.port : 443;
         
         // Hop порты: +1, +2, -1 от базового (имитирует легитимный UDP)

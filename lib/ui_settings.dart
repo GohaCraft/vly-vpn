@@ -73,14 +73,14 @@ class SettingsScreen extends StatelessWidget {
             iconColor: const Color(0xFF7C4DFF),
             title: S.t('stealth_engine'),
             subtitle: 'Anti-DPI · JA4+ · Reality SNI · Siberia',
-            helpText: 'Маскирует VPN под обычный HTTPS. Anti-DPI обманывает глубокую проверку пакетов. Reality SNI показывает ТСПУ что вы посещаете Google/Microsoft.',
+            helpText: 'Маскирует VPN под обычный HTTPS. Anti-DPI обманывает глубокую проверку пакетов. Reality SNI показывает DPI что вы посещаете Google/Microsoft.',
             onTap: () => _push(context, const _StealthPage())),
           _SettingsTile(
             icon: Icons.theater_comedy_outlined,
             iconColor: const Color(0xFFFF6D00),
             title: S.t('camouflage'),
             subtitle: 'Под что скрываться: Netflix · YouTube · iCloud · NaïveProxy',
-            helpText: 'Делает VPN трафик неотличимым от конкретного сервиса. ТСПУ видит запросы к Netflix/iCloud — не подозрительный VPN. Для России лучше: Windows Update или iCloud.',
+            helpText: 'Делает VPN трафик неотличимым от конкретного сервиса. DPI видит запросы к Netflix/iCloud — не подозрительный VPN. Для России лучше: Windows Update или iCloud.',
             onTap: () => _push(context, const _CamouflagePage())),
           _SettingsTile(
             icon: Icons.psychology_outlined,
@@ -619,7 +619,7 @@ class _CamouflagePage extends StatelessWidget {
         _InfoCard(
           icon: Icons.theater_comedy_outlined,
           text: 'Делает VPN трафик неотличимым от конкретного сервиса. '
-                'ТСПУ видит запросы к Netflix/YouTube/Discord — '
+                'DPI видит запросы к Netflix/YouTube/Discord — '
                 'не подозрительный "VPN паттерн".'),
         const SizedBox(height: 16),
 
@@ -722,7 +722,7 @@ class _CamouflagePage extends StatelessWidget {
         _InfoCard(
           icon: Icons.warning_amber_rounded,
           text: '⚠️ Для России: Microsoft 🪟 и Apple 🍎 — САМЫЕ СИЛЬНЫЕ. '
-                'РКН не может заблокировать Windows Update и iCloud. '
+                'провайдер не может заблокировать Windows Update и iCloud. '
                 'NaïveProxy 🔀 — лучший против ML-DPI. '
                 'Если Россия отключится от глобального интернета — '
                 'работают только Microsoft и Apple (RU CIDR).'),
@@ -1174,7 +1174,7 @@ class _AiBypassPage extends StatelessWidget {
         icon: Icons.security_outlined,
         text: '✅ Hysteria2/QUIC — лучший выбор\n'
             '✅ VLESS+xHTTP — новый 2026\n'
-            '✅ Reality+VK SNI — белый список РКН\n'
+            '✅ Reality+VK SNI — белый список провайдер\n'
             '❌ VLESS+TCP plain TLS — заблокирован с 17.02.2026'),
       const SizedBox(height: 12),
 
@@ -1303,7 +1303,7 @@ class _StealthPage extends StatelessWidget {
         subtitle: 'Включает все анти-DPI механизмы',
         value: vpn.stealthMode,
         onChanged: (v) => vpn.setStealthMode(v),
-        hint: 'Мастер-переключатель всех stealth функций. Включает фрагментацию TLS, ротацию SNI, jitter задержки. ТСПУ не может определить тип трафика.'),
+        hint: 'Мастер-переключатель всех stealth функций. Включает фрагментацию TLS, ротацию SNI, jitter задержки. DPI не может определить тип трафика.'),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.scatter_plot_outlined, iconColor: const Color(0xFF7C4DFF),
@@ -1319,7 +1319,7 @@ class _StealthPage extends StatelessWidget {
         subtitle: 'dl.google.com · icloud.com · microsoft.com',
         value: vpn.stealthRealitySni,
         onChanged: (v) => vpn.setStealthRealitySni(v),
-        hint: 'SNI — имя сервера в TLS handshake. Каждый раз берём SNI из белого списка РКН (Google, Apple, Microsoft). ТСПУ видит соединение к легитимному домену, не к VPN серверу.'),
+        hint: 'SNI — имя сервера в TLS handshake. Каждый раз берём SNI из белого списка провайдер (Google, Apple, Microsoft). DPI видит соединение к легитимному домену, не к VPN серверу.'),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.local_fire_department_outlined, iconColor: const Color(0xFFFF7043),
@@ -1333,7 +1333,7 @@ class _StealthPage extends StatelessWidget {
       _SubSection('СИБИРСКАЯ БЛОКИРОВКА'),
       _InfoCard(
         icon: Icons.shield_outlined,
-        text: 'РКН детектирует burst TLS соединений к одному IP '
+        text: 'провайдер детектирует burst TLS соединений к одному IP '
               '(3+ за 5 сек) и блокирует сервер на 2 минуты. '
               'Siberia Shield пейсит соединения и использует один '
               'мультиплексированный туннель вместо множества.'),
@@ -1344,7 +1344,7 @@ class _StealthPage extends StatelessWidget {
         subtitle: 'Connection pacing · Single-tunnel XMUX · Decoy traffic',
         value: vpn.siberiaShield,
         onChanged: (v) => vpn.setSiberiaShield(v),
-        hint: 'Защита от «Сибирской блокировки»: ТСПУ блокирует сервер при 2+ SYN за 8 сек. Siberia Shield: пейсит соединения (1 за 8 сек), шлёт decoy HTTPS трафик к белым доменам между сессиями.'),
+        hint: 'Защита от «Сибирской блокировки»: DPI блокирует сервер при 2+ SYN за 8 сек. Siberia Shield: пейсит соединения (1 за 8 сек), шлёт decoy HTTPS трафик к белым доменам между сессиями.'),
 
       const SizedBox(height: 8),
       _SwitchRow(
@@ -2364,7 +2364,7 @@ class _WhitelistTesterPage extends StatefulWidget {
 }
 
 class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
-  // Ключевые домены РКН — должны быть доступны БЕЗ VPN
+  // Ключевые домены провайдер — должны быть доступны БЕЗ VPN
   static const _ruDomains = [
     ('gosuslugi.ru',     '🏛 Госуслуги'),
     ('mos.ru',           '🏙 Mos.ru (Москва)'),
@@ -2380,7 +2380,7 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
     ('2gis.ru',          '🗺 2ГИС'),
   ];
 
-  // Домены которые БЛОКИРУЮТСЯ РКН — должны работать ЧЕРЕЗ VPN
+  // Домены которые БЛОКИРУЮТСЯ провайдер — должны работать ЧЕРЕЗ VPN
   static const _blockedDomains = [
     ('instagram.com',    '📸 Instagram'),
     ('twitter.com',      '🐦 X (Twitter)'),

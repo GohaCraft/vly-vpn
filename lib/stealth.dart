@@ -8,7 +8,7 @@ class StealthEngine {
   // Кэш живого SNI — не проверяем TLS каждое подключение
   static String? _cachedSni;
   static DateTime? _sniCacheTime;
-  // TTL 3 минуты — РКН блокировки появляются быстро, 5 мин слишком долго
+  // TTL 3 минуты — провайдер блокировки появляются быстро, 5 мин слишком долго
   static const _sniCacheTtl = Duration(minutes: 3);
 
   // ── 1. TLS Фрагментация — "Ghost Handshake" ────────────────────────────────
@@ -41,7 +41,7 @@ class StealthEngine {
 
     if (!hasFragmentTarget) return base;
 
-    // Профили фрагментации — 22.03.2026: ТСПУ AI анализирует статистику пакетов
+    // Профили фрагментации — 22.03.2026: DPI AI анализирует статистику пакетов
     // Ключ: НЕ фиксированные паттерны, вариативность похожа на реальный браузер
     // Источник: ntc.party + net4people/bbs анализ март 2026
     final fragProfiles = [
@@ -76,7 +76,7 @@ class StealthEngine {
 
   // ── 2. Reality SNI Ротация ─────────────────────────────────────────────────
   // Каждый раз берём следующий SNI из пула высокоавторитетных доменов.
-  // РКН видит трафик к dl.google.com — не блокирует.
+  // провайдер видит трафик к dl.google.com — не блокирует.
   static String nextSni() {
     final sni = kRealitySniPool[sniIndex % kRealitySniPool.length];
     sniIndex++;
@@ -158,7 +158,7 @@ class StealthEngine {
   }
 
   // ── 3. Packet Jitter — обман AI/ML анализа (обновлено март 2026) ───────────
-  // ML-DPI ТСПУ 2026 обучен на поведенческих признаках: inter-arrival time,
+  // ML-DPI DPI 2026 обучен на поведенческих признаках: inter-arrival time,
   // burst размер, соотношение up/down. Имитируем WebRTC/video call паттерн.
   static Future<void> applyJitter() async {
     // DNS lookup imitation: 20-60ms (типично для DoH через 1.1.1.1)
@@ -266,19 +266,19 @@ class StealthEngine {
 
   // ── 7. Рандомный User-Agent для warm-up ───────────────────────────────────
   // Источник версий — единый пул kModernUserAgents (constants.dart, обновл. 28.06.2026).
-  // РКН и DPI блокируют запросы от Dart/2.x по умолчанию.
+  // провайдер и DPI блокируют запросы от Dart/2.x по умолчанию.
   // ВАЖНО: UA должен быть консистентен с uTLS fingerprint ниже, иначе ML-детектор
-  // ТСПУ (слой 4) ловит рассинхрон «браузер в UA ≠ браузер в TLS handshake».
+  // DPI (слой 4) ловит рассинхрон «браузер в UA ≠ браузер в TLS handshake».
   static const _userAgents = kModernUserAgents;
   static String _randomUserAgent() => _userAgents[_rng.nextInt(_userAgents.length)];
 
   // uTLS fingerprints — актуализированы 28.06.2026 (Chrome 138 / Edge 138 / Safari 18.5).
-  // ML-модель ТСПУ анализирует поведенческие паттерны TLS handshake.
+  // ML-модель DPI анализирует поведенческие паттерны TLS handshake.
   // 'random' = случайный из набора xray-core — максимально усложняет классификацию.
   // Профили подобраны под доли пула kModernUserAgents (Android Chrome — приоритет).
   static const List<String> _uTlsProfiles = [
     'chrome',    // Chrome 138 — ~45% пула, самый надёжный
-    'edge',      // Edge 138 — Windows Update IP в whitelist ТСПУ
+    'edge',      // Edge 138 — Windows Update IP в whitelist DPI
     'safari',    // Safari 18.5 iOS — iPhone трафик
     'ios',       // iOS native TLS stack — нативный мобильный
     'firefox',   // Firefox 140 — desktop, другой ALPN паттерн
@@ -356,7 +356,7 @@ class StealthEngine {
       }
 
       // 4. Smart routing — российские сайты напрямую, заблокированные через VPN
-      // Используем актуальный список РКН-блокировок из BypassRulesEngine
+      // Используем актуальный список провайдер-блокировок из BypassRulesEngine
       // Это заменяет только IPv6 blackhole — маршрутизацию ставим целиком
       final routing = j['routing'] as Map<String, dynamic>? ?? {};
       final rules   = (routing['rules'] as List?)?.cast<dynamic>() ?? <dynamic>[];
@@ -406,7 +406,7 @@ class StealthEngine {
         ob['streamSettings'] = ss;
 
         // 6b. VLESS Vision flow control — антидетект TLS-in-TLS (март 2026)
-        // AI-DPI ТСПУ ищет вложенные TLS паттерны (packet length distribution).
+        // AI-DPI DPI ищет вложенные TLS паттерны (packet length distribution).
         // Vision применяет dynamic padding — пакеты выглядят как реальный HTTPS.
         // Применяем ТОЛЬКО для VLESS+Reality без явного flow
         if (proto == 'vless') {
@@ -434,8 +434,8 @@ class StealthEngine {
         }
       }
 
-      // 7. Policy — anti-TCP-freeze (новый метод ТСПУ март 2026)
-      // ТСПУ замораживает TCP когда server→client > ~15-20KB на "подозрительных" IP
+      // 7. Policy — anti-TCP-freeze (новый метод DPI март 2026)
+      // DPI замораживает TCP когда server→client > ~15-20KB на "подозрительных" IP
       // bufferSize 512KB + connIdle 300s форсирует правильный keepalive
       try {
         final policy = Map<String, dynamic>.from(j['policy'] as Map? ?? {});
@@ -584,7 +584,7 @@ class StealthEngine {
 
   // ── xHTTP Config Builder (НОВЫЙ транспорт 2026) ─────────────────────────────
   // xHTTP — лучший TCP-транспорт апрель 2026. Выглядит как HTTP multipart upload.
-  // ТСПУ не детектирует: нет характерных паттернов TLS VPN, только обычный HTTP.
+  // DPI не детектирует: нет характерных паттернов TLS VPN, только обычный HTTP.
   // Работает там где Reality+TCP уже не проходит.
   static Map<String, dynamic> buildXhttpConfig({
     required String host,
@@ -664,7 +664,7 @@ class StealthEngine {
 
   // ── ShadowTLS v3 + Shadowsocks config ────────────────────────────────────────
   // ShadowTLS v3: туннель поверх реального TLS сервера.
-  // ТСПУ видит легитимный TLS handshake к vk.com — пропускает.
+  // DPI видит легитимный TLS handshake к vk.com — пропускает.
   static Map<String, dynamic> buildShadowTlsConfig({
     required String host,
     required int    port,
@@ -744,7 +744,7 @@ class StealthEngine {
 
   static Map<String, dynamic> _buildDns() => {
     'servers': [
-      // DoH через Cloudflare — обходит DNS отравление РКН
+      // DoH через Cloudflare — обходит DNS отравление провайдер
       {'address': 'https://1.1.1.1/dns-query', 'skipFallback': true,
        'domains': ['geosite:geolocation-!cn']},
       {'address': 'https://8.8.8.8/dns-query', 'skipFallback': true},
@@ -799,7 +799,7 @@ class StealthEngine {
   static String get cachedSniPublic => _cachedSni ?? '—';
 
   // ── 10. Hysteria2 конфиг builder ──────────────────────────────────────────
-  // Hysteria2 использует QUIC (UDP) — ТСПУ хуже справляется с UDP DPI.
+  // Hysteria2 использует QUIC (UDP) — DPI хуже справляется с UDP DPI.
   // Salamander обфускация XOR-ит каждый QUIC пакет с паролем → fingerprint скрыт.
   // Формат ноды: hy2://password@host:port?sni=...&obfs=salamander&obfs-password=...
   static Map<String, dynamic> buildHysteria2Config(String nodeLink) {
@@ -870,7 +870,7 @@ class StealthEngine {
 
   // ── 11. VLESS+Vision полный конфиг builder ────────────────────────────────
   // Vision = XTLS-rprx-vision: убирает TLS-in-TLS паттерн + добавляет рандомный padding.
-  // Без Vision ТСПУ ML видит "двойное TLS" → помечает как VPN.
+  // Без Vision DPI ML видит "двойное TLS" → помечает как VPN.
   // С Vision пакеты неотличимы от реального HTTPS браузера (март 2026 анализ).
   //
   // IMPORTANT: Vision требует flow=xtls-rprx-vision на обеих сторонах (клиент + сервер).
@@ -950,7 +950,7 @@ class StealthEngine {
       ],
       'dns': {
         'servers': [
-          // DoH — обходит DNS отравление РКН
+          // DoH — обходит DNS отравление провайдер
           {'address': 'https://1.1.1.1/dns-query', 'skipFallback': true,
            'domains': ['geosite:geolocation-!cn']},
           {'address': 'https://8.8.8.8/dns-query', 'skipFallback': true},
@@ -973,7 +973,7 @@ class StealthEngine {
           {'type': 'field', 'network': 'tcp,udp', 'outboundTag': 'proxy'},
         ],
       },
-      // Anti-TCP-freeze политика (ТСПУ март 2026)
+      // Anti-TCP-freeze политика (DPI март 2026)
       'policy': {
         'levels': {
           '0': {
@@ -992,7 +992,7 @@ class StealthEngine {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  ZAPRET BRIDGE — интеграция с локальным Zapret DPI-bypass
 //  Zapret работает на сетевом уровне (nfqueue/windivert) — дополняет VPN.
-//  Использовать как fallback когда ТСПУ активно блокирует TLS handshake.
+//  Использовать как fallback когда DPI активно блокирует TLS handshake.
 //  GitHub: github.com/bol-van/zapret
 // ═══════════════════════════════════════════════════════════════════════════════
 class ZapretBridge {
@@ -1085,7 +1085,7 @@ class ZapretBridge {
   static String recommendStrategy(BlockType blockType) {
     switch (blockType) {
       case BlockType.tlsFingerprint:
-        // ТСПУ видит TLS fingerprint → подменяем SNI + disorder
+        // DPI видит TLS fingerprint → подменяем SNI + disorder
         return 'fake_sni';
       case BlockType.tcpReset:
         // Активный RST → disorder пакеты + TTL trick

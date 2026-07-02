@@ -4,7 +4,7 @@ part of 'main.dart';
 class SelfHealingMirror {
   static final _rng = Random();
   // Нейтральные User-Agent — не раскрываем что это VPN клиент.
-  // 'VlyVPN/5.6.0' идентифицировал трафик для систем мониторинга РКН.
+  // 'VlyVPN/5.6.0' идентифицировал трафик для систем мониторинга провайдер.
   // Источник версий — единый пул kModernUserAgents (constants.dart, обновл. 28.06.2026).
   static const _uas = kModernUserAgents;
   static String get _ua => _uas[_rng.nextInt(_uas.length)];
@@ -139,7 +139,7 @@ class BlockDetector {
     // Шаг 1: DNS — провайдер отравляет DNS для заблокированных IP
     if (!await _dns(host)) return BlockType.dnsPoisoning;
 
-    // Шаг 2: TCP — RST значит активная блокировка ТСПУ
+    // Шаг 2: TCP — RST значит активная блокировка DPI
     final tcp = await _tcp(host, port);
     if (tcp == _TR.reset)   return BlockType.tcpReset;
     if (tcp == _TR.closed)  return BlockType.portBlocked;
@@ -192,7 +192,7 @@ class BlockDetector {
   }
 
   // FIX: используем DoH вместо системного DNS
-  // InternetAddress.lookup() = OS resolver = РКН отравляет его
+  // InternetAddress.lookup() = OS resolver = провайдер отравляет его
   // Cloudflare DoH по прямому IP — не зависит от DNS провайдера
   static Future<bool> _dns(String h) async {
     // Сначала пробуем DoH через Cloudflare (прямой IP, не DNS-имя)
@@ -228,7 +228,7 @@ class BlockDetector {
   static Future<bool> _tls(String h, int p) async {
     try {
       // Только TLS handshake — не отправляем HTTP
-      // HEAD запрос создавал паттерн который РКН мог детектировать
+      // HEAD запрос создавал паттерн который провайдер мог детектировать
       // Для нас важно что TLS соединение устанавливается, не HTTP ответ
       final s = await SecureSocket.connect(h, p,
           timeout: _t, onBadCertificate: (_) => true);
@@ -253,7 +253,7 @@ class BypassRulesEngine {
   DateTime? get devLastSync     => _lastDomainSync;
 
   static const _builtin = [
-    // TCP reset / TLS fingerprint — самое частое у РКН
+    // TCP reset / TLS fingerprint — самое частое у провайдер
     {'id': 'tcp_reset', 'triggers': ['tcpReset', 'tlsFingerprint'], 'strategies': [
       {'priority': 1, 'type': 'rotate_reality_sni',  'params': {}},
       {'priority': 2, 'type': 'add_reality_sni',     'params': {'sni': 'www.yandex.ru'}},    // Яндекс — Tier 0
@@ -266,7 +266,7 @@ class BypassRulesEngine {
       {'priority': 9, 'type': 'add_reality_sni',     'params': {'sni': 'dl.google.com'}},
       {'priority': 10,'type': 'add_reality_sni',     'params': {'sni': 'update.microsoft.com'}},
       {'priority': 11,'type': 'trojan_ws_fallback',  'params': {'port': 443, 'path': '/api/v1'}},
-      // Hysteria2 fallback: UDP/QUIC обходит TCP-блокировки ТСПУ
+      // Hysteria2 fallback: UDP/QUIC обходит TCP-блокировки DPI
       {'priority': 12,'type': 'hysteria2_fallback',  'params': {'obfs': 'salamander'}},
       // Zapret: локальный DPI bypass как последний рубеж перед CDN
       {'priority': 13,'type': 'zapret_bypass',       'params': {'strategy': 'disorder'}},
@@ -321,7 +321,7 @@ class BypassRulesEngine {
       {'priority': 11,'type': 'zapret_bypass',        'params': {'strategy': 'fake_sni'}},
       {'priority': 12,'type': 'cdn_fallback',          'params': {'url': 'vly-vpn.workers.dev'}},
     ]},
-    // Stealth: TCP reset (активная блокировка ТСПУ)
+    // Stealth: TCP reset (активная блокировка DPI)
     {'id': 'stealth_reset', 'triggers': ['tcpReset'], 'strategies': [
       {'priority': 1, 'type': 'rotate_reality_sni',   'params': {}},
       {'priority': 2, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/'}},
@@ -483,7 +483,7 @@ class BypassRulesEngine {
     return _blockedDomains.any((b) => d == b || d.endsWith('.$b'));
   }
 
-  // Захардкоженные актуальные блокировки (РКН, март 2026)
+  // Захардкоженные актуальные блокировки (провайдер, март 2026)
   // Источник: postium.ru, gogov.ru — обновлено 19.03.2026
   static const List<String> _hardcodedBlocked = [
     // Социальные сети
@@ -678,7 +678,7 @@ class BypassRulesEngine {
         break;
 
       // Hysteria2 fallback — переключение на QUIC/UDP протокол.
-      // Когда TCP заблокирован ТСПУ, Hysteria2 продолжает работать через UDP.
+      // Когда TCP заблокирован DPI, Hysteria2 продолжает работать через UDP.
       // Salamander obfs скрывает QUIC fingerprint — выглядит как обычный UDP.
       // Нода должна иметь Hysteria2 сервер на том же хосте (или мы берём из пула).
       // Если hy2:// нода уже есть в конфиге — просто добавляем Salamander obfs.
@@ -751,7 +751,7 @@ class BypassRulesEngine {
 
       // Zapret DPI bypass — активирует локальный Zapret как промежуточный прокси.
       // Zapret работает на уровне пакетов (nfqueue/windivert) — не меняет VPN протокол.
-      // Эффективен когда ТСПУ блокирует по TLS fingerprint или делает TCP RST.
+      // Эффективен когда DPI блокирует по TLS fingerprint или делает TCP RST.
       // Стратегии: fake_sni | disorder | split | ttl_trick
       // ВАЖНО: Zapret должен быть установлен и запущен на устройстве отдельно.
       case 'zapret_bypass':
@@ -784,7 +784,7 @@ class BypassRulesEngine {
         break;
 
       // Whitelist domain fronting — обход белого списка мобильных операторов
-      // ТСПУ DROP ALL кроме разрешённых IP (Яндекс, VK, Сбер).
+      // DPI DROP ALL кроме разрешённых IP (Яндекс, VK, Сбер).
       // Domain fronting: TLS SNI = разрешённый домен, реальный трафик идёт на наш сервер.
       case 'whitelist_domain_fronting':
         try {
@@ -845,7 +845,7 @@ class BypassRulesEngine {
         break;
 
       // Residential IP — проверка что IP сервера не дата-центр
-      // Дата-центры (AS хостингов) в чёрных списках РКН
+      // Дата-центры (AS хостингов) в чёрных списках провайдер
       // Residential IP выглядит как домашний пользователь
       case 'residential_ip':
         try {
@@ -867,7 +867,7 @@ class BypassRulesEngine {
 
   // Выбирает SNI по тиру доверия для обхода белых списков
   // Tier 0: Яндекс — Ростелеком Сибирь никогда не блокирует
-  // Tier 1: VK/Mail.ru — в белом списке РКН
+  // Tier 1: VK/Mail.ru — в белом списке провайдер
   // Tier 2: Microsoft/Apple — корпоративный whitelist
   static String _whitelistSniByTier(int tier) {
     const t0 = ['yandex.ru', 'ya.ru', 'mail.yandex.ru', 'yastatic.net'];

@@ -166,7 +166,7 @@ class TrafficCamouflageEngine {
   // ────────────────────────────────────────────────────────────────────────────
   static void _applyTelegram(Map<String, dynamic> j) {
     // Telegram MTProto через WebSocket — максимальная маскировка
-    // Март 2026: РКН анализирует JA4+ fingerprint
+    // Март 2026: провайдер анализирует JA4+ fingerprint
     // Ротация CDN + реальный fingerprint iOS клиента
     final cdns = ['cdn4.telegram.org', 'cdn5.telegram.org', 'cdn1.telegram.org'];
     final sni  = cdns[DateTime.now().millisecond % cdns.length];
@@ -279,7 +279,7 @@ class TrafficCamouflageEngine {
 
   // ────────────────────────────────────────────────────────────────────────────
   // MICROSOFT: Windows Update / Office 365 sync
-  // Корпоративный трафик — РКН НИКОГДА не блокирует (риск)
+  // Корпоративный трафик — провайдер НИКОГДА не блокирует (риск)
   // ────────────────────────────────────────────────────────────────────────────
   static void _applyMicrosoft(Map<String, dynamic> j) {
     _patchOutbounds(j, 'h2', {
@@ -319,7 +319,7 @@ class TrafficCamouflageEngine {
   // ────────────────────────────────────────────────────────────────────────────
   // NAÏVE PROXY: HTTP CONNECT через HTTP/2
   // NaïveProxy паттерн: браузер отправляет CONNECT запрос как Chrome
-  // ТСПУ видит обычный браузерный HTTPS — самый сложный для детектирования
+  // DPI видит обычный браузерный HTTPS — самый сложный для детектирования
   // ────────────────────────────────────────────────────────────────────────────
   static void _applyNaive(Map<String, dynamic> j) {
     // NaïveProxy использует HTTP/2 CONNECT — имитирует Chrome встроенный прокси

@@ -116,7 +116,7 @@ class BypassArsenal {
     {'id': 99,  'name': 'Switch node final',         'type': 'switch_node',         'priority': 99, 'params': {}},
     {'id': 100, 'name': 'Shadow final CDN',          'type': 'shadow_fallback',     'priority': 100,'params': {}},
     // ── TIER STEALTH 2026: Fragmented Reality + Whitelist bypass ─────────────
-    // Март 2026: РКН использует JA4+ fingerprint — нужна фрагментация первого TLS пакета
+    // Март 2026: провайдер использует JA4+ fingerprint — нужна фрагментация первого TLS пакета
     {'id': 101, 'name': '🔀 Fragmented Reality 1-5b', 'type': 'fragmented_reality',  'priority': 0,  'params': {'fragSize':1, 'delayMs':50,  'sni':'yandex.ru'}},
     {'id': 102, 'name': '🔀 Fragmented Reality 3b',   'type': 'fragmented_reality',  'priority': 0,  'params': {'fragSize':3, 'delayMs':50,  'sni':'ya.ru'}},
     {'id': 103, 'name': '🔀 Fragmented Reality 5b',   'type': 'fragmented_reality',  'priority': 0,  'params': {'fragSize':5, 'delayMs':50,  'sni':'vk.com'}},
@@ -289,7 +289,7 @@ class BypassStrategy {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  STEALTH ENGINE 3.0  —  Anti-DPI / Anti-JA4+ / Self-Healing
-//  Март 2026: РКН использует AI-анализ TLS fingerprint (JA4+) + ТСПУ глубокий DPI
+//  Март 2026: провайдер использует AI-анализ TLS fingerprint (JA4+) + DPI глубокий DPI
 //  v3.0: race-based SNI, безопасный mux, расширенный SNI пул, защита pbk/sid,
 //        гарантированный cleanup warmUp, рандомная фрагментация, IPv6 leak fix
 // ═══════════════════════════════════════════════════════════════════════════════

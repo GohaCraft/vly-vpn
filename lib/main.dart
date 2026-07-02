@@ -28,7 +28,7 @@ part 'models.dart';
 part 'providers.dart';
 part 'backup.dart';
 part 'siberia.dart';
-part 'tspu_2026.dart';
+part 'netcond_2026.dart';
 part 'camouflage.dart';
 part 'bypass_arsenal.dart';
 part 'service_bypass.dart';

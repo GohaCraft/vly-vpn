@@ -13,7 +13,7 @@ enum VlyErrorCode {
   e1003('E-1003', 'Config empty',             'getFullConfiguration() returned empty. Re-import this node.'),
   e1004('E-1004', 'Config parse error',       'Node config is malformed JSON. Try re-importing.'),
   e1005('E-1005', 'Network unreachable',      'No internet. Check WiFi or mobile data.'),
-  e1006('E-1006', 'TLS handshake failed',     'TLS/Reality rejected by DPI. РКН blocking this node.'),
+  e1006('E-1006', 'TLS handshake failed',     'TLS/Reality rejected by DPI. провайдер blocking this node.'),
   e1007('E-1007', 'Protocol rejected',        'Server rejected protocol. Try WS or gRPC transport.'),
   e1008('E-1008', 'Port blocked',             'Port blocked by ISP. Try port 443 or 2053.'),
   e1009('E-1009', 'DNS poisoned',             'DNS intercepted. DoH enforced on next connect.'),
@@ -30,12 +30,12 @@ enum VlyErrorCode {
   e1019('E-1019', 'Telegram Protocol error',  'TG Fast Protocol config threw. Connected without TG opt.'),
   e1020('E-1020', 'V2Ray engine crash',       'v2ray-core crashed. Engine restarting. Reinstall if persists.'),
   // ── Siberia Shield ────────────────────────────────────────────────────────
-  e1021('E-1021', 'Siberia burst detected',   'IP burst-blocked by РКН. Cooldown 3 min. Switching node.'),
+  e1021('E-1021', 'Siberia burst detected',   'IP burst-blocked by провайдер. Cooldown 3 min. Switching node.'),
   e1022('E-1022', 'Pacing overflow',          'Connection pacing queue full. Shield temporarily bypassed.'),
   e1023('E-1023', 'Decoy failed',             'Pre-connect decoy request failed. No internet to check sites.'),
   e1024('E-1024', 'applyToConfig error',      'SiberiaShield.applyToConfig threw. mux not applied.'),
   // ── Bypass & AI ───────────────────────────────────────────────────────────
-  e1025('E-1025', 'Block type unknown',       'BlockDetector returned none. New РКН method or unstable net.'),
+  e1025('E-1025', 'Block type unknown',       'BlockDetector returned none. New провайдер method or unstable net.'),
   e1026('E-1026', 'All strategies failed',    'All 100 bypass strategies + 60 node rotations failed.'),
   e1027('E-1027', 'Bypass probe error',       'BypassProber TCP+TLS probe threw exception.'),
   e1028('E-1028', 'Strategy apply error',     'applyStrategy() threw. Node link may be malformed.'),
@@ -68,17 +68,17 @@ enum VlyErrorCode {
   e1051('E-1051', 'Whitelist active',         'Mobile whitelist detected. Only gov/CDN IPs allowed. Domain fronting applied.'),
   e1052('E-1052', 'Domain fronting failed',   'All whitelist endpoints blocked. ISP blocking gov portals too.'),
   e1053('E-1053', 'Endpoint probe timeout',   'Whitelist endpoint probe timed out (3s). Slow network or partial block.'),
-  // ── TSPU Bypass Window ─────────────────────────────────────────────────────
-  e1054('E-1054', 'TSPU bypass detected',     'TSPU overloaded (40K+ rules). Direct connection possible without stealth.'),
-  e1055('E-1055', 'TSPU bypass ended',        'TSPU recovered. Switching back to stealth mode.'),
-  e1056('E-1056', 'Bypass window missed',     'TSPU bypass ended during connection. Reconnecting with stealth.'),
+  // ── DPI Bypass Window ─────────────────────────────────────────────────────
+  e1054('E-1054', 'DPI bypass detected',     'DPI overloaded (40K+ rules). Direct connection possible without stealth.'),
+  e1055('E-1055', 'DPI bypass ended',        'DPI recovered. Switching back to stealth mode.'),
+  e1056('E-1056', 'Bypass window missed',     'DPI bypass ended during connection. Reconnecting with stealth.'),
   // ── Adaptive Mimicry ───────────────────────────────────────────────────────
   e1057('E-1057', 'Persona generation failed','Cannot generate digital persona. Using default browser fingerprint.'),
   e1058('E-1058', 'Behavioral delay error',   'Behavioral delay interrupted. ML-DPI may detect uniform traffic.'),
   e1059('E-1059', 'Network profile error',    'Cannot apply network profile (MTU/TTL). Using OS defaults.'),
   // ── MTProxy Fallback ───────────────────────────────────────────────────────
   e1060('E-1060', 'MTProxy DC unreachable',   'Telegram MTProxy DC timed out. Trying next DC.'),
-  e1061('E-1061', 'All MTProxy DCs blocked',  'All 5 Telegram DCs blocked. TSPU targeting MTProxy specifically.'),
+  e1061('E-1061', 'All MTProxy DCs blocked',  'All 5 Telegram DCs blocked. DPI targeting MTProxy specifically.'),
   e1062('E-1062', 'Fake TLS rejected',        'MTProxy Fake TLS rejected by DPI. Telegram CDN pattern detected.'),
   // ── News Awareness (04.04.2026) ────────────────────────────────────────────
   e1063('E-1063', 'Yandex/VK/Sber blocked',   'Yandex/VK/Sber now helping MinTsifry block VPN. Endpoints removed.'),
@@ -132,7 +132,7 @@ enum VlyErrorCode {
       'telegram':    'E-1019', 'v2ray_crash':   'E-1020', 'siberia':     'E-1021',
       'bypass':      'E-1026', 'probe':         'E-1027', 'sub':         'E-1032',
       'save':        'E-1038', 'backup':        'E-1039', 'profile':     'E-1041',
-      'watchdog':    'E-1050', 'whitelist':     'E-1051', 'tspu_bypass': 'E-1054',
+      'watchdog':    'E-1050', 'whitelist':     'E-1051', 'dpi_window':  'E-1054',
       'mimicry':     'E-1057', 'mtproxy':       'E-1060', 'news':        'E-1063',
     };
     return map[event] ?? 'E-0000';

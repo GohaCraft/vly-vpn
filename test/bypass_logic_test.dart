@@ -77,17 +77,17 @@ void main() {
     });
   });
 
-  group('Классификатор блокировок ТСПУ', () {
+  group('Классификатор блокировок DPI', () {
     test('распознаёт тип блокировки по тексту ошибки', () {
-      expect(TspuCountermeasures2026.classifyError('Connection reset by peer'),
+      expect(NetworkCountermeasures2026.classifyError('Connection reset by peer'),
           BlockType.tcpReset);
-      expect(TspuCountermeasures2026.classifyError('TLS handshake failed'),
+      expect(NetworkCountermeasures2026.classifyError('TLS handshake failed'),
           BlockType.tlsFingerprint);
-      expect(TspuCountermeasures2026.classifyError('DNS lookup failed'),
+      expect(NetworkCountermeasures2026.classifyError('DNS lookup failed'),
           BlockType.dnsPoisoning);
-      expect(TspuCountermeasures2026.classifyError('Operation timed out'),
+      expect(NetworkCountermeasures2026.classifyError('Operation timed out'),
           BlockType.timeout);
-      expect(TspuCountermeasures2026.classifyError('Connection refused'),
+      expect(NetworkCountermeasures2026.classifyError('Connection refused'),
           BlockType.portBlocked);
     });
   });

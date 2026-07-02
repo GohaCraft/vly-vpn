@@ -909,7 +909,7 @@ class VpnProvider extends ChangeNotifier {
     }
     _notify();
 
-    // Каждые 5 попыток — cooldown (даём РКН "остыть")
+    // Каждые 5 попыток — cooldown (даём провайдер "остыть")
     if (_bypassAttempt > 0 && _bypassAttempt % 5 == 0) {
       stealthStatus = '⏳ Cooldown 30s';
       aiStatus      = 'COOLDOWN';
@@ -1019,7 +1019,7 @@ class VpnProvider extends ChangeNotifier {
   }
 
 
-  // ═══ Security Patches v7.0 — ТСПУ невидимость ════════════════════════════
+  // ═══ Security Patches v7.0 — DPI невидимость ════════════════════════════
   static String _applySecurityPatches(String cfg) {
     try {
       final j = jsonDecode(cfg) as Map<String, dynamic>;
@@ -1027,7 +1027,7 @@ class VpnProvider extends ChangeNotifier {
       // 1. Нет логов на диск — /proc/net leak защита
       j['log'] = {'loglevel': 'none', 'access': '', 'error': ''};
 
-      // 2. Sniffing выключен — ТСПУ не читает домены через xray
+      // 2. Sniffing выключен — DPI не читает домены через xray
       if (j['inbounds'] is List) {
         for (final ib in j['inbounds'] as List) {
           if (ib is Map) ib['sniffing'] = {'enabled': false};
@@ -1194,7 +1194,7 @@ class VpnProvider extends ChangeNotifier {
 
 
       // ── HYSTERIA2 AUTO-DETECT: QUIC/UDP обход DPI ────────────────────────
-      // ТСПУ не умеет анализировать QUIC трафик (март 2026)
+      // DPI не умеет анализировать QUIC трафик (март 2026)
       if (finalLink.startsWith('hy2://') || finalLink.startsWith('hysteria2://')) {
         _log('⚡ Hysteria2 QUIC/UDP — DPI bypass');
         try {
@@ -1413,8 +1413,8 @@ class VpnProvider extends ChangeNotifier {
       status = 'ERROR';
       stealthStatus = '';
 
-      // TspuCountermeasures2026: умная классификация ошибки
-      final blockType = TspuCountermeasures2026.classifyError(e.toString());
+      // NetworkCountermeasures2026: умная классификация ошибки
+      final blockType = NetworkCountermeasures2026.classifyError(e.toString());
       final errStr = e.toString().toLowerCase();
       final isBlock = blockType != BlockType.timeout ||
                       errStr.contains('reset') || errStr.contains('timeout') ||
@@ -1422,7 +1422,7 @@ class VpnProvider extends ChangeNotifier {
 
       // Логируем тип для Dev Dashboard
       if (blockType != BlockType.timeout) {
-        final prio = TspuCountermeasures2026.prioritizedStrategies(blockType).take(3).join(',');
+        final prio = NetworkCountermeasures2026.prioritizedStrategies(blockType).take(3).join(',');
         _log('🔍 Тип блокировки: ${blockType.name} → приоритет стратегий: $prio');
       }
 

@@ -1,14 +1,14 @@
 // ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last, prefer_final_locals, omit_local_variable_types, always_use_package_imports
 part of 'main.dart';
 
-class TspuCountermeasures2026 {
+class NetworkCountermeasures2026 {
   static final _rng = Random();
 
   // ── Детектор типа блокировки по коду ошибки ────────────────────────────────
   // Разные типы блокировок требуют разных контрмер
   static BlockType classifyError(String errorMsg) {
     final e = errorMsg.toLowerCase();
-    // TCP RST — активная блокировка (ТСПУ инжектирует RST)
+    // TCP RST — активная блокировка (DPI инжектирует RST)
     if (e.contains('connection reset') || e.contains('econnreset')) {
       return BlockType.tcpReset;
     }
@@ -57,7 +57,7 @@ class TspuCountermeasures2026 {
   }
 
   // ── Случайный padding для снижения энтропийных признаков ────────────────────
-  // ТСПУ детектирует низкоэнтропийные пакеты как VPN
+  // DPI детектирует низкоэнтропийные пакеты как VPN
   // Добавляем рандомный User-Agent и фейковые заголовки
   static Map<String, String> antiEntropyHeaders() {
     final agents = [
@@ -80,7 +80,7 @@ class TspuCountermeasures2026 {
   }
 
   // ── Adaptive delay: имитация сетевого стека конкретного устройства ──────────
-  // ТСПУ 2026: ML обнаруживает VPN по "идеальным" задержкам (0ms jitter)
+  // DPI 2026: ML обнаруживает VPN по "идеальным" задержкам (0ms jitter)
   // Реальные устройства имеют jitter 2-15ms на каждом пакете
   static Duration adaptiveDelay(Duration base) {
     // Добавляем gaussian-like jitter ±15% к базовой задержке
@@ -100,7 +100,7 @@ class TspuCountermeasures2026 {
   }
 
   // ── Обнаружение режима "замедления" (не блокировка, а throttling) ───────────
-  // ТСПУ иногда замедляет, а не блокирует — распознаём по RTT > 2000ms
+  // DPI иногда замедляет, а не блокирует — распознаём по RTT > 2000ms
   static Future<ThrottleState> detectThrottle(String host, int port) async {
     try {
       final sw = Stopwatch()..start();
@@ -497,7 +497,7 @@ class KillSwitchV2 {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  RESIDENTIAL IP DETECTOR — проверка что IP сервера не дата-центр
 //
-//  Операторы и ТСПУ используют базы IP-репутации (MaxMind, IP2Location)
+//  Операторы и DPI используют базы IP-репутации (MaxMind, IP2Location)
 //  для определения VPN-серверов по ASN дата-центров.
 //  Residential IP = IP домашнего провайдера, не хостинга.
 //  Residential IP сложнее заблокировать — это «обычный пользователь».
@@ -530,12 +530,12 @@ class ResidentialIpDetector {
     31898,  // Oracle Cloud
     44356,  // Selectel
     49505,  // Selectel
-    200350, // Wildberries (сотрудничает с РКН)
-    207634, // Ozon (сотрудничает с РКН)
-    57724,  // Avito (сотрудничает с РКН)
-    31261,  // Сбербанк (сотрудничает с РКН)
-    47541,  // VK (сотрудничает с РКН)
-    13238,  // Яндекс (сотрудничает с РКН)
+    200350, // Wildberries (сотрудничает с провайдер)
+    207634, // Ozon (сотрудничает с провайдер)
+    57724,  // Avito (сотрудничает с провайдер)
+    31261,  // Сбербанк (сотрудничает с провайдер)
+    47541,  // VK (сотрудничает с провайдер)
+    13238,  // Яндекс (сотрудничает с провайдер)
   };
 
   // Residential IP — проверка по IP-диапазонам
