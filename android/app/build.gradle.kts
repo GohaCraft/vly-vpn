@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace    = "com.example.vpn_new"
+    namespace    = "app.vlyvpn"
     compileSdk   = 36
     ndkVersion   = flutter.ndkVersion
 
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.vpn_new"
+        applicationId = "app.vlyvpn"
         minSdk        = flutter.minSdkVersion
         targetSdk     = flutter.targetSdkVersion
         // versionCode по timestamp — каждый билд уникален, обновление без удаления

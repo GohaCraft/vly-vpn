@@ -3,7 +3,7 @@
 //  Подключает: NotificationHelper + DisconnectReceiver + TileService
 // ================================================================
 
-package com.example.vpn_new
+package app.vlyvpn
 
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
@@ -12,13 +12,13 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
-    private val commandsChannel = "aura_vpn/commands"
+    private val commandsChannel = "vly_vpn/commands"
 
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
 
         // Сохраняем engine для DisconnectReceiver и VpnTileService
-        AuraVpnApp.engine = engine
+        VlyApp.engine = engine
 
         // Уведомления
         NotificationHelper.setup(this, engine)
@@ -35,7 +35,7 @@ class MainActivity : FlutterActivity() {
             }
 
         // Системный шаринг + файловый импорт
-        MethodChannel(engine.dartExecutor.binaryMessenger, "aura_vpn/share")
+        MethodChannel(engine.dartExecutor.binaryMessenger, "vly_vpn/share")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "share" -> {
@@ -72,7 +72,7 @@ class MainActivity : FlutterActivity() {
             }
 
         // Обновление тайла при изменении статуса VPN
-        MethodChannel(engine.dartExecutor.binaryMessenger, "aura_vpn/tile")
+        MethodChannel(engine.dartExecutor.binaryMessenger, "vly_vpn/tile")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "update" -> {
@@ -80,7 +80,7 @@ class MainActivity : FlutterActivity() {
                             VpnTileService.isVpnActive =
                                 call.argument<Boolean>("active") ?: false
                             VpnTileService.serverName  =
-                                call.argument<String>("server")  ?: "Aura VPN"
+                                call.argument<String>("server")  ?: "Vly"
                         }
                         result.success(null)
                     }
@@ -90,7 +90,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
-        AuraVpnApp.engine = null
+        VlyApp.engine = null
         super.onDestroy()
     }
 

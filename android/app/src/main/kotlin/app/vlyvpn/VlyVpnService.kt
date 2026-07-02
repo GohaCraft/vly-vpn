@@ -1,4 +1,4 @@
-package com.example.vpn_new
+package app.vlyvpn
 
 import android.app.*
 import android.content.Intent
@@ -6,10 +6,10 @@ import android.net.VpnService
 import android.os.Build
 import androidx.core.app.NotificationCompat
 
-class AuraVpnService : VpnService() {
+class VlyVpnService : VpnService() {
 
     companion object {
-        const val CHANNEL_ID = "aura_vpn_channel"
+        const val CHANNEL_ID = "vly_vpn_channel"
         const val NOTIFICATION_ID = 1
     }
 
@@ -34,7 +34,7 @@ class AuraVpnService : VpnService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Aura VPN")
+            .setContentTitle("Vly")
             .setContentText("Соединение активно")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentIntent(pendingIntent)
@@ -47,7 +47,7 @@ class AuraVpnService : VpnService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Aura VPN Status",
+                "Vly Status",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Shows VPN connection status"

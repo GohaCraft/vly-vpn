@@ -6,10 +6,10 @@
 //    AppsHelper.setup(this, engine)
 //
 //  Положить рядом с MainActivity.kt:
-//  android/app/src/main/kotlin/com/example/vpn_new/AppsHelper.kt
+//  android/app/src/main/kotlin/app/vlyvpn/AppsHelper.kt
 // ================================================================
 
-package com.example.vpn_new
+package app.vlyvpn
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
@@ -26,11 +26,11 @@ import kotlinx.coroutines.*
 
 object AppsHelper {
 
-    private const val CHANNEL = "aura_vpn/apps"
+    private const val CHANNEL = "vly_vpn/apps"
 
     // Пакеты которые скрываем из списка — системные / сам VPN
     private val HIDDEN_PACKAGES = setOf(
-        "com.example.vpn_new",
+        "app.vlyvpn",
         "android",
         "com.android.systemui",
         "com.android.settings",
