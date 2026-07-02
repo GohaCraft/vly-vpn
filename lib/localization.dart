@@ -2208,4 +2208,24 @@ class S {
     VlyLocale.uk: 'Українська', VlyLocale.it: 'Italiano',
     VlyLocale.kz: 'Қазақша', VlyLocale.be: 'Беларуская',
   };
+
+  // Флаги (emoji regional indicators) для красивого селектора языков.
+  static const Map<VlyLocale, String> localeFlags = {
+    VlyLocale.en: '🇬🇧', VlyLocale.ru: '🇷🇺', VlyLocale.zh: '🇨🇳',
+    VlyLocale.de: '🇩🇪', VlyLocale.fr: '🇫🇷', VlyLocale.es: '🇪🇸',
+    VlyLocale.ar: '🇸🇦', VlyLocale.fa: '🇮🇷', VlyLocale.tr: '🇹🇷',
+    VlyLocale.pt: '🇵🇹', VlyLocale.ja: '🇯🇵', VlyLocale.ko: '🇰🇷',
+    VlyLocale.uk: '🇺🇦', VlyLocale.it: '🇮🇹', VlyLocale.kz: '🇰🇿',
+    VlyLocale.be: '🇧🇾',
+  };
+
+  // Английские названия — вторичная подпись под родным названием.
+  static const Map<VlyLocale, String> localeEnglish = {
+    VlyLocale.en: 'English', VlyLocale.ru: 'Russian', VlyLocale.zh: 'Chinese',
+    VlyLocale.de: 'German', VlyLocale.fr: 'French', VlyLocale.es: 'Spanish',
+    VlyLocale.ar: 'Arabic', VlyLocale.fa: 'Persian', VlyLocale.tr: 'Turkish',
+    VlyLocale.pt: 'Portuguese', VlyLocale.ja: 'Japanese', VlyLocale.ko: 'Korean',
+    VlyLocale.uk: 'Ukrainian', VlyLocale.it: 'Italian', VlyLocale.kz: 'Kazakh',
+    VlyLocale.be: 'Belarusian',
+  };
 }

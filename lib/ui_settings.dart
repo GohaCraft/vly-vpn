@@ -1586,24 +1586,50 @@ class _LanguagePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = Provider.of<AppProvider>(context);
-    return _SubPage(title: S.t('language'), child: Wrap(
-      spacing: 8, runSpacing: 8,
+    return _SubPage(title: S.t('language'), child: GridView.count(
+      crossAxisCount: 2,
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+      childAspectRatio: 3.1,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: VlyLocale.values.map((loc) {
         final sel = app.locale == loc;
         return GestureDetector(
           onTap: () => app.setLocale(loc),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
             decoration: BoxDecoration(
-              color: sel ? _accent.withOpacity(0.18) : Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(10),
+              color: sel ? _accent.withOpacity(0.14) : Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: sel ? _accent.withOpacity(0.5) : Colors.white.withOpacity(0.10))),
-            child: Text(S.localeNames[loc] ?? loc.name,
-              style: TextStyle(fontSize: 12,
-                color: sel ? _accent : Colors.white54,
-                fontWeight: sel ? FontWeight.bold : FontWeight.normal))));
+                color: sel ? _accent : Colors.white.withOpacity(0.08),
+                width: sel ? 1.6 : 1)),
+            child: Row(children: [
+              Container(width: 38, height: 38, alignment: Alignment.center,
+                decoration: BoxDecoration(shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.06)),
+                child: Text(S.localeFlags[loc] ?? '🏳️',
+                  style: const TextStyle(fontSize: 21))),
+              const SizedBox(width: 11),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(S.localeNames[loc] ?? loc.name,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13.5,
+                      color: sel ? _accent : Colors.white,
+                      fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 1),
+                  Text(S.localeEnglish[loc] ?? '',
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 10.5,
+                      color: Colors.white.withOpacity(0.4))),
+                ])),
+              if (sel) Icon(Icons.check_circle_rounded, color: _accent, size: 19),
+            ])));
       }).toList()));
   }
 }
