@@ -1,17 +1,55 @@
-# vpn_new
+# Vly VPN
 
-A new Flutter project.
+**Smart bypass, always on.**
 
-## Getting Started
+Vly — кроссплатформенный anti-censorship VPN на Flutter, заточенный под
+обход блокировок ТСПУ/РКН и мобильных белых списков в России. Клиент сам
+подбирает и адаптирует метод обхода в реальном времени, без ручной настройки.
 
-This project is a starting point for a Flutter application.
+## Ключевые возможности
 
-A few resources to get you started if this is your first Flutter project:
+- **AI-каскад обхода** — вместо одной фиксированной стратегии клиент пробует
+  упорядоченный каскад методов (VLESS + Reality/xHTTP/gRPC/XTLS-Vision,
+  Hysteria2 fallback), верифицируя каждый реальным TLS-пробингом, а не
+  предположением.
+- **Обучающаяся память (контекстный бандит)** — для каждого класса сети
+  (мобильный + белый список / мобильный / Wi-Fi) клиент запоминает, какая
+  стратегия быстрее и надёжнее работает именно там, и учится на провалах
+  (в т.ч. когда проба прошла, а живой туннель — нет).
+- **Self-healing блеклист** — проваленные стратегии уходят в cooldown с
+  экспоненциальным backoff и сами возвращаются в строй, а не банятся навсегда.
+  Паник-флор гарантирует, что клиент никогда не останется совсем без обхода.
+- **Health monitor** — фоновая проверка обхода по каждому сервису в реальном
+  времени, мгновенный failover при массовой деградации.
+- **Серверно-обновляемый каскад** — новые стратегии обхода и правила
+  доставляются с сервера (версионирование, TTL, валидация) без обновления
+  приложения; вшитый каскад всегда остаётся безопасным «полом».
+- **Пер-сервисный обход** — отдельные профили и роутинг для YouTube,
+  Telegram (и форков), TikTok и др.
+- **Кастомизация темы** — HSV-подбор цвета, готовые скины, фон-фото/GIF.
+- **16 языков** локализации.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Стек
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **Flutter/Dart** — весь UI и клиентская логика (монолит `lib/*.dart`,
+  `part of main.dart`).
+- **flutter_v2ray (xray-core)** — транспорт: VLESS+Reality, xHTTP, gRPC,
+  XTLS-Vision, Hysteria2.
+- **Android/iOS** нативная упаковка через Flutter.
+
+## Разработка
+
+```bash
+flutter pub get
+flutter analyze
+flutter test
+flutter run
+```
+
+Golden-тесты для визуальной проверки UI лежат в `test/*_golden_test.dart`.
+
+## Статус
+
+Активная разработка. Каскад обхода и AI-эвристики регулярно обновляются по
+мере изменения поведения ТСПУ/РКН — см. комментарии в `lib/ai_bypass.dart`
+для истории актуализации методов.
