@@ -27,9 +27,26 @@ android {
         versionName   = flutter.versionName
     }
 
+    // Стабильный keystore — ОДИН на все сборки (локально и в CI). Раньше
+    // использовался debug-keystore, который генерится заново на каждой машине CI
+    // → каждая сборка подписана РАЗНЫМ ключом → Android отказывался обновлять
+    // (signature mismatch), приходилось удалять старое приложение. Теперь подпись
+    // одинаковая везде → обновление поверх (in-place update) работает.
+    signingConfigs {
+        create("vly") {
+            storeFile     = file("vly.keystore")
+            storePassword = "vlyvpn2026"
+            keyAlias      = "vly"
+            keyPassword   = "vlyvpn2026"
+        }
+    }
+
     buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("debug")
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("vly")
+        }
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("vly")
         }
     }
 }

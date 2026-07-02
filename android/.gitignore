@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Vly: стабильный keystore для согласованной подписи (in-place updates)
+!android/app/vly.keystore
