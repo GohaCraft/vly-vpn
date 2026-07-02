@@ -38,6 +38,26 @@ jobs:
           echo "android.enableJetifier=false" >> android/gradle.properties
           echo "android.native.buildOutput=verbose" >> android/gradle.properties
 
+      - name: Configure release signing (if secrets set)
+        env:
+          KEYSTORE_BASE64:   ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS:         ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD:      ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/vly.keystore
+            {
+              echo "storeFile=vly.keystore"
+              echo "storePassword=$KEYSTORE_PASSWORD"
+              echo "keyAlias=$KEY_ALIAS"
+              echo "keyPassword=$KEY_PASSWORD"
+            } > android/key.properties
+            echo "Release signing configured from secrets (stable in-place updates)."
+          else
+            echo "No KEYSTORE_BASE64 secret — falling back to debug signing."
+          fi
+
       - name: Build APK
         run: |
           export JAVA_OPTS="-Xmx6g -Xms2g"

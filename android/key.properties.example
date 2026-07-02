@@ -1,0 +1,11 @@
+# Шаблон конфигурации подписи. Скопируй в android/key.properties и заполни.
+# НАСТОЯЩИЙ android/key.properties — в .gitignore, НИКОГДА не коммить его.
+#
+# В CI эти же значения приходят из GitHub Secrets (workflow сам создаёт
+# key.properties): KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD.
+#
+# storeFile — путь к .keystore относительно каталога android/app/
+storeFile=vly.keystore
+storePassword=ВАШ_ПАРОЛЬ_ХРАНИЛИЩА
+keyAlias=vly
+keyPassword=ВАШ_ПАРОЛЬ_КЛЮЧА
