@@ -103,12 +103,12 @@ class BypassHealthMonitor {
       } catch (_) { ok = false; }
       final worsened = report(p.id, ok: ok, latencyMs: ms);
       if (worsened && stateOf(p.id) == BypassHealth.down) newlyDown.add(p.id);
-      // Сервис умер → его стратегию в self-healing блеклист (cooldown с backoff).
-      if (stateOf(p.id) == BypassHealth.down) {
-        StrategyBlacklist.markFailed(p.strategy);
-      } else if (stateOf(p.id) == BypassHealth.healthy) {
-        StrategyBlacklist.markSuccess(p.strategy);
-      }
+      // ПРИМЕЧАНИЕ: раньше здесь дёргали StrategyBlacklist.markFailed(p.strategy).
+      // Это была ошибка пространств имён — p.strategy ('reality_fragment' и т.п.)
+      // НЕ совпадает с типами каскада ('vless_xhttp'…), так что бан оседал
+      // фантомным мусором и на выбор стратегии не влиял. Реакция на смерть
+      // сервиса — это failover + end-to-end наказание активной руки в
+      // _onBypassDown (AiMemory.penalizeActive), а не бан несуществующего ключа.
     }));
     if (newlyDown.isNotEmpty) {
       _log?.call('🔴 Обход отключился: ${newlyDown.join(", ")}');

@@ -806,6 +806,10 @@ class VpnProvider extends ChangeNotifier {
     // не дожидаясь полного обрыва соединения.
     if (downAll >= (total / 2).ceil() && !_isRotating) {
       _log('🔴 Массовое падение обходов ($downAll/$total) → немедленный failover');
+      // End-to-end сигнал: активная стратегия прошла TLS-пробу, но сквозь живой
+      // туннель по факту не держит связь — наказываем её, чтобы ИИ опустил её
+      // в рейтинге и в следующий раз выбрал другую.
+      AiMemory.penalizeActive();
       stealthHandshakeFails = 3; // форсируем путь обхода
       _scheduleBypass();
     }

@@ -225,4 +225,55 @@ void main() {
       expect(StrategyBlacklist.isFailed('s1'), isTrue); // восстановлен cooldown
     });
   });
+
+  group('ИИ-бандит — умный скоринг + самокоррекция', () {
+    setUp(() => AiMemory.resetAll());
+
+    test('надёжность важнее сырой скорости (score = надёжн × скорость × свежесть)', () {
+      // Быстрая, но нестабильная: 100мс, 1 успех и 5 провалов.
+      AiMemory.recordSuccess('n', 'fast_flaky', 100);
+      for (var i = 0; i < 5; i++) { AiMemory.recordFailure('n', 'fast_flaky'); }
+      // Медленнее, но стабильная: 500мс, 4 успеха без провалов.
+      for (var i = 0; i < 4; i++) { AiMemory.recordSuccess('n', 'slow_solid', 500); }
+      // Стабильная должна встать выше — ИИ не гонится за скоростью в ущерб связи.
+      expect(AiMemory.rankedTypes('n').first, 'slow_solid');
+    });
+
+    test('при равной надёжности выигрывает более быстрая', () {
+      AiMemory.recordSuccess('n2', 'slow', 700);
+      AiMemory.recordSuccess('n2', 'fast', 120);
+      expect(AiMemory.rankedTypes('n2'), ['fast', 'slow']);
+    });
+
+    test('penalizeActive наказывает активную (последнюю успешную) руку', () {
+      AiMemory.recordSuccess('n3', 'active_one', 200);
+      expect(AiMemory.statsFor('n3', 'active_one')!['losses'], 0);
+      AiMemory.penalizeActive(); // сигнал «живой туннель умер»
+      expect(AiMemory.statsFor('n3', 'active_one')!['losses'], 1);
+    });
+
+    test('recordFailure не создаёт фантомных записей для неизвестных стратегий', () {
+      AiMemory.recordFailure('n4', 'never_seen');
+      expect(AiMemory.statsFor('n4', 'never_seen'), isNull);
+      expect(AiMemory.rankedTypes('n4'), isEmpty);
+    });
+
+    test('провалы опускают ранее лидировавшую стратегию (самокоррекция)', () {
+      // Обе стартуют одинаково быстрыми и надёжными.
+      AiMemory.recordSuccess('n5', 'a', 150);
+      AiMemory.recordSuccess('n5', 'b', 150);
+      // «a» начинает валиться сквозь туннель — модель должна её опустить.
+      for (var i = 0; i < 4; i++) { AiMemory.recordFailure('n5', 'a'); }
+      expect(AiMemory.rankedTypes('n5').first, 'b');
+    });
+
+    test('EWMA-задержка сглаживает джиттер, не прыгая на новое значение', () {
+      AiMemory.recordSuccess('n6', 's', 120);
+      expect(AiMemory.latencyFor('n6', 's'), 120);
+      AiMemory.recordSuccess('n6', 's', 320);
+      final ms = AiMemory.latencyFor('n6', 's')!;
+      expect(ms, greaterThan(120));
+      expect(ms, lessThan(320));
+    });
+  });
 }

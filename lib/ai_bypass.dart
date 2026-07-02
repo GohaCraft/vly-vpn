@@ -158,99 +158,236 @@ class StrategyBlacklist {
   }
 }
 
+// «Рука» бандита: накопленная статистика одной стратегии на одном классе сети.
+class _Arm {
+  int ms;      // сглаженная (EWMA) задержка успешной пробы, мс
+  int wins;    // сколько раз реально сработала (проба/туннель прошли)
+  int losses;  // сколько раз провалилась (проба не прошла / туннель умер)
+  int seenMs;  // epoch последнего обновления — для затухания устаревших знаний
+  _Arm({this.ms = 0, this.wins = 0, this.losses = 0, required this.seenMs});
+
+  Map<String, dynamic> toJson() => {'m': ms, 'w': wins, 'l': losses, 's': seenMs};
+  static _Arm fromJson(Map j) => _Arm(
+        ms:     (j['m'] as num?)?.toInt() ?? 0,
+        wins:   (j['w'] as num?)?.toInt() ?? 0,
+        losses: (j['l'] as num?)?.toInt() ?? 0,
+        seenMs: (j['s'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+      );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  AI MEMORY — долговременная память ИИ (сохраняется между запусками)
 //
-//  Раньше _lastWinnerType и StrategyBlacklist жили ТОЛЬКО в памяти → при каждом
-//  перезапуске приложения ИИ учился с нуля. Теперь запоминаем:
-//   • какая стратегия сработала на КАЖДОМ классе сети (mobile-whitelist /
-//     mobile / wifi) — при возврате в такую сеть коннект сразу берёт победителя;
-//   • состояние self-healing блеклиста (cooldown'ы стратегий).
-//  Всё в SharedPreferences, запись дебаунсится.
+//  Модель: контекстный многорукий бандит. Для каждого КЛАССА СЕТИ
+//  (mobile_wl / mobile / wifi) храним статистику по каждой стратегии: скорость
+//  (EWMA-задержка), надёжность (wins/losses) и свежесть (когда последний раз
+//  подтверждена). Порядок каскада = сортировка по СКОРУ = надёжность × скорость
+//  × свежесть. ИИ учится не «что работало», а «что работает БЫСТРО и СТАБИЛЬНО
+//  ИМЕННО ЗДЕСЬ, и подтверждалось НЕДАВНО».
+//
+//  🔒 ГЛАВНЫЙ ИНВАРИАНТ БЕЗОПАСНОСТИ («ИИ не должна расхерачить весь проект»):
+//     память может ТОЛЬКО ПЕРЕУПОРЯДОЧИТЬ каскад, но НИКОГДА не удаляет из него
+//     стратегии. Полный статический каскад всегда на месте; даже стратегия с
+//     нулевым скором остаётся кандидатом и будет опробована, если верхние не
+//     прошли. Плюс паник-флор в _runAutoMode: если всё в cooldown — чистим и
+//     пробуем заново. Пользователь физически не может остаться без обхода.
+//
+//  Самокоррекция: провал пробы или смерть живого туннеля (сигнал от
+//  HealthMonitor через penalizeActive) добавляет loss → скор падает →
+//  стратегия опускается. Это лечит «отравление» модели быстрой, но по факту
+//  нерабочей стратегией (проба TLS прошла, а сквозь туннель — нет).
+//
+//  Границы: устаревшие (>21 дня) записи чистятся при загрузке, на класс сети
+//  хранится не больше _maxArmsPerNet стратегий (кэп памяти). load() устойчив к
+//  битому JSON (try/catch + мягкий парсинг полей). Всё в SharedPreferences,
+//  запись дебаунсится.
 // ═══════════════════════════════════════════════════════════════════════════
 class AiMemory {
   static const _key = 'ai_memory_v1';
-  static final Map<String, String> _winnerByNet = {};
-  // Замеренная задержка успешной пробы: net -> strategyType -> ms (сглажено).
-  // ИИ учится не «что работало», а «что работало БЫСТРЕЕ» в этой сети.
-  static final Map<String, Map<String, int>> _latencyByNet = {};
+  static const _maxArmsPerNet = 24;                 // кэп памяти на класс сети
+  static const _staleAfter = Duration(days: 21);    // забываем совсем старое
+  static final Map<String, Map<String, _Arm>> _arms = {};
+  // Последняя ПОДТВЕРЖДЁННАЯ стратегия — «активная рука». Нужна, чтобы сигнал
+  // «живой туннель умер» (end-to-end от HealthMonitor) наказал именно её.
+  static String? _activeNet;
+  static String? _activeType;
   static Timer? _saveDebounce;
+
+  static int get _now => DateTime.now().millisecondsSinceEpoch;
 
   // Класс сети — грубый «отпечаток» без спец-разрешений (SSID недоступен без
   // location). mobile+whitelist / mobile / wifi покрывают разные режимы обхода.
   static String netClass(bool mobile, bool whitelist) =>
       mobile ? (whitelist ? 'mobile_wl' : 'mobile') : 'wifi';
 
-  static String? winnerFor(String net) => _winnerByNet[net];
-
-  static void recordWinner(String net, String strategyType) {
-    if (_winnerByNet[net] == strategyType) return;
-    _winnerByNet[net] = strategyType;
+  // ── Обучение ───────────────────────────────────────────────────────────────
+  // Стратегия сработала: обновляем задержку (EWMA 60/40), +win, метка свежести.
+  // Фиксируем её как активную руку для end-to-end обратной связи.
+  static void recordSuccess(String net, String type, int ms) {
+    final v = ms.clamp(0, 60000);
+    final m = _arms.putIfAbsent(net, () => {});
+    final a = m.putIfAbsent(type, () => _Arm(seenMs: _now));
+    a.ms = a.ms == 0 ? v : (a.ms * 0.6 + v * 0.4).round();
+    a.wins++;
+    a.seenMs = _now;
+    _activeNet = net; _activeType = type;
+    _prune(net);
     _scheduleSave();
   }
 
-  // Запоминаем задержку успешной стратегии. EWMA (60% старое / 40% новое):
-  // сглаживает джиттер сети, но следует за трендом деградации фронта.
-  static void recordLatency(String net, String type, int ms) {
-    if (ms < 0) return;
-    final m = _latencyByNet.putIfAbsent(net, () => {});
-    final prev = m[type];
-    m[type] = prev == null ? ms : (prev * 0.6 + ms * 0.4).round();
+  // Стратегия провалилась: +loss. Наказываем ТОЛЬКО уже известную руку —
+  // не создаём записи на провалах (иначе память замусорится проигравшими).
+  static void recordFailure(String net, String type) {
+    final a = _arms[net]?[type];
+    if (a == null) return;
+    a.losses++;
+    a.seenMs = _now;
     _scheduleSave();
   }
 
-  static int? latencyFor(String net, String type) => _latencyByNet[net]?[type];
+  // End-to-end сигнал: HealthMonitor увидел, что ЖИВОЙ туннель массово умер →
+  // активная стратегия по факту не работает сквозь туннель, хоть TLS-проба и
+  // прошла. Наказываем именно её — модель сама себя исправляет.
+  static void penalizeActive() {
+    final n = _activeNet, t = _activeType;
+    if (n != null && t != null) recordFailure(n, t);
+  }
 
-  // Типы стратегий этой сети, отсортированные по замеренной задержке
-  // (самые быстрые — первыми). Пусто, если сеть ещё не изучена.
+  // Скор руки: надёжность × скорость × свежесть. Чем выше — тем раньше в каскаде.
+  static double _score(_Arm a) {
+    // Лаплас-сглаживание: одна победа без поражений ≠ абсолютная уверенность.
+    final reliability = (a.wins + 1) / (a.wins + a.losses + 2); // ∈ (0,1)
+    final speed = 600.0 / (a.ms + 300);                          // быстрее → больше
+    final ageDays = (_now - a.seenMs) / 86400000.0;
+    // Свежесть затухает, но не в ноль (пол 0.4): старое-но-хорошее ещё в игре.
+    final recency = ageDays <= 1 ? 1.0
+        : (1.0 / (1 + 0.15 * (ageDays - 1))).clamp(0.4, 1.0);
+    return reliability * speed * recency;
+  }
+
+  static int? latencyFor(String net, String type) => _arms[net]?[type]?.ms;
+
+  // Диагностика/тесты: сырая статистика руки (или null, если не изучена).
+  static Map<String, int>? statsFor(String net, String type) {
+    final a = _arms[net]?[type];
+    return a == null ? null : {'wins': a.wins, 'losses': a.losses, 'ms': a.ms};
+  }
+
+  // Стратегии этой сети по убыванию скора (лучшие — первыми). Пусто для
+  // неизученной сети → каскад идёт в статическом порядке.
   static List<String> rankedTypes(String net) {
-    final m = _latencyByNet[net];
+    final m = _arms[net];
     if (m == null || m.isEmpty) return const [];
-    final e = m.entries.toList()..sort((a, b) => a.value.compareTo(b.value));
+    final e = m.entries.toList()
+      ..sort((a, b) => _score(b.value).compareTo(_score(a.value)));
     return e.map((x) => x.key).toList();
   }
 
-  static void onBlacklistChanged() => _scheduleSave();
+  static String? winnerFor(String net) {
+    final r = rankedTypes(net);
+    return r.isEmpty ? null : r.first;
+  }
 
-  static Map<String, String> get winners => Map.unmodifiable(_winnerByNet);
+  // Убираем протухшие руки и держим кэп памяти (оставляем top-N по скору).
+  static void _prune(String net) {
+    final m = _arms[net];
+    if (m == null) return;
+    final cutoff = _now - _staleAfter.inMilliseconds;
+    m.removeWhere((_, a) => a.seenMs < cutoff);
+    if (m.length > _maxArmsPerNet) {
+      final keep = (m.entries.toList()
+            ..sort((a, b) => _score(b.value).compareTo(_score(a.value))))
+          .take(_maxArmsPerNet)
+          .map((e) => e.key)
+          .toSet();
+      m.removeWhere((k, _) => !keep.contains(k));
+    }
+  }
+
+  // ── Совместимость со старым API (UI/тесты) ──────────────────────────────────
+  static void recordWinner(String net, String type) {
+    final m = _arms.putIfAbsent(net, () => {});
+    final a = m.putIfAbsent(type, () => _Arm(seenMs: _now));
+    a.wins++;
+    a.seenMs = _now;
+    _activeNet = net; _activeType = type;
+    _scheduleSave();
+  }
+
+  static void recordLatency(String net, String type, int ms) =>
+      recordSuccess(net, type, ms);
+
+  static void onBlacklistChanged() => _scheduleSave();
 
   static void _scheduleSave() {
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(seconds: 2), save);
   }
 
+  // ── Персист ─────────────────────────────────────────────────────────────────
   static Future<void> load() async {
     try {
       final p   = await SharedPreferences.getInstance();
       final raw = p.getString(_key);
       if (raw == null) return;
       final j = jsonDecode(raw) as Map<String, dynamic>;
-      final w = (j['winners'] as Map?)?.cast<String, dynamic>() ?? {};
-      _winnerByNet
-        ..clear()
-        ..addEntries(w.entries.map((e) => MapEntry(e.key, e.value.toString())));
-      final lat = (j['latency'] as Map?)?.cast<String, dynamic>() ?? {};
-      _latencyByNet.clear();
-      lat.forEach((net, m) {
-        if (m is Map) {
-          _latencyByNet[net] = m.map(
-              (k, v) => MapEntry(k.toString(), (v as num).toInt()));
-        }
-      });
+      _arms.clear();
+      final arms = (j['arms'] as Map?)?.cast<String, dynamic>();
+      if (arms != null) {
+        arms.forEach((net, m) {
+          if (m is Map) {
+            final inner = <String, _Arm>{};
+            m.forEach((type, a) {
+              if (a is Map) inner[type.toString()] = _Arm.fromJson(a);
+            });
+            if (inner.isNotEmpty) _arms[net] = inner;
+          }
+        });
+      } else {
+        _migrateLegacy(j); // мягкая миграция со старой схемы winners/latency
+      }
+      for (final net in _arms.keys.toList()) { _prune(net); }
       final bl = (j['blacklist'] as Map?)?.cast<String, dynamic>() ?? {};
       StrategyBlacklist.restoreJson(bl);
     } catch (_) {}
+  }
+
+  // Переносим знания старого формата, чтобы у пользователей не обнулялось обучение.
+  static void _migrateLegacy(Map<String, dynamic> j) {
+    final lat = (j['latency'] as Map?)?.cast<String, dynamic>() ?? {};
+    lat.forEach((net, m) {
+      if (m is Map) {
+        final inner = _arms.putIfAbsent(net, () => {});
+        m.forEach((type, v) {
+          inner[type.toString()] =
+              _Arm(ms: (v as num).toInt(), wins: 1, seenMs: _now);
+        });
+      }
+    });
+    final win = (j['winners'] as Map?)?.cast<String, dynamic>() ?? {};
+    win.forEach((net, type) {
+      final inner = _arms.putIfAbsent(net, () => {});
+      final t = type.toString();
+      (inner[t] ??= _Arm(seenMs: _now)).wins += 1;
+    });
   }
 
   static Future<void> save() async {
     try {
       final p = await SharedPreferences.getInstance();
       await p.setString(_key, jsonEncode({
-        'winners':   _winnerByNet,
-        'latency':   _latencyByNet,
+        'arms': _arms.map((net, m) =>
+            MapEntry(net, m.map((t, a) => MapEntry(t, a.toJson())))),
         'blacklist': StrategyBlacklist.toJson(),
       }));
     } catch (_) {}
+  }
+
+  // Для тестов/диагностики: полный сброс памяти.
+  static void resetAll() {
+    _arms.clear();
+    _activeNet = null;
+    _activeType = null;
   }
 }
 
@@ -577,11 +714,11 @@ class AiBypassAgent {
     final cascade = await _buildCascade(bt, whitelistActive, isMobile);
     final limited = cascade.take(kMaxAttempts).toList();
 
-    // Обучение: упорядочиваем каскад по ЗАМЕРЕННОЙ задержке успешных проб на
-    // этом классе сети (в т.ч. из прошлых запусков — память персистится).
-    // Самая быстрая рабочая стратегия идёт первой; неизученные — за ними, по
-    // статическому приоритету каскада. ИИ учится не просто «что работало», а
-    // «что работало БЫСТРЕЕ здесь».
+    // Обучение: упорядочиваем каскад по СКОРУ (надёжность × скорость × свежесть)
+    // для этого класса сети — знания персистятся между запусками. Лучшая
+    // проверенная стратегия идёт первой; неизученные — за ними, по статическому
+    // приоритету каскада. ВАЖНО: это только ПЕРЕСТАНОВКА — ни одна стратегия из
+    // каскада не удаляется, поэтому ИИ физически не может «выпилить» обход.
     final ranked = AiMemory.rankedTypes(net);
     if (ranked.isNotEmpty) {
       int rank(BypassStrategy s) {
@@ -590,10 +727,9 @@ class AiBypassAgent {
       }
       limited.sort((a, b) => rank(a).compareTo(rank(b)));
     }
-    final fastest = ranked.isNotEmpty ? ranked.first : AiMemory.winnerFor(net);
+    final leader = ranked.isNotEmpty ? ranked.first : null;
     _log('🤖 E-2006: Cascade: ${limited.length} стратегий'
-        '${fastest != null ? " (лидер: $fastest"
-            "${ranked.isNotEmpty ? " ${AiMemory.latencyFor(net, fastest)}ms" : ""})" : ""}');
+        '${leader != null ? " (лидер: $leader ${AiMemory.latencyFor(net, leader)}ms)" : ""}');
 
     // ПАНИК-ФЛОР: если ВСЕ кандидаты сейчас в cooldown — значит ИИ временно
     // забанил всё. Не оставляем пользователя без обхода: чистим блеклист и
@@ -628,8 +764,8 @@ class AiBypassAgent {
             .timeout(const Duration(seconds: 3), onTimeout: () => false);
         sw.stop();
         if (ok) {
-          AiMemory.recordWinner(net, s.type);      // запоминаем победителя для этой сети
-          AiMemory.recordLatency(net, s.type, sw.elapsedMilliseconds); // и его скорость
+          // +win + задержка + фиксация как активной руки (одним вызовом).
+          AiMemory.recordSuccess(net, s.type, sw.elapsedMilliseconds);
           StrategyBlacklist.markSuccess(s.type);   // сработало → снять возможный бан
           AiMemory.onBlacklistChanged();
           _log('✅ E-2007: Обход проверен (${sw.elapsedMilliseconds}ms): ${s.type}');
@@ -638,6 +774,7 @@ class AiBypassAgent {
         _log('· ${s.type}: конфиг построен, проба связи не прошла');
       }
       StrategyBlacklist.markFailed(s.type);
+      AiMemory.recordFailure(net, s.type);         // модель учится и на провалах
       AiMemory.onBlacklistChanged();
     }
 
