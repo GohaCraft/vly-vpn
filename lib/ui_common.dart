@@ -569,9 +569,14 @@ class _BlobPainter extends CustomPainter {
         ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r)));
     }
   }
-  @override bool shouldRepaint(_BlobPainter o) =>
-      o.connected != connected || o.isLight != isLight ||
-      o.blobs.length != blobs.length; // перерисовывать только при реальных изменениях
+  // FIX бага смены темы: раньше сравнивались только connected/isLight/length,
+  // но НЕ цвета блобов — при смене тёмной темы на тёмную (Океан→Сакура) холст
+  // блобов не перерисовывался, оставляя старые цвета поверх нового фона =
+  // «смешивание». Это painter, управляемый тикером-анимацией, поэтому корректно
+  // перерисовывать всегда: и позиции блобов (анимация), и их цвета (смена темы)
+  // обновляются мгновенно. FPS-гейт (_lowPerf) уже останавливает тикер на
+  // слабых устройствах, так что лишних перерисовок нет.
+  @override bool shouldRepaint(_BlobPainter o) => true;
 }
 
 // iOS 26 Liquid Glass material — specular highlights, refraction, blur
