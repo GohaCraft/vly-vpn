@@ -943,3 +943,84 @@ class BypassProber {
     }
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  TELEMETRY — строго анонимная диагностика (opt-in, по умолчанию ВЫКЛ)
+//
+//  Зачем: после релиза видеть, ЧТО ломается (какие стратегии падают, какие
+//  коды ошибок частые) — БЕЗ слежки за пользователем.
+//
+//  🔒 ОТПРАВЛЯЕМ ТОЛЬКО ЭТО: версия/сборка app, ОС, класс сети
+//     (mobile/mobile_wl/wifi — без SSID), тип стратегии (наш внутренний токен),
+//     код ошибки, bool-успех, латентность вёдрами по 250 мс, случайный
+//     install-id (НЕ device/user id).
+//  🔒 НЕ ОТПРАВЛЯЕМ НИКОГДА: IP, посещённые домены, адреса/ссылки нод,
+//     идентификаторы пользователя/устройства, содержимое трафика.
+//  Fire-and-forget: провал отправки просто теряется; очередь ограничена.
+// ═══════════════════════════════════════════════════════════════════════════
+class Telemetry {
+  static bool _enabled = false;
+  static String? _iid;                       // анонимный install id
+  static final List<Map<String, dynamic>> _queue = [];
+  static Timer? _flushTimer;
+  static const _maxQueue   = 40;
+  static const _flushAfter = Duration(seconds: 20);
+
+  static bool get enabled => _enabled;
+
+  static Future<void> init() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      _iid = p.getString('tele_iid');
+      if (_iid == null) {
+        final r = Random.secure();
+        _iid = List.generate(8,
+            (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+        await p.setString('tele_iid', _iid!);
+      }
+    } catch (_) {}
+  }
+
+  static void configure({required bool enabled}) {
+    _enabled = enabled;
+    if (!enabled) { _queue.clear(); _flushTimer?.cancel(); _flushTimer = null; }
+  }
+
+  // Результат попытки стратегии — тип это наш внутренний токен, не данные юзера.
+  static void strategyResult({
+    required String type, required bool ok, required String netClass,
+    int latencyMs = 0,
+  }) => _add('strategy', {
+        'type': type, 'ok': ok, 'net': netClass,
+        if (latencyMs > 0) 'lat': (latencyMs / 250).round() * 250, // ведро 250мс
+      });
+
+  static void errorCode(String code) => _add('error', {'code': code});
+
+  static void connectOutcome({required bool success, int attempts = 0}) =>
+      _add('connect', {'ok': success, if (attempts > 0) 'tries': attempts});
+
+  static void _add(String event, Map<String, dynamic> data) {
+    if (!_enabled) return;
+    _queue.add({
+      'e': event, 't': DateTime.now().toUtc().millisecondsSinceEpoch, ...data,
+    });
+    while (_queue.length > _maxQueue) { _queue.removeAt(0); }
+    _flushTimer ??= Timer(_flushAfter, () { _flushTimer = null; flush(); });
+  }
+
+  static Future<void> flush() async {
+    if (!_enabled || _queue.isEmpty) return;
+    final batch = List<Map<String, dynamic>>.from(_queue);
+    _queue.clear();
+    final payload = jsonEncode({
+      'iid': _iid, 'app': kAppVersion, 'build': kAppBuild,
+      'os': Platform.operatingSystem, 'osv': Platform.operatingSystemVersion,
+      'events': batch,
+    });
+    try {
+      await PinnedHttpClient.post(kTelemetryUrl, body: payload,
+          timeout: const Duration(seconds: 6));
+    } catch (_) { /* fire-and-forget: теряем батч, не копим бесконечно */ }
+  }
+}

@@ -936,6 +936,8 @@ class AiBypassAgent {
           AiMemory.recordSuccess(net, s.type, sw.elapsedMilliseconds);
           StrategyBlacklist.markSuccess(s.type);   // сработало → снять возможный бан
           AiMemory.onBlacklistChanged();
+          Telemetry.strategyResult(type: s.type, ok: true, netClass: net,
+              latencyMs: sw.elapsedMilliseconds);
           _log('✅ E-2007: Обход проверен (${sw.elapsedMilliseconds}ms): ${s.type}');
           return result;
         }
@@ -944,6 +946,7 @@ class AiBypassAgent {
       StrategyBlacklist.markFailed(s.type);
       AiMemory.recordFailure(net, s.type);         // модель учится и на провалах
       AiMemory.onBlacklistChanged();
+      Telemetry.strategyResult(type: s.type, ok: false, netClass: net);
     }
 
     // Ни один кандидат не прошёл пробу. Не теряем шанс: отдаём первый

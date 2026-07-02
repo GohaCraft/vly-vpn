@@ -1197,6 +1197,11 @@ class _AiBypassPage extends StatelessWidget {
         title: S.t('sync_rules'), subtitle: S.t('sync_rules_sub'),
         actionLabel: 'SYNC',
         onTap: vpn.syncRules),
+      const SizedBox(height: 4),
+      _SwitchRow(
+        icon: Icons.insights_outlined, iconColor: const Color(0xFF66BB6A),
+        title: S.t('telemetry'), subtitle: S.t('telemetry_sub'),
+        value: vpn.telemetryEnabled, onChanged: vpn.setTelemetryEnabled),
 
       const SizedBox(height: 20),
       _SubSection('STEALTH ENGINE 3.0'),

@@ -181,6 +181,10 @@ class VlyProfile {
   // ── Безопасность ──────────────────────────────────────────────────────────
   bool killSwitch;
   bool aiEnabled;
+  // Анонимная диагностика. Для anti-censorship инструмента по умолчанию ВЫКЛ
+  // (opt-in): пользователь включает сам. Шлём только обезличенное — версия,
+  // класс сети, тип стратегии, коды ошибок; НИКОГДА IP/домены/адреса нод.
+  bool telemetryEnabled;
   SplitTunnelMode splitMode;
   List<String> splitApps;
 
@@ -220,6 +224,7 @@ class VlyProfile {
     this.subNames         = const {},
     this.killSwitch       = false,
     this.aiEnabled        = true,
+    this.telemetryEnabled = false,   // opt-in: по умолчанию выключено
     this.splitMode        = SplitTunnelMode.disabled,
     this.splitApps        = const [],
     // Tunnel
@@ -254,6 +259,7 @@ class VlyProfile {
     'subNames': subNames,
     'killSwitch': killSwitch,
     'aiEnabled': aiEnabled,
+    'telemetryEnabled': telemetryEnabled,
     'splitMode': splitMode.name,
     'splitApps': splitApps,
     'ipPreference': ipPreference,
@@ -286,6 +292,7 @@ class VlyProfile {
     subNames: Map<String,String>.from(j['subNames'] ?? {}),
     killSwitch: j['killSwitch'] ?? false,
     aiEnabled: j['aiEnabled'] ?? true,
+    telemetryEnabled: j['telemetryEnabled'] ?? false,
     splitMode: SplitTunnelMode.values.firstWhere(
         (e) => e.name == (j['splitMode'] ?? 'disabled'),
         orElse: () => SplitTunnelMode.disabled),

@@ -109,6 +109,7 @@ class VpnProvider extends ChangeNotifier {
   Map<String, String>   get subNames  => _prof.subNames;
   bool get killSwitch   => _prof.killSwitch;
   bool get aiEnabled    => _prof.aiEnabled;
+  bool get telemetryEnabled => _prof.telemetryEnabled;
   SplitTunnelMode get splitMode => _prof.splitMode;
   List<String>    get splitApps => _prof.splitApps;
 
@@ -412,6 +413,11 @@ class VpnProvider extends ChangeNotifier {
     }
   }
   void setAiEnabled(bool v)    { _prof.aiEnabled  = v; saveToDisk(); _notify(); }
+  void setTelemetryEnabled(bool v) {
+    _prof.telemetryEnabled = v;
+    Telemetry.configure(enabled: v);   // мгновенно применяем (и чистим очередь при выкл)
+    saveToDisk(); _notify();
+  }
   void setKillSwitch(bool v)   { _prof.killSwitch = v; saveToDisk(); _notify(); }
 
   // Сброс конфига ноды к оригинальному состоянию из провайдера
@@ -657,6 +663,8 @@ class VpnProvider extends ChangeNotifier {
     // _autoConnect.load() - disabled
     // Долговременная память ИИ: победители по классам сетей + блеклист.
     AiMemory.load();
+    // Анонимная диагностика (opt-in): применяем сохранённый выбор пользователя.
+    Telemetry.init().then((_) => Telemetry.configure(enabled: _prof.telemetryEnabled));
     // Серверно-обновляемый AI-каскад (blueprint §4b): грузим кэш, тянем свежую.
     MutationRegistry.load().then((_) => MutationRegistry.syncFromServer(_log));
     _bypassRules.syncFromServer(_log).then((_) => _notify());
