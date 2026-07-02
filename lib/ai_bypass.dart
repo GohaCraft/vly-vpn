@@ -171,6 +171,9 @@ class StrategyBlacklist {
 class AiMemory {
   static const _key = 'ai_memory_v1';
   static final Map<String, String> _winnerByNet = {};
+  // Замеренная задержка успешной пробы: net -> strategyType -> ms (сглажено).
+  // ИИ учится не «что работало», а «что работало БЫСТРЕЕ» в этой сети.
+  static final Map<String, Map<String, int>> _latencyByNet = {};
   static Timer? _saveDebounce;
 
   // Класс сети — грубый «отпечаток» без спец-разрешений (SSID недоступен без
@@ -184,6 +187,27 @@ class AiMemory {
     if (_winnerByNet[net] == strategyType) return;
     _winnerByNet[net] = strategyType;
     _scheduleSave();
+  }
+
+  // Запоминаем задержку успешной стратегии. EWMA (60% старое / 40% новое):
+  // сглаживает джиттер сети, но следует за трендом деградации фронта.
+  static void recordLatency(String net, String type, int ms) {
+    if (ms < 0) return;
+    final m = _latencyByNet.putIfAbsent(net, () => {});
+    final prev = m[type];
+    m[type] = prev == null ? ms : (prev * 0.6 + ms * 0.4).round();
+    _scheduleSave();
+  }
+
+  static int? latencyFor(String net, String type) => _latencyByNet[net]?[type];
+
+  // Типы стратегий этой сети, отсортированные по замеренной задержке
+  // (самые быстрые — первыми). Пусто, если сеть ещё не изучена.
+  static List<String> rankedTypes(String net) {
+    final m = _latencyByNet[net];
+    if (m == null || m.isEmpty) return const [];
+    final e = m.entries.toList()..sort((a, b) => a.value.compareTo(b.value));
+    return e.map((x) => x.key).toList();
   }
 
   static void onBlacklistChanged() => _scheduleSave();
@@ -205,6 +229,14 @@ class AiMemory {
       _winnerByNet
         ..clear()
         ..addEntries(w.entries.map((e) => MapEntry(e.key, e.value.toString())));
+      final lat = (j['latency'] as Map?)?.cast<String, dynamic>() ?? {};
+      _latencyByNet.clear();
+      lat.forEach((net, m) {
+        if (m is Map) {
+          _latencyByNet[net] = m.map(
+              (k, v) => MapEntry(k.toString(), (v as num).toInt()));
+        }
+      });
       final bl = (j['blacklist'] as Map?)?.cast<String, dynamic>() ?? {};
       StrategyBlacklist.restoreJson(bl);
     } catch (_) {}
@@ -215,6 +247,7 @@ class AiMemory {
       final p = await SharedPreferences.getInstance();
       await p.setString(_key, jsonEncode({
         'winners':   _winnerByNet,
+        'latency':   _latencyByNet,
         'blacklist': StrategyBlacklist.toJson(),
       }));
     } catch (_) {}
@@ -544,18 +577,23 @@ class AiBypassAgent {
     final cascade = await _buildCascade(bt, whitelistActive, isMobile);
     final limited = cascade.take(kMaxAttempts).toList();
 
-    // Обучение: стратегию, победившую на ЭТОМ классе сети в прошлый раз (в т.ч.
-    // в прошлые запуски — память персистится), пробуем первой.
-    final pref = AiMemory.winnerFor(net);
-    if (pref != null) {
-      limited.sort((a, b) {
-        if (a.type == pref && b.type != pref) return -1;
-        if (b.type == pref && a.type != pref) return 1;
-        return 0;
-      });
+    // Обучение: упорядочиваем каскад по ЗАМЕРЕННОЙ задержке успешных проб на
+    // этом классе сети (в т.ч. из прошлых запусков — память персистится).
+    // Самая быстрая рабочая стратегия идёт первой; неизученные — за ними, по
+    // статическому приоритету каскада. ИИ учится не просто «что работало», а
+    // «что работало БЫСТРЕЕ здесь».
+    final ranked = AiMemory.rankedTypes(net);
+    if (ranked.isNotEmpty) {
+      int rank(BypassStrategy s) {
+        final i = ranked.indexOf(s.type);
+        return i < 0 ? 1000 + s.priority : i;
+      }
+      limited.sort((a, b) => rank(a).compareTo(rank(b)));
     }
+    final fastest = ranked.isNotEmpty ? ranked.first : AiMemory.winnerFor(net);
     _log('🤖 E-2006: Cascade: ${limited.length} стратегий'
-        '${pref != null ? " (приоритет: $pref)" : ""}');
+        '${fastest != null ? " (лидер: $fastest"
+            "${ranked.isNotEmpty ? " ${AiMemory.latencyFor(net, fastest)}ms" : ""})" : ""}');
 
     // ПАНИК-ФЛОР: если ВСЕ кандидаты сейчас в cooldown — значит ИИ временно
     // забанил всё. Не оставляем пользователя без обхода: чистим блеклист и
@@ -585,13 +623,16 @@ class AiBypassAgent {
         // принимал первый ПОСТРОЕННЫЙ конфиг без проверки связи — обход был
         // «наугад». Теперь пробуем реальный TLS-коннект к ноде и принимаем
         // только то, что измеримо работает.
+        final sw = Stopwatch()..start();
         final ok = await BypassProber.probe(result)
             .timeout(const Duration(seconds: 3), onTimeout: () => false);
+        sw.stop();
         if (ok) {
           AiMemory.recordWinner(net, s.type);      // запоминаем победителя для этой сети
+          AiMemory.recordLatency(net, s.type, sw.elapsedMilliseconds); // и его скорость
           StrategyBlacklist.markSuccess(s.type);   // сработало → снять возможный бан
           AiMemory.onBlacklistChanged();
-          _log('✅ E-2007: Обход проверен и работает: ${s.type}');
+          _log('✅ E-2007: Обход проверен (${sw.elapsedMilliseconds}ms): ${s.type}');
           return result;
         }
         _log('· ${s.type}: конфиг построен, проба связи не прошла');

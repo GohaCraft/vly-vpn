@@ -195,6 +195,25 @@ void main() {
       expect(AiMemory.winnerFor('mobile'), isNull);
     });
 
+    test('recordLatency/rankedTypes ранжирует стратегии по скорости', () {
+      const net = 'wifi_lat';
+      AiMemory.recordLatency(net, 'vless_grpc_reality', 800);
+      AiMemory.recordLatency(net, 'vless_xhttp', 120);
+      AiMemory.recordLatency(net, 'vless_reality_vk', 350);
+      // Самая быстрая — первой (xhttp 120ms < vk 350ms < grpc 800ms).
+      expect(AiMemory.rankedTypes(net), ['vless_xhttp', 'vless_reality_vk', 'vless_grpc_reality']);
+      expect(AiMemory.latencyFor(net, 'vless_xhttp'), 120);
+      // EWMA сглаживает: повтор с бОльшим значением поднимает среднее, но плавно.
+      AiMemory.recordLatency(net, 'vless_xhttp', 320);
+      final smoothed = AiMemory.latencyFor(net, 'vless_xhttp')!;
+      expect(smoothed, greaterThan(120));
+      expect(smoothed, lessThan(320)); // не прыгает сразу на новое значение
+    });
+
+    test('rankedTypes пуст для неизученной сети', () {
+      expect(AiMemory.rankedTypes('never_seen_net'), isEmpty);
+    });
+
     test('блеклист сериализуется и восстанавливается (персист между запусками)', () {
       StrategyBlacklist.clear();
       StrategyBlacklist.markFailed('s1');
