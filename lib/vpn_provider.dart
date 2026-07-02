@@ -653,7 +653,8 @@ class VpnProvider extends ChangeNotifier {
     _ipCheck.fetchReal();
     await _loadStealthPrefs();
     // _autoConnect.load() - disabled
-    // StrategyBlacklist is in-memory only (no persistent load needed)
+    // Долговременная память ИИ: победители по классам сетей + блеклист.
+    AiMemory.load();
     _bypassRules.syncFromServer(_log).then((_) => _notify());
     // Синхронизируем статистику стратегий с сервером (фоново)
     // NewsAwareness.syncFromServer disabled (no server configured)

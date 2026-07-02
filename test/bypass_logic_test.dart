@@ -179,4 +179,31 @@ void main() {
       expect(BypassHealthMonitor.downServices.length, 3);
     });
   });
+
+  group('AI память — per-network + персист', () {
+    test('netClass различает режимы сети', () {
+      expect(AiMemory.netClass(true, true), 'mobile_wl');
+      expect(AiMemory.netClass(true, false), 'mobile');
+      expect(AiMemory.netClass(false, false), 'wifi');
+    });
+
+    test('recordWinner/winnerFor запоминает победителя по классу сети', () {
+      AiMemory.recordWinner('wifi', 'vless_xhttp');
+      AiMemory.recordWinner('mobile_wl', 'vless_reality_vk');
+      expect(AiMemory.winnerFor('wifi'), 'vless_xhttp');
+      expect(AiMemory.winnerFor('mobile_wl'), 'vless_reality_vk');
+      expect(AiMemory.winnerFor('mobile'), isNull);
+    });
+
+    test('блеклист сериализуется и восстанавливается (персист между запусками)', () {
+      StrategyBlacklist.clear();
+      StrategyBlacklist.markFailed('s1');
+      final json = StrategyBlacklist.toJson();
+      expect(json.containsKey('s1'), isTrue);
+      StrategyBlacklist.clear();
+      expect(StrategyBlacklist.isFailed('s1'), isFalse);
+      StrategyBlacklist.restoreJson(json);
+      expect(StrategyBlacklist.isFailed('s1'), isTrue); // восстановлен cooldown
+    });
+  });
 }

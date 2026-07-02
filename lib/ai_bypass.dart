@@ -107,6 +107,10 @@ class _BanEntry {
   final DateTime until;
   final int fails;
   const _BanEntry(this.until, this.fails);
+  Map<String, dynamic> toJson() => {'u': until.millisecondsSinceEpoch, 'f': fails};
+  static _BanEntry fromJson(Map j) => _BanEntry(
+      DateTime.fromMillisecondsSinceEpoch((j['u'] as num).toInt()),
+      (j['f'] as num).toInt());
 }
 
 class StrategyBlacklist {
@@ -143,6 +147,78 @@ class StrategyBlacklist {
 
   static bool get isEnabled => _enabled;
   static void setEnabled(bool v) { _enabled = v; }
+
+  // Сериализация для персиста между запусками (см. AiMemory).
+  static Map<String, dynamic> toJson() =>
+      _banned.map((k, v) => MapEntry(k, v.toJson()));
+  static void restoreJson(Map<String, dynamic> j) {
+    _banned.clear();
+    j.forEach((k, v) { if (v is Map) _banned[k] = _BanEntry.fromJson(v); });
+    _banned.removeWhere((_, v) => DateTime.now().isAfter(v.until)); // чистим просроченные
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  AI MEMORY — долговременная память ИИ (сохраняется между запусками)
+//
+//  Раньше _lastWinnerType и StrategyBlacklist жили ТОЛЬКО в памяти → при каждом
+//  перезапуске приложения ИИ учился с нуля. Теперь запоминаем:
+//   • какая стратегия сработала на КАЖДОМ классе сети (mobile-whitelist /
+//     mobile / wifi) — при возврате в такую сеть коннект сразу берёт победителя;
+//   • состояние self-healing блеклиста (cooldown'ы стратегий).
+//  Всё в SharedPreferences, запись дебаунсится.
+// ═══════════════════════════════════════════════════════════════════════════
+class AiMemory {
+  static const _key = 'ai_memory_v1';
+  static final Map<String, String> _winnerByNet = {};
+  static Timer? _saveDebounce;
+
+  // Класс сети — грубый «отпечаток» без спец-разрешений (SSID недоступен без
+  // location). mobile+whitelist / mobile / wifi покрывают разные режимы обхода.
+  static String netClass(bool mobile, bool whitelist) =>
+      mobile ? (whitelist ? 'mobile_wl' : 'mobile') : 'wifi';
+
+  static String? winnerFor(String net) => _winnerByNet[net];
+
+  static void recordWinner(String net, String strategyType) {
+    if (_winnerByNet[net] == strategyType) return;
+    _winnerByNet[net] = strategyType;
+    _scheduleSave();
+  }
+
+  static void onBlacklistChanged() => _scheduleSave();
+
+  static Map<String, String> get winners => Map.unmodifiable(_winnerByNet);
+
+  static void _scheduleSave() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 2), save);
+  }
+
+  static Future<void> load() async {
+    try {
+      final p   = await SharedPreferences.getInstance();
+      final raw = p.getString(_key);
+      if (raw == null) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      final w = (j['winners'] as Map?)?.cast<String, dynamic>() ?? {};
+      _winnerByNet
+        ..clear()
+        ..addEntries(w.entries.map((e) => MapEntry(e.key, e.value.toString())));
+      final bl = (j['blacklist'] as Map?)?.cast<String, dynamic>() ?? {};
+      StrategyBlacklist.restoreJson(bl);
+    } catch (_) {}
+  }
+
+  static Future<void> save() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_key, jsonEncode({
+        'winners':   _winnerByNet,
+        'blacklist': StrategyBlacklist.toJson(),
+      }));
+    } catch (_) {}
+  }
 }
 
 // ── Детектор белых списков ──────────────────────────────────────────────────
@@ -458,6 +534,7 @@ class AiBypassAgent {
         .timeout(const Duration(seconds: 2), onTimeout: () => false);
     final isMobile = await WhitelistBypassEngine.isMobileNetwork()
         .timeout(const Duration(seconds: 1), onTimeout: () => false);
+    final net = AiMemory.netClass(isMobile, whitelistActive);
 
     if (whitelistActive) {
       _log('🟡 E-2005: Белые списки активны (${isMobile ? "мобильный" : "WiFi"})');
@@ -467,9 +544,9 @@ class AiBypassAgent {
     final cascade = await _buildCascade(bt, whitelistActive, isMobile);
     final limited = cascade.take(kMaxAttempts).toList();
 
-    // Обучение: победившую в прошлый раз стратегию пробуем первой.
-    // Сети стабильны в рамках сессии — то, что сработало, обычно работает снова.
-    final pref = _lastWinnerType;
+    // Обучение: стратегию, победившую на ЭТОМ классе сети в прошлый раз (в т.ч.
+    // в прошлые запуски — память персистится), пробуем первой.
+    final pref = AiMemory.winnerFor(net);
     if (pref != null) {
       limited.sort((a, b) {
         if (a.type == pref && b.type != pref) return -1;
@@ -511,14 +588,16 @@ class AiBypassAgent {
         final ok = await BypassProber.probe(result)
             .timeout(const Duration(seconds: 3), onTimeout: () => false);
         if (ok) {
-          _lastWinnerType = s.type;
-          StrategyBlacklist.markSuccess(s.type); // сработало → снять возможный бан
+          AiMemory.recordWinner(net, s.type);      // запоминаем победителя для этой сети
+          StrategyBlacklist.markSuccess(s.type);   // сработало → снять возможный бан
+          AiMemory.onBlacklistChanged();
           _log('✅ E-2007: Обход проверен и работает: ${s.type}');
           return result;
         }
         _log('· ${s.type}: конфиг построен, проба связи не прошла');
       }
       StrategyBlacklist.markFailed(s.type);
+      AiMemory.onBlacklistChanged();
     }
 
     // Ни один кандидат не прошёл пробу. Не теряем шанс: отдаём первый
@@ -531,8 +610,7 @@ class AiBypassAgent {
     return null;
   }
 
-  // Последняя сработавшая стратегия — для приоритизации в следующем каскаде.
-  static String? _lastWinnerType;
+  // (Победитель теперь хранится в AiMemory по классу сети — персистится.)
 
   // ── Построение каскада стратегий ──────────────────────────────────────────
   Future<List<BypassStrategy>> _buildCascade(
