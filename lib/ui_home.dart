@@ -92,9 +92,9 @@ class HomeScreen extends StatelessWidget {
 
   void _confirmExit(BuildContext ctx, VpnProvider vpn) {
     showCupertinoDialog(context: ctx, builder: (x) => CupertinoAlertDialog(
-      title: const Text('Выйти из Vly?'),
+      title: Text(S.t('exit_title')),
       content: Text(vpn.isConnected
-          ? 'VPN будет отключён' : 'Приложение закроется'),
+          ? S.t('exit_vpn_off') : S.t('exit_app_close')),
       actions: [
         CupertinoDialogAction(
             onPressed: () => Navigator.pop(x),
@@ -619,7 +619,7 @@ class _IpStatusRow extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 info == null
-                    ? 'Нажми чтобы проверить IP'
+                    ? S.t('tap_check_ip')
                     : '${info.ip}  ·  ${info.country}',
                 style: const TextStyle(fontSize: 10, color: Colors.white30),
               ),
@@ -674,7 +674,7 @@ class _IpCheckScreenState extends State<IpCheckScreen> {
               CupertinoSliverNavigationBar(
                 backgroundColor: Colors.transparent,
                 border: null,
-                largeTitle: Text('Проверка IP',
+                largeTitle: Text(S.t('ip_check_title'),
                     style: TextStyle(
                         color: light ? Colors.black87 : Colors.white,
                         fontWeight: FontWeight.w800)),
@@ -727,7 +727,7 @@ class _IpCheckScreenState extends State<IpCheckScreen> {
                       ),
                       child: loading
                           ? const Center(child: CupertinoActivityIndicator())
-                          : const Center(child: Text('ПРОВЕРИТЬ СНОВА',
+                          : Center(child: Text(S.t('check_again'),
                               style: TextStyle(
                                   fontSize: 12, fontWeight: FontWeight.w900,
                                   color: Colors.white, letterSpacing: 2))),
@@ -807,17 +807,17 @@ class _IpDetailCard extends StatelessWidget {
         child: Column(children: [
           _DetailRow(
             icon: Icons.language_outlined,
-            label: 'IP адрес',
+            label: S.t('ip_address'),
             value: cur.ip,
             color: Colors.white70),
           _DetailRow(
             icon: Icons.flag_outlined,
-            label: 'Страна',
+            label: S.t('country'),
             value: '${_countryFlag(cur.countryCode)} ${cur.country}',
             color: Colors.white70),
           _DetailRow(
             icon: Icons.location_city_outlined,
-            label: 'Город',
+            label: S.t('city'),
             value: cur.city,
             color: Colors.white70),
           _DetailRow(
@@ -895,11 +895,11 @@ class _IpVerdictCard extends StatelessWidget {
         ? Icons.verified_user_outlined
         : Icons.gpp_bad_outlined;
     final title  = protected
-        ? 'Защищён'
-        : 'Не защищён';
+        ? S.t('protected')
+        : S.t('unprotected');
     final sub    = protected
-        ? 'IP скрыт, трафик идёт через VPN'
-        : 'Ваш реальный IP виден';
+        ? S.t('ip_hidden')
+        : S.t('ip_visible');
 
     return GlassBox(
       blur: 20, tint: color, tintOpacity: 0.08,

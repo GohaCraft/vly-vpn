@@ -29,6 +29,14 @@ class S {
 
   static const Map<VlyLocale, Map<String, String>> _strings = {
     VlyLocale.en: {
+      // ── Главный экран (покрытие i18n, добавлено) ──
+      'exit_title': 'Exit Vly?', 'exit_vpn_off': 'VPN will disconnect',
+      'exit_app_close': 'App will close', 'exit': 'Exit',
+      'tap_check_ip': 'Tap to check IP',
+      'check_again': 'CHECK AGAIN', 'protected': 'Protected',
+      'unprotected': 'Not protected', 'ip_hidden': 'IP hidden, traffic via VPN',
+      'ip_visible': 'Your real IP is exposed', 'ip_address': 'IP address',
+      'country': 'Country', 'city': 'City',
       'app_name': 'VLY', 'connected': 'CONNECTED', 'connecting': 'CONNECTING…',
       'disconnected': 'DISCONNECTED', 'error': 'ERROR', 'no_nodes': 'NO NODES',
       'add_via_qr': 'Add via QR, key or subscription', 'scan_qr': 'SCAN QR',
@@ -123,6 +131,14 @@ class S {
       'dns_address': 'DNS Address',
     },
     VlyLocale.ru: {
+      // ── Главный экран (покрытие i18n, добавлено) ──
+      'exit_title': 'Выйти из Vly?', 'exit_vpn_off': 'VPN будет отключён',
+      'exit_app_close': 'Приложение закроется', 'exit': 'Выйти',
+      'tap_check_ip': 'Нажми чтобы проверить IP',
+      'check_again': 'ПРОВЕРИТЬ СНОВА', 'protected': 'Защищён',
+      'unprotected': 'Не защищён', 'ip_hidden': 'IP скрыт, трафик идёт через VPN',
+      'ip_visible': 'Ваш реальный IP виден', 'ip_address': 'IP адрес',
+      'country': 'Страна', 'city': 'Город',
       'app_name': 'VLY', 'connected': 'ПОДКЛЮЧЕНО', 'connecting': 'ПОДКЛЮЧЕНИЕ…',
       'disconnected': 'ОТКЛЮЧЕНО', 'error': 'ОШИБКА', 'no_nodes': 'НЕТ УЗЛОВ',
       'add_via_qr': 'Добавьте через QR, ключ или подписку', 'scan_qr': 'СКАНИРОВАТЬ QR',
