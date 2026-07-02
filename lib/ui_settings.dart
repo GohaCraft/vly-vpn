@@ -2883,35 +2883,28 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
         title: const Text('Моя тема',
           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
               color: Colors.white)),
-        actions: [
-          // Сохранить
-          TextButton(
-            onPressed: () {
-              app.setSkin(VlySkinId.custom);
-              Navigator.pop(context);
-            },
-            child: Text('Сохранить',
-              style: TextStyle(color: _accent, fontWeight: FontWeight.w700,
-                  fontSize: 13))),
-        ],
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, GlassAppBar.totalHeight(context) + 8, 16, 40),
         children: [
 
-          // ── ПРЕВЬЮ ──────────────────────────────────────────────────────
+          // ── ПРЕВЬЮ (всегда отражает редактируемую тему, вживую) ─────────
           Container(
             height: 140,
-            margin: const EdgeInsets.only(bottom: 20),
+            margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              color: app.skin.bgDark,
+              color: app.customBg,
               gradient: LinearGradient(
                 begin: Alignment.topLeft, end: Alignment.bottomRight,
-                colors: [app.skin.accent.withOpacity(0.2), app.skin.bgDark]),
-              border: Border.all(color: app.skin.accent.withOpacity(0.3)),
+                colors: [
+                  app.customBlob1.withOpacity(0.55),
+                  app.customBg,
+                  app.customBlob2.withOpacity(0.45),
+                ]),
+              border: Border.all(color: app.customAccent.withOpacity(0.3)),
               boxShadow: [BoxShadow(
-                  color: app.skin.accent.withOpacity(0.25), blurRadius: 20)],
+                  color: app.customAccent.withOpacity(0.25), blurRadius: 20)],
             ),
             child: Center(child: Column(
               mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -2919,15 +2912,22 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
                   width: 50, height: 50,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: app.skin.accent, width: 2),
-                    color: app.skin.accent.withOpacity(0.1)),
+                    border: Border.all(color: app.customAccent, width: 2),
+                    gradient: LinearGradient(colors: [
+                      app.customAccent.withOpacity(0.25),
+                      app.customAccent2.withOpacity(0.15)])),
                   child: Icon(Icons.power_settings_new_rounded,
-                      color: app.skin.accent, size: 26)),
+                      color: app.customAccent, size: 26)),
                 const SizedBox(height: 10),
                 Text('ПРЕДПРОСМОТР', style: TextStyle(
-                    color: app.skin.accent, fontSize: 11,
+                    color: app.customAccent, fontSize: 11,
                     fontWeight: FontWeight.w800, letterSpacing: 2)),
               ]))),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 18, left: 4),
+            child: Text('Изменения применяются сразу',
+              style: TextStyle(color: Colors.white.withOpacity(0.35),
+                  fontSize: 11))),
 
           // ── ЦВЕТ АКЦЕНТА ────────────────────────────────────────────────
           _SectionLabel('Цвет акцента'),
@@ -3019,7 +3019,7 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
 
           const SizedBox(height: 24),
 
-          // ── ПРИМЕНИТЬ ────────────────────────────────────────────────────
+          // ── ГОТОВО (тема уже активна — кнопка просто закрывает) ──────────
           GestureDetector(
             onTap: () {
               app.setSkin(VlySkinId.custom);
@@ -3030,8 +3030,8 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 gradient: LinearGradient(colors: [
-                  _accent, _accent.withOpacity(0.7)])),
-              child: const Text('Применить тему',
+                  app.customAccent, app.customAccent2])),
+              child: const Text('Готово',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white, fontSize: 15,
                     fontWeight: FontWeight.w700, letterSpacing: 0.5))),
@@ -3100,7 +3100,8 @@ class _SectionLabel extends StatelessWidget {
       letterSpacing: 1.2)));
 }
 
-// Bottom sheet выбора цвета
+// Профессиональный HSV color picker: SV-квадрат + слайдер оттенка + быстрые
+// свотчи + HEX-ввод. Живой предпросмотр, точный подбор цвета жестами.
 class _ColorPickerSheet extends StatefulWidget {
   final Color current;
   final ValueChanged<Color> onChanged;
@@ -3109,107 +3110,206 @@ class _ColorPickerSheet extends StatefulWidget {
 }
 
 class _ColorPickerSheetState extends State<_ColorPickerSheet> {
-  late Color _selected;
+  late HSVColor _hsv;
   late TextEditingController _hexCtrl;
 
-  // Палитра популярных цветов
+  // Быстрые пресеты для мгновенного выбора
   static const _palette = [
     Color(0xFFFF4D4D), Color(0xFFFF6B35), Color(0xFFFFD700), Color(0xFF00E676),
-    Color(0xFF00B4D8), Color(0xFF00E5FF), Color(0xFF4FC3F7), Color(0xFF7C4DFF),
-    Color(0xFFD500F9), Color(0xFFFF4081), Color(0xFFFFB5D8), Color(0xFFE8B8A0),
-    Color(0xFF00FF9F), Color(0xFF00FF41), Color(0xFFFF9800), Color(0xFFCDDC39),
+    Color(0xFF00B4D8), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFFD500F9),
+    Color(0xFFFF4081), Color(0xFFFFB5D8), Color(0xFF00FF9F), Color(0xFFFF9800),
     Color(0xFFFFFFFF), Color(0xFFBDBDBD), Color(0xFF757575), Color(0xFF212121),
   ];
 
   @override
   void initState() {
     super.initState();
-    _selected = widget.current;
-    _hexCtrl = TextEditingController(
-        text: widget.current.value.toRadixString(16).substring(2).toUpperCase());
+    _hsv = HSVColor.fromColor(widget.current);
+    _hexCtrl = TextEditingController(text: _hex(widget.current));
   }
 
   @override
   void dispose() { _hexCtrl.dispose(); super.dispose(); }
 
+  String _hex(Color c) =>
+      c.value.toRadixString(16).substring(2).toUpperCase();
+
+  // Тема оперирует непрозрачными цветами.
+  Color get _color => _hsv.toColor().withOpacity(1);
+
+  void _emit({bool syncHex = true}) {
+    if (syncHex) _hexCtrl.text = _hex(_color);
+    widget.onChanged(_color);
+  }
+
+  void _setSV(Offset local, Size size) {
+    final s = (local.dx / size.width).clamp(0.0, 1.0);
+    final v = 1 - (local.dy / size.height).clamp(0.0, 1.0);
+    setState(() => _hsv = _hsv.withSaturation(s).withValue(v));
+    _emit();
+  }
+
+  void _setHue(double dx, double width) {
+    final h = (dx / width).clamp(0.0, 1.0) * 360;
+    setState(() => _hsv = _hsv.withHue(h));
+    _emit();
+  }
+
+  void _pickSwatch(Color c) {
+    setState(() => _hsv = HSVColor.fromColor(c));
+    _emit();
+  }
+
   @override
   Widget build(BuildContext ctx) {
+    final color = _color;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
+        color: const Color(0xFF15151F),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         border: Border.all(color: Colors.white.withOpacity(0.1))),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+      child: Column(mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // Handle
-        Container(width: 36, height: 4,
+        Center(child: Container(width: 36, height: 4,
           decoration: BoxDecoration(color: Colors.white24,
-              borderRadius: BorderRadius.circular(2))),
-        const SizedBox(height: 16),
-        // Превью
-        Container(
-          width: double.infinity, height: 56,
-          decoration: BoxDecoration(
-            color: _selected,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: _selected.withOpacity(0.5), blurRadius: 16)])),
-        const SizedBox(height: 16),
-        // Палитра
-        Wrap(spacing: 10, runSpacing: 10, children: _palette.map((c) =>
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _selected = c;
-                _hexCtrl.text = c.value.toRadixString(16).substring(2).toUpperCase();
-              });
-              widget.onChanged(c);
-            },
-            child: Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: c, borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(2)))),
+        const SizedBox(height: 18),
+
+        // ── SV-квадрат (насыщенность × яркость) ──────────────────────────
+        LayoutBuilder(builder: (_, c) {
+          final size = Size(c.maxWidth, 180);
+          return GestureDetector(
+            onPanDown: (d) => _setSV(d.localPosition, size),
+            onPanUpdate: (d) => _setSV(d.localPosition, size),
+            child: SizedBox(
+              width: size.width, height: size.height,
+              child: Stack(children: [
+                Positioned.fill(child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: CustomPaint(painter: _SVPainter(_hsv.hue)))),
+                Positioned(
+                  left: (_hsv.saturation * size.width - 10)
+                      .clamp(-2.0, size.width - 18),
+                  top: ((1 - _hsv.value) * size.height - 10)
+                      .clamp(-2.0, size.height - 18),
+                  child: IgnorePointer(child: Container(
+                    width: 20, height: 20,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle, color: color,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black45, blurRadius: 4)])))),
+              ])),
+          );
+        }),
+        const SizedBox(height: 18),
+
+        // ── Слайдер оттенка (радуга) ─────────────────────────────────────
+        LayoutBuilder(builder: (_, c) {
+          final w = c.maxWidth;
+          return GestureDetector(
+            onPanDown: (d) => _setHue(d.localPosition.dx, w),
+            onPanUpdate: (d) => _setHue(d.localPosition.dx, w),
+            child: SizedBox(width: w, height: 24, child: Stack(children: [
+              Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: const LinearGradient(colors: [
+                  Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
+                  Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF),
+                  Color(0xFFFF0000)])))),
+              Positioned(
+                left: (_hsv.hue / 360 * w - 12).clamp(-2.0, w - 22),
+                top: -1,
+                child: IgnorePointer(child: Container(
+                  width: 24, height: 26, decoration: BoxDecoration(
+                    shape: BoxShape.circle, color: Colors.white,
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black38, blurRadius: 3)])))),
+            ])),
+          );
+        }),
+        const SizedBox(height: 20),
+
+        // ── Быстрые пресеты ──────────────────────────────────────────────
+        Wrap(spacing: 10, runSpacing: 10, children: _palette.map((sw) {
+          final sel = _color.value == sw.value;
+          return GestureDetector(
+            onTap: () => _pickSwatch(sw),
+            child: Container(width: 34, height: 34,
+              decoration: BoxDecoration(color: sw,
+                borderRadius: BorderRadius.circular(9),
                 border: Border.all(
-                  color: _selected == c ? Colors.white : Colors.transparent,
-                  width: 2.5))),
-          )).toList()),
-        const SizedBox(height: 16),
-        // HEX ввод
+                  color: sel ? Colors.white : Colors.white12,
+                  width: sel ? 2.5 : 1))));
+        }).toList()),
+        const SizedBox(height: 18),
+
+        // ── HEX + предпросмотр + OK ──────────────────────────────────────
         Row(children: [
-          Text('HEX: ', style: TextStyle(
-              color: Colors.white.withOpacity(0.6), fontSize: 13)),
-          Expanded(child: TextField(
-            controller: _hexCtrl,
-            style: const TextStyle(color: Colors.white, fontSize: 13,
-                fontFamily: 'monospace'),
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              filled: true, fillColor: Colors.white.withOpacity(0.07),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none)),
-            onChanged: (v) {
-              if (v.length == 6) {
-                try {
-                  final c = Color(int.parse('FF$v', radix: 16));
-                  setState(() => _selected = c);
-                  widget.onChanged(c);
-                } catch (_) {}
-              }
-            },
-          )),
+          Container(width: 46, height: 46, decoration: BoxDecoration(
+            color: color, borderRadius: BorderRadius.circular(12),
+            boxShadow: [BoxShadow(color: color.withOpacity(0.5), blurRadius: 12)])),
+          const SizedBox(width: 12),
+          Expanded(child: Row(children: [
+            Text('#', style: TextStyle(
+                color: Colors.white.withOpacity(0.5), fontSize: 15,
+                fontFamily: 'monospace', fontWeight: FontWeight.w700)),
+            Expanded(child: TextField(
+              controller: _hexCtrl,
+              style: const TextStyle(color: Colors.white, fontSize: 15,
+                  fontFamily: 'monospace', fontWeight: FontWeight.w700),
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                filled: true, fillColor: Colors.white.withOpacity(0.06),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none)),
+              onChanged: (v) {
+                final h = v.replaceAll('#', '').trim();
+                if (h.length == 6) {
+                  try {
+                    final c = Color(int.parse('FF$h', radix: 16));
+                    setState(() => _hsv = HSVColor.fromColor(c));
+                    _emit(syncHex: false);
+                  } catch (_) {}
+                }
+              },
+            )),
+          ])),
           const SizedBox(width: 12),
           GestureDetector(
             onTap: () => Navigator.pop(ctx),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
               decoration: BoxDecoration(
-                color: _accent, borderRadius: BorderRadius.circular(8)),
+                color: _accent, borderRadius: BorderRadius.circular(10)),
               child: const Text('OK', style: TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w700)))),
+                  color: Colors.white, fontWeight: FontWeight.w800)))),
         ]),
       ]));
   }
+}
+
+// Заливка SV-квадрата: слева-направо белый→чистый оттенок, сверху-вниз
+// прозрачный→чёрный (модель HSV).
+class _SVPainter extends CustomPainter {
+  final double hue;
+  _SVPainter(this.hue);
+  @override
+  void paint(Canvas c, Size s) {
+    final r = Offset.zero & s;
+    c.drawRect(r, Paint()..shader = LinearGradient(colors: [
+      Colors.white, HSVColor.fromAHSV(1, hue, 1, 1).toColor()]).createShader(r));
+    c.drawRect(r, Paint()..shader = const LinearGradient(
+      begin: Alignment.topCenter, end: Alignment.bottomCenter,
+      colors: [Colors.transparent, Colors.black]).createShader(r));
+  }
+  @override bool shouldRepaint(_SVPainter o) => o.hue != hue;
 }
 
 class _SH extends StatelessWidget {
