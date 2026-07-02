@@ -88,6 +88,7 @@ class VpnProvider extends ChangeNotifier {
   DateTime? _connectedAt;
   Timer?  _trafficTimer;
   Timer?  _saveDebounce;   // дебаунс записи на диск (см. saveToDisk/saveNow)
+  Timer?  _rulesSyncTimer; // периодическая синхронизация bypass-правил с сервером
 
   // ── История подключений (v4.0) ────────────────────────────────────────────
   List<ConnectionRecord> connectionHistory = [];
@@ -337,6 +338,7 @@ class VpnProvider extends ChangeNotifier {
     _cancelWd();
     _stopTrafficTimer();
     _autoRecheckTimer?.cancel();
+    _rulesSyncTimer?.cancel();
     _logDebounce?.cancel();
     // Флаш отложенной записи, чтобы не потерять последние изменения настроек.
     if (_saveDebounce?.isActive ?? false) { _saveDebounce!.cancel(); saveNow(); }
@@ -656,6 +658,13 @@ class VpnProvider extends ChangeNotifier {
     // Долговременная память ИИ: победители по классам сетей + блеклист.
     AiMemory.load();
     _bypassRules.syncFromServer(_log).then((_) => _notify());
+    // Периодическое обновление стратегий обхода с сервера (без апдейта app).
+    // Раньше правила тянулись только один раз при старте. Теперь — раз в час,
+    // чтобы серверный «мозг» мог подкидывать свежие методы на лету.
+    _rulesSyncTimer?.cancel();
+    _rulesSyncTimer = Timer.periodic(const Duration(hours: 1), (_) {
+      if (!_disposed) _bypassRules.syncFromServer(_log).then((_) { if (!_disposed) _notify(); });
+    });
     // Синхронизируем статистику стратегий с сервером (фоново)
     // NewsAwareness.syncFromServer disabled (no server configured)
     _fetchServerNodes();
