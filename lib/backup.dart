@@ -141,62 +141,115 @@ class BackupEngine {
 //           openssl dgst -sha256 -binary | base64
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// HTTP-клиент с настоящим certificate pinning для наших доменов.
+//
+// Тонкость: HttpClient.badCertificateCallback срабатывает ТОЛЬКО для
+// сертификатов, невалидных по CA. MITM с mis-issued, но валидным по CA
+// сертификатом проходит стандартную проверку — поэтому пин сверяется на
+// peerCertificate ОТВЕТА (после хендшейка, до чтения тела), и при
+// несовпадении соединение рвётся, а данные не читаются.
+//
+// Пин активен только когда в kPinnedSha256 заданы реальные значения (не
+// PLACEHOLDER). До появления сертификата сервера действует обычная
+// CA-проверка — так пиннинг не ломает работу на этапе без сервера. Как только
+// реальные пины добавлены — enforcement включается автоматически.
 class PinnedHttpClient {
-  // Создаём HttpClient с проверкой отпечатка для наших доменов
-  static HttpClient create({bool pinned = true}) {
-    final client = HttpClient();
-    client.userAgent = kStealthUA;
+  static bool get _pinningActive =>
+      kPinnedSha256.any((s) => s.isNotEmpty && !s.startsWith('PLACEHOLDER'));
 
-    if (!pinned || kPinnedSha256.every((s) => s.startsWith('PLACEHOLDER'))) {
-      // Pinning не настроен (заглушки) — работаем без него
-      return client;
-    }
+  // Диагностика: включён ли реально enforcement пиннинга (заданы настоящие пины).
+  static bool get pinningActive => _pinningActive;
 
-    // TODO: полный cert pinning через SHA-256 — добавить когда будет реальный сертификат
-    // Dart X509Certificate не даёт доступ к DER bytes без сторонних пакетов.
-    // Команда для получения SHA-256: openssl s_client -connect api.vlyvpn.app:443 |
-    //   openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER |
-    //   openssl dgst -sha256 -binary | base64
-    client.badCertificateCallback = (cert, host, port) {
-      // Пока только проверяем что сертификат выдан для нашего домена
-      if (kPinnedDomains.any((d) => host == d || host.endsWith('.$d'))) {
-        // Rejecting certificates that don't match our domain
-        return false; // false = reject bad cert (correct security behavior)
-      }
-      return false; // reject all bad certs from any domain
-    };
+  static bool _isPinnedHost(String host) =>
+      kPinnedDomains.any((d) => host == d || host.endsWith('.$d'));
 
-    return client;
-  }
+  // SHA-256(DER сертификата) в base64 — формат, совпадающий с kPinnedSha256.
+  static String certFingerprint(X509Certificate cert) =>
+      base64.encode(sha256.convert(cert.der).bytes);
 
-  // Быстрый HTTP GET с pinning и timeout
   static Future<http.Response> get(
     String url, {
     Map<String, String>? headers,
     Duration timeout = const Duration(seconds: 8),
     bool pinOurServer = true,
-  }) async {
-    final uri  = Uri.parse(url);
-    // pin = pinOurServer && kPinnedDomains.any(...) — TODO: use when cert pinning enabled
-    final hdrs = {
-      'User-Agent': kStealthUA,
-      ...?headers,
-    };
-    return http.get(uri, headers: hdrs).timeout(timeout);
-  }
+  }) => _send('GET', url, headers: headers, timeout: timeout);
 
-  // POST с pinning и timeout
   static Future<http.Response> post(
     String url, {
     required String body,
     Map<String, String>? headers,
     Duration timeout = const Duration(seconds: 5),
+  }) => _send('POST', url, headers: headers, body: body, timeout: timeout);
+
+  static Future<http.Response> _send(
+    String method,
+    String url, {
+    Map<String, String>? headers,
+    String? body,
+    required Duration timeout,
   }) async {
-    final hdrs = {
-      'Content-Type': 'application/json',
-      'User-Agent': kStealthUA,
-      ...?headers,
-    };
-    return http.post(Uri.parse(url), headers: hdrs, body: body).timeout(timeout);
+    final uri = Uri.parse(url);
+
+    // Пиним ТОЛЬКО наши домены и ТОЛЬКО когда пины настроены. Иначе —
+    // обычный http (прежнее поведение), чтобы ничего не сломать до сервера.
+    if (!(_pinningActive && _isPinnedHost(uri.host))) {
+      final hdrs = {
+        'User-Agent': kStealthUA,
+        if (body != null) 'Content-Type': 'application/json',
+        ...?headers,
+      };
+      return method == 'GET'
+          ? http.get(uri, headers: hdrs).timeout(timeout)
+          : http.post(uri, headers: hdrs, body: body).timeout(timeout);
+    }
+
+    final client = HttpClient()..userAgent = kStealthUA;
+    client.badCertificateCallback = (_, __, ___) => false; // невалидные — отклоняем
+    try {
+      final req = await (method == 'GET'
+          ? client.getUrl(uri)
+          : client.postUrl(uri)).timeout(timeout);
+      req.headers.set('User-Agent', kStealthUA);
+      headers?.forEach((k, v) => req.headers.set(k, v));
+      if (body != null) {
+        req.headers.contentType = ContentType.json;
+        req.write(body);
+      }
+      final resp = await req.close().timeout(timeout);
+
+      // ПИН-ПРОВЕРКА до чтения тела: сертификат пира обязан совпасть с пином.
+      final cert = resp.certificate;
+      if (cert == null || !kPinnedSha256.contains(certFingerprint(cert))) {
+        throw const HandshakeException(
+            'Certificate pin mismatch — возможен MITM, соединение разорвано');
+      }
+
+      final bodyStr = await resp.transform(utf8.decoder).join().timeout(timeout);
+      final respHeaders = <String, String>{};
+      resp.headers.forEach((k, v) => respHeaders[k] = v.join(', '));
+      return http.Response(bodyStr, resp.statusCode, headers: respHeaders);
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  // Утилита для настройки пиннинга: подключается к URL и возвращает текущий
+  // отпечаток сертификата (base64 SHA-256 DER) — значение для kPinnedSha256.
+  // Вызвать один раз, когда сервер поднят, и вставить результат в constants.
+  static Future<String?> fetchFingerprint(String url,
+      {Duration timeout = const Duration(seconds: 8)}) async {
+    final client = HttpClient()..userAgent = kStealthUA;
+    client.badCertificateCallback = (_, __, ___) => false;
+    try {
+      final req  = await client.getUrl(Uri.parse(url)).timeout(timeout);
+      final resp = await req.close().timeout(timeout);
+      final cert = resp.certificate;
+      await resp.drain<void>();
+      return cert == null ? null : certFingerprint(cert);
+    } catch (_) {
+      return null;
+    } finally {
+      client.close(force: true);
+    }
   }
 }

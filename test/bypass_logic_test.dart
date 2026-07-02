@@ -359,4 +359,13 @@ void main() {
       expect(MutationRegistry.active, isNull);
     });
   });
+
+  group('Certificate pinning', () {
+    test('с PLACEHOLDER-пинами enforcement выключен (не ломает запросы до сервера)', () {
+      // Защита от футгана: если бы pinning был активен на placeholder-пинах,
+      // ВСЕ запросы к нашим доменам падали бы с pin mismatch. Когда добавишь
+      // реальные пины в kPinnedSha256 — этот тест осознанно обнови на isTrue.
+      expect(PinnedHttpClient.pinningActive, isFalse);
+    });
+  });
 }

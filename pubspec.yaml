@@ -12,6 +12,7 @@ dependencies:
   provider: ^6.1.2
   flutter_v2ray: 1.0.10
   http: ^1.2.2
+  crypto: ^3.0.3
   shared_preferences: ^2.3.2
   mobile_scanner: ^5.2.3
   flutter_svg: ^2.0.10+1

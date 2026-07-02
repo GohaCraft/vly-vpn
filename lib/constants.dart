@@ -6,15 +6,20 @@ part of 'main.dart';
 const String kControlPlaneUrl   = 'https://api.vlyvpn.app';
 
 // ── Certificate Pinning ───────────────────────────────────────────────────────
-// SHA-256 отпечатки публичных ключей нашего сервера api.vlyvpn.app
-// Когда получишь реальный сертификат — замени PLACEHOLDER на настоящие SHA256
-// Формат: base64(sha256(SubjectPublicKeyInfo DER))
-// Команда для получения: openssl s_client -connect api.vlyvpn.app:443 |
-//   openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER |
-//   openssl dgst -sha256 -binary | base64
+// Отпечатки сертификата нашего сервера api.vlyvpn.app. Enforcement включается
+// в PinnedHttpClient АВТОМАТИЧЕСКИ, как только здесь появятся реальные значения
+// (не PLACEHOLDER). Пока placeholders — работает обычная CA-проверка.
+// Формат: base64(sha256(DER всего сертификата)).
+// Получить значение можно двумя путями:
+//   1) PinnedHttpClient.fetchFingerprint('https://api.vlyvpn.app') — вернёт
+//      готовую строку для вставки сюда;
+//   2) openssl s_client -connect api.vlyvpn.app:443 </dev/null 2>/dev/null |
+//        openssl x509 -outform DER | openssl dgst -sha256 -binary | base64
+// Пиньте ДВА значения (текущий + резервный/следующий сертификат), чтобы ротация
+// сертификата не оборвала клиентов.
 const kPinnedSha256 = [
   'PLACEHOLDER_REPLACE_WITH_REAL_SHA256_OF_YOUR_CERT==',  // Primary cert
-  'PLACEHOLDER_REPLACE_WITH_REAL_SHA256_OF_BACKUP_CERT==', // Backup / Let's Encrypt root
+  'PLACEHOLDER_REPLACE_WITH_REAL_SHA256_OF_BACKUP_CERT==', // Backup / next cert
 ];
 
 // Домены для которых применяется cert pinning (только наши серверы)
