@@ -37,6 +37,7 @@ part 'service_bypass.dart';
 part 'health_monitor.dart';
 part 'stealth.dart';
 part 'networking.dart';
+part 'singbox.dart';
 part 'ai_bypass.dart';
 part 'vpn_provider.dart';
 part 'ui_common.dart';

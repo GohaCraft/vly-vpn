@@ -360,6 +360,40 @@ void main() {
     });
   });
 
+  group('sing-box config builder (фаза 2 миграции ядра)', () {
+    test('VLESS+Reality+Vision → корректный sing-box outbound', () {
+      const link = 'vless://uuid-1234@srv.net:8443'
+          '?security=reality&pbk=PUBKEY123&sid=SHORT1&sni=vk.com&flow=xtls-rprx-vision#N';
+      final ob = SingBoxConfigBuilder.vlessRealityOutbound(link, sni: 'vk.com')!;
+      expect(ob['type'], 'vless');
+      expect(ob['server'], 'srv.net');
+      expect(ob['server_port'], 8443);
+      expect(ob['uuid'], 'uuid-1234');
+      expect(ob['flow'], 'xtls-rprx-vision');
+      final tls = ob['tls'] as Map;
+      expect(tls['server_name'], 'vk.com');
+      expect((tls['utls'] as Map)['fingerprint'], 'chrome');
+      final r = tls['reality'] as Map;
+      expect(r['enabled'], true);
+      expect(r['public_key'], 'PUBKEY123');
+      expect(r['short_id'], 'SHORT1');
+    });
+    test('не-Reality ссылка (без pbk) → null', () {
+      expect(SingBoxConfigBuilder.vlessRealityOutbound(
+          'vless://u@h:443?security=tls#N'), isNull);
+      expect(SingBoxConfigBuilder.vlessRealityOutbound('trojan://x@h:443'), isNull);
+    });
+    test('полный конфиг: tun-inbound + proxy/direct + роутинг', () {
+      final json = SingBoxConfigBuilder.buildVlessReality(
+          'vless://u@h:443?pbk=K&sid=S#N')!;
+      final j = jsonDecode(json) as Map<String, dynamic>;
+      expect((j['inbounds'] as List).first['type'], 'tun');
+      final outs = (j['outbounds'] as List).map((o) => o['type']).toList();
+      expect(outs, containsAll(['vless', 'direct']));
+      expect((j['route'] as Map)['final'], 'proxy');
+    });
+  });
+
   group('Честность движка — только реально рабочие протоколы', () {
     test('Hysteria2 и ShadowTLS недоступны (xray-core их не запускает)', () {
       expect(BypassMode.hysteria2.isAvailable, isFalse);
