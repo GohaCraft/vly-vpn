@@ -1837,7 +1837,7 @@ class _AboutPageState extends State<_AboutPage> {
         ])),
       const SizedBox(height: 24),
       _DetailRow2('🛡', 'Протоколы', 'VLESS, VMess, SS, Trojan, HY2'),
-      _DetailRow2('🤖', 'AI Engine', 'Bypass Arsenal · 100 стратегий'),
+      _DetailRow2('🤖', 'AI Engine', 'Bypass Arsenal · 100 strategies'),
       _DetailRow2('🇷🇺', 'Белые списки', 'antifilter.download · runetfreedom'),
       _DetailRow2('🛡', 'Siberia Shield', 'Connection pacing · Single-tunnel MUX'),
       _DetailRow2('✈️', 'Telegram', 'Fast Protocol · Auto-detect'),
@@ -2027,9 +2027,9 @@ class _DevDashboardState extends State<_DevDashboard> {
       if (CrashReporter.recent.isNotEmpty)
         _DevRow('Last error',      CrashReporter.recent.first, color: Colors.orangeAccent),
       const SizedBox(height: 12),
-      _DevSection('STRATEGY BLACKLIST (${blacklist.length} заблокировано, 5 мин TTL)'),
+      _DevSection('STRATEGY BLACKLIST (${blacklist.length} banned, 5 min TTL)'),
       if (blacklist.isEmpty)
-        const _DevEmptyMsg('Чёрный список пуст — все стратегии доступны')
+        const _DevEmptyMsg('Blacklist empty — all strategies available')
       else
         ...blacklist.map((e) {
           final key = e.length > 28 ? e.substring(0, 28) : e;
@@ -2055,7 +2055,7 @@ class _DevDashboardState extends State<_DevDashboard> {
       _DevBtn('🧹 Clear blacklist (${blacklist.length})', Colors.orange, () {
         StrategyBlacklist.clear();
         setState(() {});
-        _showSnack('Blacklist cleared — все стратегии разблокированы');
+        _showSnack('Blacklist cleared — all strategies unbanned');
       }),
       const SizedBox(height: 6),
       _DevBtn('🛡 Clear Siberia cooldowns', Colors.teal, () {
@@ -2115,7 +2115,7 @@ class _DevDashboardState extends State<_DevDashboard> {
       ...codes.map((e) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: GestureDetector(
-          onTap: () { Clipboard.setData(ClipboardData(text: e.code)); _showSnack('${e.code} скопирован'); },
+          onTap: () { Clipboard.setData(ClipboardData(text: e.code)); _showSnack('${e.code} copied'); },
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
