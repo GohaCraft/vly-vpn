@@ -360,6 +360,19 @@ void main() {
     });
   });
 
+  group('Честность движка — только реально рабочие протоколы', () {
+    test('Hysteria2 и ShadowTLS недоступны (xray-core их не запускает)', () {
+      expect(BypassMode.hysteria2.isAvailable, isFalse);
+      expect(BypassMode.shadowtls.isAvailable, isFalse);
+    });
+    test('рабочие режимы доступны', () {
+      for (final m in [BypassMode.auto, BypassMode.xhttp,
+          BypassMode.realityVk, BypassMode.grpc, BypassMode.whitelist]) {
+        expect(m.isAvailable, isTrue, reason: m.name);
+      }
+    });
+  });
+
   group('Certificate pinning', () {
     test('с PLACEHOLDER-пинами enforcement выключен (не ломает запросы до сервера)', () {
       // Защита от футгана: если бы pinning был активен на placeholder-пинах,

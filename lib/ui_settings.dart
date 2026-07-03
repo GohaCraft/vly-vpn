@@ -1165,7 +1165,9 @@ class _AiBypassPage extends StatelessWidget {
       const SizedBox(height: 12),
 
       // Карточки режимов обхода
-      ...BypassMode.values.map((mode) => _BypassModeCard(
+      // Показываем только режимы, которые реально запускает текущее ядро
+      // (Hysteria2/ShadowTLS скрыты — xray-core их не поддерживает).
+      ...BypassMode.values.where((m) => m.isAvailable).map((mode) => _BypassModeCard(
         mode: mode,
         selected: vpn.bypassMode == mode,
         onSelect: () => vpn.setBypassMode(mode),

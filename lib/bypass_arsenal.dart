@@ -123,7 +123,6 @@ class BypassArsenal {
     {'id': 104, 'name': '🛡 Whitelist: Yandex SNI',   'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'yandex.ru', 'tier':0}},
     {'id': 105, 'name': '🛡 Whitelist: VK SNI',       'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'vk.com',    'tier':1}},
     {'id': 106, 'name': '🛡 Whitelist: mail.ru SNI',  'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'mail.ru',   'tier':1}},
-    {'id': 107, 'name': '🚀 Hysteria2 UDP fallback',  'type': 'hysteria2_fallback',   'priority': 0, 'params': {}},
     {'id': 108, 'name': '🔀 Fragment 2b delay 30ms',  'type': 'fragmented_reality',   'priority': 0, 'params': {'fragSize':2, 'delayMs':30,  'sni':'mail.yandex.ru'}},
     {'id': 109, 'name': '🔀 Fragment 1b delay 100ms', 'type': 'fragmented_reality',   'priority': 0, 'params': {'fragSize':1, 'delayMs':100, 'sni':'userapi.com'}},
     {'id': 110, 'name': '🛡 Whitelist: MS Update',    'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'update.microsoft.com','tier':2}},

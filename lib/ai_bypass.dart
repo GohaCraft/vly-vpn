@@ -84,17 +84,24 @@ extension BypassModeInfo on BypassMode {
   String get status {
     switch (this) {
       case BypassMode.auto:      return '✅ Рекомендуется — июнь 2026';
-      case BypassMode.hysteria2: return '⚠️ Деградирует — ~40% детекта (май 2026)';
+      case BypassMode.hysteria2: return '🚧 Требует ядро sing-box — недоступно';
       case BypassMode.xhttp:     return '✅ Лучший — Reality-совместим';
       case BypassMode.realityVk: return '✅ Лучший — Reality detection stable-low';
       case BypassMode.grpc:      return '✅ Актуально — Reality + gRPC';
-      case BypassMode.shadowtls: return '❌ Не поддерживается xray-core → Reality';
+      case BypassMode.shadowtls: return '🚧 Требует ядро sing-box — недоступно';
       case BypassMode.whitelist: return '⚠️ Белые списки: нужен whitelisted-IP сервер';
     }
   }
   // Reality-методы (xHTTP/Reality) — приоритет: detection stable-low.
-  // Hysteria2 убран из «рекомендуемых» — QUIC-fingerprint деградирует.
   bool get isRecommended => this == BypassMode.auto || this == BypassMode.xhttp || this == BypassMode.realityVk;
+
+  // ЧЕСТНОСТЬ ДВИЖКА: реально ли метод запускается ТЕКУЩИМ ядром (xray-core
+  // через flutter_v2ray). Hysteria2 (QUIC) и ShadowTLS xray-core НЕ
+  // поддерживает — движок не соберёт рабочий туннель. Такие режимы скрыты из
+  // выбора и авто-каскада, чтобы не обещать то, чего нет и не тратить попытки
+  // на заведомо нерабочий конфиг. Появятся после переезда ядра на sing-box.
+  bool get isAvailable =>
+      this != BypassMode.hysteria2 && this != BypassMode.shadowtls;
 }
 
 // ── Self-healing blacklist стратегий ───────────────────────────────────────
@@ -825,7 +832,9 @@ class AiBypassAgent {
   }
 
   Future<VpnConfig?> _findInternal(VpnConfig blocked) async {
-    if (bypassMode != BypassMode.auto) {
+    // Режим, который текущее ядро не умеет (Hysteria2/ShadowTLS), не пытаемся
+    // применять «напрямую» — это гарантированный провал. Падаем на авто-каскад.
+    if (bypassMode != BypassMode.auto && bypassMode.isAvailable) {
       return _applyDirectMode(blocked, bypassMode);
     }
     return _runAutoMode(blocked);
@@ -1002,32 +1011,26 @@ class AiBypassAgent {
           params: {'path': '/upload/chunk/${DateTime.now().second}', 'mode': 'stream',
                    'sni': nextSni(200)}),
 
-      // ═══ 7: Hysteria2 (QUIC) — понижен: деградирует, но иногда проходит ═══
-      BypassStrategy(priority: 7, type: 'hysteria2_fallback',
-          params: {'udp_hop': true, 'brutal': false}),
-
-      // ═══ 8: Reality + Sber SNI ═══
-      BypassStrategy(priority: 8, type: 'vless_reality_sber',
+      // ═══ 7: Reality + Sber SNI ═══
+      BypassStrategy(priority: 7, type: 'vless_reality_sber',
           params: {'sni': 'sber.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ 9: Фрагментация ClientHello (обход поведенческого анализа) ═══
-      BypassStrategy(priority: 9, type: 'vless_fragmented',
+      // ═══ 8: Фрагментация ClientHello (обход поведенческого анализа) ═══
+      BypassStrategy(priority: 8, type: 'vless_fragmented',
           params: {'min': 1, 'max': 5, 'interval': '20-100ms', 'sni': sni}),
 
-      // ═══ 10: Reality + MTS SNI (оператор в белом списке) ═══
-      BypassStrategy(priority: 10, type: 'vless_reality_mts',
+      // ═══ 9: Reality + MTS SNI (оператор в белом списке) ═══
+      BypassStrategy(priority: 9, type: 'vless_reality_mts',
           params: {'sni': 'mts.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ 11: gRPC без Reality (fallback) ═══
-      BypassStrategy(priority: 11, type: 'vless_grpc_plain',
+      // ═══ 10: gRPC без Reality (fallback) ═══
+      BypassStrategy(priority: 10, type: 'vless_grpc_plain',
           params: {'service': 'TunService', 'sni': nextSni(300)}),
 
-      // ═══ 12: Hysteria2 другой порт — последний резерв ═══
-      BypassStrategy(priority: 12, type: 'hysteria2_alt_port',
-          params: {'port_hint': 8443, 'udp_hop': true}),
-
-      // (убраны как нереализуемые на xray-core: vless_reality_ipv6 — нет
-      //  обработчика/нельзя форсировать IPv6; ShadowTLS — не поддерживается.)
+      // ЧЕСТНОСТЬ ДВИЖКА: Hysteria2 (QUIC) и ShadowTLS УБРАНЫ из каскада —
+      // xray-core их не запускает, конфиг заведомо нерабочий, попытки тратятся
+      // впустую. Вернутся после переезда ядра на sing-box. Также убран
+      // vless_reality_ipv6 (нет обработчика/нельзя форсировать IPv6).
     ];
 
     // Серверная mutation-программа (blueprint §4b): её стратегии идут ПЕРВЫМИ,

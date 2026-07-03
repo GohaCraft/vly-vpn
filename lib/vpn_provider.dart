@@ -2068,6 +2068,9 @@ class VpnProvider extends ChangeNotifier {
 
   // Установить режим обхода (вызывается из UI)
   Future<void> setBypassMode(BypassMode mode) async {
+    // Нерабочий на текущем ядре режим (Hysteria2/ShadowTLS) не выставляем —
+    // коэрсим в auto, чтобы не оставить пользователя со сломанным выбором.
+    if (!mode.isAvailable) mode = BypassMode.auto;
     bypassMode = mode;
     _aiAgent.bypassMode = mode;
     final p = await SharedPreferences.getInstance();

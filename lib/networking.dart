@@ -266,8 +266,7 @@ class BypassRulesEngine {
       {'priority': 9, 'type': 'add_reality_sni',     'params': {'sni': 'dl.google.com'}},
       {'priority': 10,'type': 'add_reality_sni',     'params': {'sni': 'update.microsoft.com'}},
       {'priority': 11,'type': 'trojan_ws_fallback',  'params': {'port': 443, 'path': '/api/v1'}},
-      // Hysteria2 fallback: UDP/QUIC обходит TCP-блокировки DPI
-      {'priority': 12,'type': 'hysteria2_fallback',  'params': {'obfs': 'salamander'}},
+      // (Hysteria2 убран — xray-core не запускает QUIC/hy2, конфиг нерабочий)
       // Zapret: локальный DPI bypass как последний рубеж перед CDN
       {'priority': 13,'type': 'zapret_bypass',       'params': {'strategy': 'disorder'}},
       {'priority': 14,'type': 'cdn_fallback',         'params': {'url': 'vly-vpn.workers.dev'}},
@@ -297,8 +296,7 @@ class BypassRulesEngine {
       {'priority': 4, 'type': 'add_reality_sni',      'params': {'sni': 'vk.com'}},           // VK
       {'priority': 5, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/cdn'}},
       {'priority': 6, 'type': 'change_transport',     'params': {'transport': 'grpc', 'service': 'gun'}},
-      // Hysteria2 — QUIC/UDP обходит IP-блокировки лучше TCP
-      {'priority': 7, 'type': 'hysteria2_fallback',   'params': {'obfs': 'salamander'}},
+      // (Hysteria2 убран — xray-core не запускает QUIC/hy2, конфиг нерабочий)
       // Zapret DPI bypass перед CDN
       {'priority': 8, 'type': 'zapret_bypass',        'params': {'strategy': 'fake_sni'}},
       {'priority': 9, 'type': 'cdn_fallback',          'params': {'url': 'vly-vpn.workers.dev'}},
