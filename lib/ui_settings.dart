@@ -608,17 +608,15 @@ class _CamouflagePage extends StatelessWidget {
     final vpn = Provider.of<VpnProvider>(context);
 
     return _SubPage(
-      title: 'Маскировка трафика',
+      title: S.t('camouflage_traffic'),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
         _InfoCard(
           icon: Icons.theater_comedy_outlined,
-          text: 'Делает VPN трафик неотличимым от конкретного сервиса. '
-                'DPI видит запросы к Netflix/YouTube/Discord — '
-                'не подозрительный "VPN паттерн".'),
+          text: S.t('info_camo')),
         const SizedBox(height: 16),
 
-        _SubSection('ВЫБЕРИ МАСКИРОВКУ'),
+        _SubSection(S.t('choose_camo_caps')),
         ...CamouflageMode.values.map((mode) {
           final selected = vpn.camouflageMode == mode.name;
           return GestureDetector(
@@ -669,7 +667,7 @@ class _CamouflagePage extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Colors.green.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(4)),
-                          child: const Text('ПО УМОЛЧАНИЮ',
+                          child: Text(S.t('default_caps'),
                               style: TextStyle(fontSize: 8, color: Colors.green,
                                   fontWeight: FontWeight.bold))),
                       if (mode == CamouflageMode.microsoft || mode == CamouflageMode.apple)
@@ -679,7 +677,7 @@ class _CamouflagePage extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Colors.orange.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(4)),
-                          child: const Text('СИЛЬНЫЙ',
+                          child: Text(S.t('strong_caps'),
                               style: TextStyle(fontSize: 8, color: Colors.orange,
                                   fontWeight: FontWeight.bold))),
                       if (mode == CamouflageMode.naive)
@@ -689,7 +687,7 @@ class _CamouflagePage extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: const Color(0xFF7C4DFF).withOpacity(0.15),
                             borderRadius: BorderRadius.circular(4)),
-                          child: const Text('ТОПОВЫЙ',
+                          child: Text(S.t('top_caps'),
                               style: TextStyle(fontSize: 8, color: Color(0xFF7C4DFF),
                                   fontWeight: FontWeight.bold))),
                     ]),
@@ -716,11 +714,7 @@ class _CamouflagePage extends StatelessWidget {
         const SizedBox(height: 16),
         _InfoCard(
           icon: Icons.warning_amber_rounded,
-          text: '⚠️ Для России: Microsoft 🪟 и Apple 🍎 — САМЫЕ СИЛЬНЫЕ. '
-                'провайдер не может заблокировать Windows Update и iCloud. '
-                'NaïveProxy 🔀 — лучший против ML-DPI. '
-                'Если Россия отключится от глобального интернета — '
-                'работают только Microsoft и Apple (RU CIDR).'),
+          text: S.t('info_camo_warn')),
       ]),
     );
   }
@@ -978,7 +972,7 @@ class _SubscriptionsPageState extends State<_SubscriptionsPage> {
       if (subs.isEmpty)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 24),
-          child: Text('Нет подписок', style: TextStyle(
+          child: Text(S.t('no_subscriptions'), style: const TextStyle(
               fontSize: 13, color: Colors.white38)))
       else
         ...subs.map((url) {
@@ -1032,7 +1026,7 @@ class _SubscriptionsPageState extends State<_SubscriptionsPage> {
           ))),
       const SizedBox(height: 10),
       _ActionBtn(
-        icon: Icons.add_rounded, label: 'Добавить подписку',
+        icon: Icons.add_rounded, label: S.t('add_subscription'),
         color: const Color(0xFF26A69A),
         onTap: () async {
           final url = _ctrl.text.trim();
@@ -1061,7 +1055,7 @@ class _BackupPageState extends State<_BackupPage> {
     final vpn = Provider.of<VpnProvider>(context);
     return _SubPage(title: S.t('backup'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _SubSection('ЭКСПОРТ'),
+      _SubSection(S.t('export_caps')),
       ClipRRect(borderRadius: BorderRadius.circular(12),
         child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
           child: TextField(controller: _pwCtrl,
@@ -1089,7 +1083,7 @@ class _BackupPageState extends State<_BackupPage> {
             backgroundColor: const Color(0xFF1B2A1B)));
         }),
       const SizedBox(height: 24),
-      _SubSection('ИМПОРТ'),
+      _SubSection(S.t('import_caps')),
       ClipRRect(borderRadius: BorderRadius.circular(12),
         child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
           child: TextField(controller: _imCtrl,
@@ -1097,7 +1091,7 @@ class _BackupPageState extends State<_BackupPage> {
             style: const TextStyle(fontSize: 11,
                 fontFamily: 'monospace', color: Colors.white70),
             decoration: InputDecoration(
-              hintText: 'Вставьте строку бэкапа…',
+              hintText: S.t('backup_import_hint'),
               hintStyle: const TextStyle(fontSize: 11, color: Colors.white24),
               filled: true, fillColor: Colors.white.withOpacity(0.06),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
@@ -1144,10 +1138,10 @@ class _ProtectionPage extends StatelessWidget {
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.public_off_rounded, iconColor: const Color(0xFF7C4DFF),
-        title: 'Кнопка обхода',
+        title: S.t('bypass_button'),
         subtitle: vpn.bypassBtnMode
-            ? 'Нажатие → Обход белых списков'
-            : 'Нажатие → Вкл/Выкл VPN',
+            ? S.t('bypass_btn_wl')
+            : S.t('bypass_btn_vpn'),
         value: vpn.bypassBtnMode,
         onChanged: (_) => vpn.toggleBypassBtnMode()),
     ]));
@@ -1164,13 +1158,10 @@ class _AiBypassPage extends StatelessWidget {
     return _SubPage(title: 'AI Bypass + Stealth', child: Column(children: [
 
       // ── МЕТОД ОБХОДА ────────────────────────────────────────────────────
-      _SubSection('МЕТОД ОБХОДА (АПРЕЛЬ 2026)'),
+      _SubSection(S.t('bypass_method_caps')),
       _InfoCard(
         icon: Icons.security_outlined,
-        text: '✅ Hysteria2/QUIC — лучший выбор\n'
-            '✅ VLESS+xHTTP — новый 2026\n'
-            '✅ Reality+VK SNI — белый список провайдер\n'
-            '❌ VLESS+TCP plain TLS — заблокирован с 17.02.2026'),
+        text: S.t('info_bypass_method')),
       const SizedBox(height: 12),
 
       // Карточки режимов обхода
@@ -1204,16 +1195,14 @@ class _AiBypassPage extends StatelessWidget {
       // Инфо-карточка
       _InfoCard(
         icon: Icons.visibility_off_outlined,
-        text: 'Защита от JA4+ fingerprinting. '
-            'TLS фрагментация разбивает handshake, '
-            'Reality SNI маскирует трафик под Google/Apple/Microsoft.'),
+        text: S.t('info_stealth3')),
       const SizedBox(height: 12),
 
       _SwitchRow(
         icon: Icons.visibility_off_outlined,
         iconColor: const Color(0xFF7C4DFF),
         title: 'Stealth Mode',
-        subtitle: 'Анти-DPI + анти-JA4+ защита',
+        subtitle: S.t('stealth_mode_sub'),
         value: vpn.stealthMode,
         onChanged: (v) { vpn.stealthMode = v; vpn.saveToDisk(); vpn.refresh(); }),
       const SizedBox(height: 4),
@@ -1221,8 +1210,8 @@ class _AiBypassPage extends StatelessWidget {
       _SwitchRow(
         icon: Icons.call_split_rounded,
         iconColor: const Color(0xFFFF6D00),
-        title: 'TLS Фрагментация',
-        subtitle: 'Ghost Handshake — разбивает TLS ClientHello на 1-3 пакета',
+        title: S.t('tls_frag'),
+        subtitle: S.t('tls_frag_sub'),
         value: vpn.stealthFragment,
         onChanged: vpn.stealthMode
             ? (v) { vpn.stealthFragment = v; vpn.saveToDisk(); vpn.refresh(); }
@@ -1232,8 +1221,8 @@ class _AiBypassPage extends StatelessWidget {
       _SwitchRow(
         icon: Icons.language_rounded,
         iconColor: const Color(0xFF26A69A),
-        title: 'Reality SNI Ротация',
-        subtitle: 'Авто-смена SNI: Google → Apple → Microsoft…',
+        title: S.t('reality_sni_rot'),
+        subtitle: S.t('reality_sni_rot_sub'),
         value: vpn.stealthRealitySni,
         onChanged: vpn.stealthMode
             ? (v) { vpn.stealthRealitySni = v; vpn.saveToDisk(); vpn.refresh(); }
@@ -1244,7 +1233,7 @@ class _AiBypassPage extends StatelessWidget {
         icon: Icons.local_fire_department_outlined,
         iconColor: const Color(0xFFFF5252),
         title: 'Warm-up',
-        subtitle: 'HTTPS запрос к безопасному домену перед VPN туннелем',
+        subtitle: S.t('warmup_sub'),
         value: vpn.stealthWarmup,
         onChanged: vpn.stealthMode
             ? (v) { vpn.stealthWarmup = v; vpn.saveToDisk(); vpn.refresh(); }
@@ -1254,13 +1243,13 @@ class _AiBypassPage extends StatelessWidget {
       _SwitchRow(
         icon: Icons.apps_rounded,
         iconColor: const Color(0xFF42A5F5),
-        title: 'Пер-сервисный обход',
-        subtitle: 'Свой обход для Telegram (+форки), YouTube, TikTok и др. по доменам/IP',
+        title: S.t('per_service_bypass'),
+        subtitle: S.t('per_service_bypass_sub'),
         value: vpn.perAppBypass,
         onChanged: (v) => vpn.setPerAppBypass(v)),
 
       const SizedBox(height: 16),
-      _SubSection('ТЕКУЩИЙ SNI ПУЛ'),
+      _SubSection(S.t('current_sni_pool_caps')),
       ...kRealitySniPool.map((sni) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(children: [
@@ -1275,8 +1264,7 @@ class _AiBypassPage extends StatelessWidget {
       _SubSection('SELF-HEALING'),
       _InfoCard(
         icon: Icons.health_and_safety_outlined,
-        text: 'Если основной API недоступен, ноды загружаются из GitHub '
-            'зеркала или DNS TXT записи автоматически.'),
+        text: S.t('info_selfheal')),
     ]));
   }
 }
