@@ -53,7 +53,7 @@ class SettingsScreen extends StatelessWidget {
             iconColor: const Color(0xFF42A5F5),
             title: S.t('lan_share'),
             subtitle: 'Прокси для устройств в сети',
-            helpText: 'Позволяет другим устройствам (телефон, ноутбук) в вашей WiFi-сети использовать Ауру как прокси. Адрес: 0.0.0.0:10808.',
+            helpText: 'Позволяет другим устройствам (телефон, ноутбук) в вашей WiFi-сети использовать Vly как прокси. Адрес: 0.0.0.0:10808.',
             onTap: () => _push(context, const _LanPage())),
 
           const SizedBox(height: 20),
@@ -108,7 +108,7 @@ class SettingsScreen extends StatelessWidget {
             iconColor: const Color(0xFF26A69A),
             title: 'Управление подписками',
             subtitle: 'Добавить · Обновить · Удалить',
-            helpText: 'Подписки — это URL-ссылки от провайдера VPN, содержащие список серверов. Вставь ссылку и Аура загрузит все доступные серверы.',
+            helpText: 'Подписки — это URL-ссылки от провайдера VPN, содержащие список серверов. Вставь ссылку и Vly загрузит все доступные серверы.',
             onTap: () => _push(context, const _SubscriptionsPage())),
           _SettingsTile(
             icon: Icons.update_rounded,
@@ -303,7 +303,7 @@ class _TunnelPage extends StatelessWidget {
         subtitle: 'DPI-детектирование типа трафика для маршрутизации',
         value: vpn.enablePacketSniff,
         onChanged: vpn.setPacketSniff,
-        hint: 'Аура анализирует SNI/HTTP Host каждого пакета и маршрутизирует по содержимому. Например: gosuslugi.ru → прямо, instagram.com → через VPN. Требует чуть больше CPU.'),
+        hint: 'Vly анализирует SNI/HTTP Host каждого пакета и маршрутизирует по содержимому. Например: gosuslugi.ru → прямо, instagram.com → через VPN. Требует чуть больше CPU.'),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.swap_horiz_rounded, iconColor: const Color(0xFF78909C),
@@ -327,7 +327,7 @@ class _LanPage extends StatelessWidget {
       _InfoCard(
         icon: Icons.wifi_tethering_rounded,
         text: 'Разрешает другим устройствам в сети использовать '
-              'Ауру как прокси-сервер. Включает прослушивание на '
+              'Vly как прокси-сервер. Включает прослушивание на '
               '0.0.0.0 вместо 127.0.0.1.'),
       const SizedBox(height: 16),
       _SubSection('ДОСТУП'),
