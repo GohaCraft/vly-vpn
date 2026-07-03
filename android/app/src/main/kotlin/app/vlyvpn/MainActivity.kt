@@ -67,6 +67,20 @@ class MainActivity : FlutterActivity() {
                             result.error("UNAVAILABLE", "Файловый менеджер недоступен", null)
                         }
                     }
+                    "openUrl" -> {
+                        // Открыть URL в браузере (страница загрузки обновления)
+                        val url = call.argument<String>("url") ?: ""
+                        if (url.isEmpty()) { result.error("NO_URL", "empty", null) }
+                        else try {
+                            startActivity(android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(url))
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("OPEN_ERROR", e.message, null)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }

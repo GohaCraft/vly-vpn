@@ -1022,3 +1022,67 @@ class Telemetry {
     } catch (_) { /* fire-and-forget: теряем батч, не копим бесконечно */ }
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  IN-APP UPDATE CHECK — критично для sideload-дистрибуции
+//
+//  APK ставится в обход магазина → авто-обновления нет. Для анти-цензуры это
+//  фатально: пользователь застревает на старой версии протоколов, пока ТСПУ
+//  эволюционирует. Клиент periodically проверяет version.json на control-plane
+//  и, если серверный build новее установленного, показывает баннер со ссылкой.
+//  Строгий парсинг + версионный гейт; при любой ошибке — тихо ничего.
+// ═══════════════════════════════════════════════════════════════════════════
+class AppUpdate {
+  final String version;   // '6.5.0'
+  final int    build;     // 20260701 (сравнивается с kAppBuild)
+  final String url;       // страница загрузки / APK
+  final String notes;     // что нового
+  final bool   mandatory; // критическое обновление (напр. смена протокола)
+  const AppUpdate({required this.version, required this.build,
+      required this.url, this.notes = '', this.mandatory = false});
+
+  static AppUpdate? decode(dynamic raw) {
+    try {
+      if (raw is! Map) return null;
+      final build = (raw['build'] as num?)?.toInt() ?? 0;
+      final url   = raw['url'];
+      // Обязательно валидный build и http(s)-URL, иначе payload не годен.
+      if (build <= 0) return null;
+      if (url is! String || !url.startsWith('http')) return null;
+      return AppUpdate(
+        version: (raw['version'] ?? '').toString(),
+        build: build, url: url,
+        notes: (raw['notes'] ?? '').toString(),
+        mandatory: raw['mandatory'] == true,
+      );
+    } catch (_) { return null; }
+  }
+}
+
+class UpdateChecker {
+  static AppUpdate? _available;
+  static AppUpdate? get available => _available;
+
+  static int get currentBuild => int.tryParse(kAppBuild) ?? 0;
+  // Серверный build строго новее установленного?
+  static bool isNewerBuild(int build) => build > currentBuild;
+
+  static Future<AppUpdate?> check() async {
+    try {
+      final res = await PinnedHttpClient.get(kUpdateUrl,
+          timeout: const Duration(seconds: 6));
+      if (res.statusCode != 200) return null;
+      final u = AppUpdate.decode(jsonDecode(res.body));
+      _available = (u != null && isNewerBuild(u.build)) ? u : null;
+      return _available;
+    } catch (_) { return null; }
+  }
+
+  // Открыть страницу загрузки нативным Intent (ACTION_VIEW) через share-канал.
+  static Future<void> openDownload(AppUpdate u) async {
+    try {
+      await const MethodChannel('vly_vpn/share')
+          .invokeMethod('openUrl', {'url': u.url});
+    } catch (_) {}
+  }
+}

@@ -373,6 +373,28 @@ void main() {
     });
   });
 
+  group('Проверка обновлений', () {
+    test('валидный payload с новым build парсится', () {
+      final u = AppUpdate.decode({
+        'version': '9.9.9', 'build': UpdateChecker.currentBuild + 1,
+        'url': 'https://vlyvpn.app/apk', 'notes': 'new', 'mandatory': true});
+      expect(u, isNotNull);
+      expect(u!.version, '9.9.9');
+      expect(u.mandatory, isTrue);
+      expect(UpdateChecker.isNewerBuild(u.build), isTrue);
+    });
+    test('старый/равный build не считается новее', () {
+      expect(UpdateChecker.isNewerBuild(UpdateChecker.currentBuild), isFalse);
+      expect(UpdateChecker.isNewerBuild(UpdateChecker.currentBuild - 1), isFalse);
+    });
+    test('битый payload → null', () {
+      expect(AppUpdate.decode('не map'), isNull);
+      expect(AppUpdate.decode({'build': 0, 'url': 'https://x'}), isNull);       // нет build
+      expect(AppUpdate.decode({'build': 99999999, 'url': 'ftp://x'}), isNull);  // не http
+      expect(AppUpdate.decode({'build': 99999999}), isNull);                    // нет url
+    });
+  });
+
   group('Certificate pinning', () {
     test('с PLACEHOLDER-пинами enforcement выключен (не ломает запросы до сервера)', () {
       // Защита от футгана: если бы pinning был активен на placeholder-пинах,

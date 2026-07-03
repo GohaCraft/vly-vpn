@@ -1755,7 +1755,41 @@ class _AboutPageState extends State<_AboutPage> {
 
   @override
   Widget build(BuildContext context) {
+    final upd = Provider.of<VpnProvider>(context).updateAvailable;
     return _SubPage(title: S.t('about_app'), child: Column(children: [
+      // ── Баннер обновления (sideload: авто-апдейта нет) ──────────────────
+      if (upd != null) GestureDetector(
+        onTap: () => UpdateChecker.openDownload(upd),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(colors: [
+              Color(0xFF43A047), Color(0xFF2E7D32)]),
+            boxShadow: [BoxShadow(
+                color: const Color(0xFF43A047).withOpacity(0.4), blurRadius: 16)]),
+          child: Row(children: [
+            const Icon(Icons.system_update_rounded, color: Colors.white, size: 24),
+            const SizedBox(width: 12),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${S.t('update_available')} · v${upd.version}',
+                style: const TextStyle(color: Colors.white, fontSize: 13,
+                    fontWeight: FontWeight.w800)),
+              if (upd.notes.isNotEmpty) Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(upd.notes, maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 11))),
+            ])),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10)),
+              child: Text(S.t('download'), style: const TextStyle(
+                  color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800))),
+          ]))),
       // Логотип
       // VLY иконка с неоновым свечением
       Container(

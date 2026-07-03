@@ -110,6 +110,7 @@ class VpnProvider extends ChangeNotifier {
   bool get killSwitch   => _prof.killSwitch;
   bool get aiEnabled    => _prof.aiEnabled;
   bool get telemetryEnabled => _prof.telemetryEnabled;
+  AppUpdate? get updateAvailable => UpdateChecker.available;
   SplitTunnelMode get splitMode => _prof.splitMode;
   List<String>    get splitApps => _prof.splitApps;
 
@@ -665,6 +666,8 @@ class VpnProvider extends ChangeNotifier {
     AiMemory.load();
     // Анонимная диагностика (opt-in): применяем сохранённый выбор пользователя.
     Telemetry.init().then((_) => Telemetry.configure(enabled: _prof.telemetryEnabled));
+    // Проверка обновлений (sideload → авто-апдейта нет). При наличии — покажем.
+    UpdateChecker.check().then((u) { if (u != null && !_disposed) _notify(); });
     // Серверно-обновляемый AI-каскад (blueprint §4b): грузим кэш, тянем свежую.
     MutationRegistry.load().then((_) => MutationRegistry.syncFromServer(_log));
     _bypassRules.syncFromServer(_log).then((_) => _notify());
