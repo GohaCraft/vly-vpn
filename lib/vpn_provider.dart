@@ -7,36 +7,11 @@ class VpnProvider extends ChangeNotifier {
   bool get mounted => !_disposed;
 
   // ── VPN Detection Shield ───────────────────────────────────────────────────
-  // Случайный порт и пароль для SOCKS5 — каждый запуск приложения новый
-  // Это защищает от scan-based детекции (Яндекс/Минцифры методика апрель 2026)
-
-  // ── Ротация SOCKS5 порта каждые 90 секунд ────────────────────────────────
-  // Защита от /proc/net/tcp сканирования (метод детекции yourvpndead)
-  // Минцифры, Яндекс.Метрика, банковские SDK сканируют localhost порты
-  static int _currentProxyPort = 0;
-  static Timer? _portRotationTimer;
-
-  static int getActiveProxyPort() {
-    if (_currentProxyPort == 0) {
-      _currentProxyPort = 40000 + (DateTime.now().millisecondsSinceEpoch % 9999);
-    }
-    return _currentProxyPort;
-  }
-
-  static void startPortRotation(VoidCallback onRotate) {
-    _portRotationTimer?.cancel();
-    _portRotationTimer = Timer.periodic(const Duration(seconds: 90), (_) {
-      // Новый порт только если VPN не подключён (иначе разорвёт соединение)
-      _currentProxyPort = 40000 + (DateTime.now().millisecondsSinceEpoch % 9999);
-      onRotate();
-    });
-  }
-
-  static void stopPortRotation() {
-    _portRotationTimer?.cancel();
-    _portRotationTimer = null;
-  }
-
+  // Случайный SOCKS5-порт на каждый запуск приложения — против scan-based
+  // детекции (сканирование localhost-портов). Порт выбирается ОДИН раз при
+  // старте; ротация «на лету» не применяется (рвала бы активное соединение).
+  // (Убран мёртвый блок getActiveProxyPort/startPortRotation — не вызывался и
+  //  вводил в заблуждение комментарием про «ротацию каждые 90с».)
   static final int    _secureProxyPort = 10000 + (DateTime.now().millisecondsSinceEpoch % 55535);
   static final String _sessionKey      =
       (DateTime.now().millisecondsSinceEpoch ^ 0xDEADBEEF).toRadixString(36) +
