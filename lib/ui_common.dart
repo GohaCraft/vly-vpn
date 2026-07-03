@@ -230,16 +230,16 @@ class _HexColorPickerState extends State<_HexColorPicker> {
             child: Container(height: 44, decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.white24)),
-              child: const Center(child: Text('Отмена',
-                  style: TextStyle(color: Colors.white54, fontSize: 13)))))),
+              child: Center(child: Text(S.t('cancel'),
+                  style: const TextStyle(color: Colors.white54, fontSize: 13)))))),
           const SizedBox(width: 10),
           Expanded(child: GestureDetector(
             onTap: () { widget.onPicked(_current); Navigator.pop(context); },
             child: Container(height: 44, decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 gradient: LinearGradient(colors: [c, c.withOpacity(0.7)])),
-              child: const Center(child: Text('Применить',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)))))),
+              child: Center(child: Text(S.t('apply'),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)))))),
         ]),
       ]));
   }
@@ -804,10 +804,11 @@ class _VlyBottomNav extends StatelessWidget {
   final int current; final ValueChanged<int> onTap; final bool light;
   const _VlyBottomNav({required this.current, required this.onTap, required this.light});
 
+  // Третий элемент — ключ локализации (метка резолвится в build через S.t).
   static const _items = [
-    (Icons.vpn_key_rounded,       Icons.vpn_key_outlined,       'VPN'),
-    (Icons.dns_rounded,           Icons.dns_outlined,            'Серверы'),
-    (Icons.settings_rounded,      Icons.settings_outlined,       'Настройки'),
+    (Icons.vpn_key_rounded,       Icons.vpn_key_outlined,       'nav_vpn'),
+    (Icons.dns_rounded,           Icons.dns_outlined,            'servers_title'),
+    (Icons.settings_rounded,      Icons.settings_outlined,       'settings'),
   ];
 
   @override
@@ -845,7 +846,7 @@ class _VlyBottomNav extends StatelessWidget {
                   size: 20,
                   color: sel ? _accent : (light ? Colors.black38 : Colors.white30))),
               const SizedBox(height: 2),
-              Text(item.$3, style: TextStyle(
+              Text(S.t(item.$3), style: TextStyle(
                 fontSize: 9,
                 color: sel ? _accent : (light ? Colors.black38 : Colors.white30),
                 fontWeight: sel ? FontWeight.w700 : FontWeight.normal,

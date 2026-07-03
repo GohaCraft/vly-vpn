@@ -109,7 +109,7 @@ class HomeScreen extends StatelessWidget {
               await Future.delayed(const Duration(milliseconds: 300));
               SystemNavigator.pop();
             },
-            child: const Text('Выйти')),
+            child: Text(S.t('exit'))),
       ],
     ));
   }
@@ -736,7 +736,7 @@ class _IpCheckScreenState extends State<IpCheckScreen> {
 
                   if (_ipCheck.hasError) Padding(
                     padding: const EdgeInsets.only(top: 12),
-                    child: Text('Ошибка: ${_ipCheck.errorMsg}',
+                    child: Text('${S.t('error')}: ${_ipCheck.errorMsg}',
                         style: const TextStyle(
                             fontSize: 11, color: Colors.redAccent),
                         textAlign: TextAlign.center)),
@@ -822,12 +822,12 @@ class _IpDetailCard extends StatelessWidget {
             color: Colors.white70),
           _DetailRow(
             icon: Icons.business_outlined,
-            label: 'Провайдер',
+            label: S.t('isp'),
             value: cur.isp,
             color: Colors.white70),
           _DetailRow(
             icon: Icons.dns_outlined,
-            label: 'DNS сервер',
+            label: S.t('dns_server'),
             value: cur.dns,
             color: Colors.white70,
             last: true),
@@ -840,7 +840,7 @@ class _IpDetailCard extends StatelessWidget {
                 Icon(Icons.compare_arrows_rounded,
                     size: 14, color: Colors.white24),
                 const SizedBox(width: 10),
-                Text('Реальный IP: ${real!.ip}',
+                Text('${S.t('real_ip')}: ${real!.ip}',
                     style: const TextStyle(
                         fontSize: 10, color: Colors.white24)),
               ])),
@@ -922,9 +922,9 @@ class _IpVerdictCard extends StatelessWidget {
                 fontSize: 11, color: color.withOpacity(0.6))),
             const SizedBox(height: 6),
             Row(children: [
-              _VerdictChip('IP',  ipChanged,  'скрыт',   'виден'),
+              _VerdictChip('IP',  ipChanged,  S.t('v_hidden'),   S.t('v_visible')),
               const SizedBox(width: 6),
-              _VerdictChip('DNS', dnsOk,      'ОК',      'утечка?'),
+              _VerdictChip('DNS', dnsOk,      S.t('v_ok'),      S.t('v_leak')),
             ]),
           ])),
         ]),
@@ -994,7 +994,7 @@ class _HomeNodePreview extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
           child: Row(children: [
-            Text('БЫСТРЫЕ СЕРВЕРЫ', style: TextStyle(
+            Text(S.t('fast_servers'), style: TextStyle(
                 fontSize: 9, letterSpacing: 2,
                 color: _subTextColor(context).withOpacity(0.45))),
             const Spacer(),
@@ -1003,7 +1003,7 @@ class _HomeNodePreview extends StatelessWidget {
                 // Switch to servers tab
                 context.findAncestorStateOfType<_MainShellState>()?.switchTab(1);
               },
-              child: Text('Все →', style: TextStyle(
+              child: Text(S.t('see_all'), style: TextStyle(
                   fontSize: 9, color: _accent.withOpacity(0.6))),
             ),
           ]),
@@ -1110,7 +1110,7 @@ class _ConnectAutoRow extends StatelessWidget {
             : Icon(active ? Icons.auto_awesome : Icons.auto_awesome_outlined,
                 size: 12, color: color),
           const SizedBox(width: 6),
-          Text(active ? (running ? 'ПОИСК...' : 'АВТО АКТИВЕН') : 'АВТО',
+          Text(active ? (running ? S.t('searching') : S.t('auto_on')) : S.t('auto'),
             style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700,
                 color: color, letterSpacing: 1.5)),
         ]),
@@ -1145,7 +1145,7 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
 
   Future<void> _importText(String text) async {
     final t = text.trim();
-    if (t.isEmpty) { setState(() => _error = 'Введите ключ или ссылку'); return; }
+    if (t.isEmpty) { setState(() => _error = S.t('enter_key_or_link')); return; }
     if (!mounted) return;
     setState(() { _loading = true; _error = ''; });
     try {
@@ -1165,7 +1165,7 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
         widget.vpn.addSingleKey(t);
         if (mounted) Navigator.pop(context);
       } else {
-        setState(() => _error = 'Неизвестный формат. Поддерживаются: vless://, vmess://, ss://, trojan://, hy2://, http(s):// (подписка)');
+        setState(() => _error = S.t('unknown_format'));
       }
     } catch (e) {
       setState(() => _error = e.toString());
@@ -1178,7 +1178,7 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
     if (data?.text != null && data!.text!.isNotEmpty) {
       await _importText(data.text!);
     } else {
-      setState(() => _error = 'Буфер обмена пуст');
+      setState(() => _error = S.t('clipboard_empty'));
     }
   }
 
@@ -1195,11 +1195,11 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
     } on PlatformException catch (e) {
       if (!mounted) return;
       if (e.code != 'CANCELLED') {
-        setState(() => _error = 'Ошибка открытия файла: ${e.message}');
+        setState(() => _error = '${S.t('file_open_error')}: ${e.message}');
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Ошибка: $e');
+      setState(() => _error = '${S.t('error')}: $e');
     }
   }
 
@@ -1227,7 +1227,7 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
 
             // Заголовок
             Row(children: [
-              Text('Добавить конфиг', style: TextStyle(fontSize: 17,
+              Text(S.t('add_config'), style: TextStyle(fontSize: 17,
                   fontWeight: FontWeight.w800, color: _textColor(context))),
               const Spacer(),
               GestureDetector(onTap: () => Navigator.pop(context),
@@ -1251,7 +1251,7 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
               const SizedBox(width: 8),
               Expanded(child: _AddMenuBtn(
                 icon: Icons.content_paste_rounded,
-                label: 'Буфер',
+                label: S.t('clipboard'),
                 color: const Color(0xFF69FF47),
                 onTap: _loading ? null : _pasteFromClipboard,
               )),
@@ -1260,14 +1260,14 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
             Row(children: [
               Expanded(child: _AddMenuBtn(
                 icon: Icons.folder_open_rounded,
-                label: 'Файл',
+                label: S.t('file'),
                 color: const Color(0xFFFFD740),
                 onTap: _loading ? null : _importFromFile,
               )),
               const SizedBox(width: 8),
               Expanded(child: _AddMenuBtn(
                 icon: Icons.rss_feed_rounded,
-                label: 'Подписки',
+                label: S.t('subscriptions'),
                 color: const Color(0xFF7C4DFF),
                 onTap: () {
                   Navigator.pop(context);
@@ -1289,7 +1289,7 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
                       fontFamily: 'monospace',
                       color: light ? Colors.black87 : Colors.white70),
                   decoration: InputDecoration(
-                    hintText: 'vless://... или https://подписка...',
+                    hintText: S.t('paste_hint'),
                     hintStyle: TextStyle(fontSize: 12,
                         color: light ? Colors.black38 : Colors.white24),
                     filled: true,
@@ -1326,7 +1326,7 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
                     BoxShadow(color: _accent.withOpacity(0.2), blurRadius: 16)]),
                 child: _loading
                   ? const Center(child: CupertinoActivityIndicator())
-                  : const Center(child: Text('ИМПОРТИРОВАТЬ',
+                  : Center(child: Text(S.t('import_btn'),
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900,
                           color: Colors.white, letterSpacing: 2))),
               ),
@@ -1402,7 +1402,7 @@ class _AutoBtn extends StatelessWidget {
                   active ? Icons.auto_awesome : Icons.auto_awesome_outlined,
                   size: 13, color: color),
           const SizedBox(width: 5),
-          Text('АВТО',
+          Text(S.t('auto'),
               style: TextStyle(
                   fontSize: 9, fontWeight: FontWeight.w900,
                   color: color, letterSpacing: 1.5)),
@@ -1451,7 +1451,7 @@ class _AutoModeBar extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    running ? 'АВТО · ПОИСК' : 'АВТО · АКТИВЕН',
+                    running ? S.t('auto_search') : S.t('auto_active'),
                     style: TextStyle(
                         fontSize: 9, fontWeight: FontWeight.w900,
                         color: color, letterSpacing: 1.5)),
@@ -1473,7 +1473,7 @@ class _AutoModeBar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                         color: Colors.white.withOpacity(0.12))),
-                  child: const Text('Выкл',
+                  child: Text(S.t('off'),
                       style: TextStyle(
                           fontSize: 9, color: Colors.white38)))),
             ]),
@@ -1503,22 +1503,22 @@ class _WhitelistBypassButton extends StatelessWidget {
     switch (status) {
       case 'ACTIVATING':
         baseColor = const Color(0xFFFFB300); // янтарный — идёт процесс
-        label     = 'АКТИВИРУЕТСЯ...';
+        label     = S.t('activating');
         icon      = Icons.sync_rounded;
         break;
       case 'ACTIVE':
         baseColor = const Color(0xFF00E676); // зелёный — работает
-        label     = 'ОБХОД АКТИВЕН';
+        label     = S.t('bypass_active');
         icon      = Icons.shield_outlined;
         break;
       case 'FAILED':
         baseColor = const Color(0xFFFF5252); // красный — ошибка
-        label     = 'ОШИБКА ОБХОДА';
+        label     = S.t('bypass_error');
         icon      = Icons.error_outline_rounded;
         break;
       default:
         baseColor = const Color(0xFF7C4DFF); // фиолетовый — ждёт
-        label     = 'ОБХОД БЕЛЫХ СПИСКОВ';
+        label     = S.t('wl_bypass_caps');
         icon      = Icons.public_off_rounded;
     }
 
@@ -1586,8 +1586,8 @@ class _WhitelistBypassButton extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       active
-                          ? 'Порт 443 · WebSocket · CDN SNI'
-                          : 'Нажми если заблокированы протоколы VPN',
+                          ? S.t('wl_hint_active')
+                          : S.t('wl_hint_tap'),
                       style: TextStyle(fontSize: 10,
                           color: baseColor.withOpacity(0.55))),
                   ])),
@@ -1610,25 +1610,24 @@ class _WhitelistBypassButton extends StatelessWidget {
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: BorderSide(color: Colors.white.withOpacity(0.10))),
-      title: const Row(children: [
-        Icon(Icons.public_off_rounded, color: Color(0xFF7C4DFF), size: 22),
-        SizedBox(width: 10),
-        Text('Обход белых списков', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+      title: Row(children: [
+        const Icon(Icons.public_off_rounded, color: Color(0xFF7C4DFF), size: 22),
+        const SizedBox(width: 10),
+        Text(S.t('wl_bypass_title'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
       ]),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        _InfoRow('🔒', 'Порт', '443 (HTTPS — всегда открыт)'),
-        _InfoRow('🌐', 'Транспорт', 'WebSocket через CDN'),
+        _InfoRow('🔒', S.t('port'), S.t('wl_port_val')),
+        _InfoRow('🌐', S.t('transport'), S.t('wl_transport_val')),
         _InfoRow('🎭', 'SNI', 'speed.cloudflare.com'),
         _InfoRow('📡', 'DNS', 'DoH — Cloudflare 1.1.1.1'),
         const SizedBox(height: 12),
         Text(
-          'Используй если VPN заблокирован на уровне протокола. '
-          'Трафик маскируется под обычный HTTPS и проходит через CDN.',
+          S.t('wl_help'),
           style: TextStyle(fontSize: 11, color: Colors.white38, height: 1.5)),
       ]),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context),
-            child: const Text('Понятно', style: TextStyle(color: Color(0xFF7C4DFF)))),
+            child: Text(S.t('understood'), style: const TextStyle(color: Color(0xFF7C4DFF)))),
       ],
     ));
   }
@@ -1783,7 +1782,7 @@ class _ListHeader extends StatelessWidget {
               : Icon(Icons.network_ping_rounded, size: 11,
                   color: _subTextColor(context).withOpacity(0.5)),
             const SizedBox(width: 4),
-            Text(vpn.isPingAllRunning ? 'ПИНГ...' : S.t('sort_by_ping'),
+            Text(vpn.isPingAllRunning ? S.t('pinging') : S.t('sort_by_ping'),
                 style: TextStyle(fontSize: 9,
                     color: _subTextColor(context).withOpacity(0.5),
                     letterSpacing: 0.5)),
@@ -1888,7 +1887,7 @@ class _NodeTile extends StatelessWidget {
       builder: (_) => CupertinoActionSheet(
         title: Text(cfg.displayName),
         message: cfg.isAiPatched
-            ? const Text('🤖 AI-патч применён', style: TextStyle(fontSize: 11))
+            ? Text(S.t('ai_patch_applied'), style: const TextStyle(fontSize: 11))
             : null,
         actions: [
           CupertinoActionSheetAction(
@@ -1899,10 +1898,10 @@ class _NodeTile extends StatelessWidget {
               Navigator.pop(context);
               ShareConfigSheet.show(context, cfg);
             },
-            child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.share_rounded, size: 16),
-              SizedBox(width: 8),
-              Text('Поделиться нодой'),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.share_rounded, size: 16),
+              const SizedBox(width: 8),
+              Text(S.t('share_node')),
             ])),
           // Сброс к оригиналу — только если конфиг был изменён
           if (modified)
@@ -1913,29 +1912,28 @@ class _NodeTile extends StatelessWidget {
                   context: context,
                   builder: (ctx) => CupertinoAlertDialog(
                     title: Text(S.t('node_reset_confirm_title')),
-                    content: const Text(
-                        'Ключ вернётся к оригинальному состоянию из провайдера подписки. '
-                        'AI-патчинг, маскировка и кастомное имя будут убраны.',
-                        style: TextStyle(fontSize: 12)),
+                    content: Text(
+                        S.t('reset_node_desc'),
+                        style: const TextStyle(fontSize: 12)),
                     actions: [
                       CupertinoDialogAction(
                         onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Отмена')),
+                        child: Text(S.t('cancel'))),
                       CupertinoDialogAction(
                         isDestructiveAction: true,
                         onPressed: () {
                           Navigator.pop(ctx);
                           vpn.resetNodeToOriginal(idx);
                         },
-                        child: const Text('Сбросить')),
+                        child: Text(S.t('reset'))),
                     ],
                   ),
                 );
               },
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.restore_rounded, size: 16, color: Colors.orange),
-                SizedBox(width: 8),
-                Text('Сбросить к оригиналу', style: TextStyle(color: Colors.orange)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Icon(Icons.restore_rounded, size: 16, color: Colors.orange),
+                const SizedBox(width: 8),
+                Text(S.t('reset_to_original'), style: const TextStyle(color: Colors.orange)),
               ])),
           CupertinoActionSheetAction(
             isDestructiveAction: true,
@@ -1944,7 +1942,7 @@ class _NodeTile extends StatelessWidget {
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Отмена')),
+          child: Text(S.t('cancel'))),
       ),
     );
   }
@@ -1967,7 +1965,7 @@ class _NodeTile extends StatelessWidget {
           return await showCupertinoDialog<bool>(
             context: context,
             builder: (_) => CupertinoAlertDialog(
-              title: const Text('Удалить ноду?'),
+              title: Text(S.t('delete_node_q')),
               content: Text(cfg.displayName),
               actions: [
                 CupertinoDialogAction(isDestructiveAction: true,
@@ -1992,7 +1990,7 @@ class _NodeTile extends StatelessWidget {
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           const Icon(Icons.tune_rounded, color: Color(0xFF64B5F6), size: 18),
           const SizedBox(height: 3),
-          const Text('Настройки', style: TextStyle(fontSize: 8, color: Color(0xFF64B5F6))),
+          Text(S.t('node_edit'), style: const TextStyle(fontSize: 8, color: Color(0xFF64B5F6))),
         ])),
       secondaryBackground: Container(
         alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 20),
@@ -2003,7 +2001,7 @@ class _NodeTile extends StatelessWidget {
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
           const SizedBox(height: 3),
-          const Text('Удалить', style: TextStyle(fontSize: 8, color: Colors.redAccent)),
+          Text(S.t('delete'), style: const TextStyle(fontSize: 8, color: Colors.redAccent)),
         ])),
       onDismissed: (dir) {
         if (dir == DismissDirection.endToStart) vpn.deleteNode(idx);
@@ -2328,7 +2326,7 @@ class _AutoConnectAppsScreenState extends State<AutoConnectAppsScreen> {
             CupertinoSliverNavigationBar(
             backgroundColor: Colors.transparent,
             border: null,
-            largeTitle: Text('Приложения-триггеры',
+            largeTitle: Text(S.t('trigger_apps'),
                 style: TextStyle(
                     color: _textColor(context),
                     fontWeight: FontWeight.w800)),
@@ -2340,7 +2338,7 @@ class _AutoConnectAppsScreenState extends State<AutoConnectAppsScreen> {
                       _autoConnect.forceRefresh();
                       setState(() {});
                     },
-                    child: const Text('Сбросить',
+                    child: Text(S.t('reset'),
                         style: TextStyle(fontSize: 12, color: Colors.redAccent)))
                 : null,
           ),
@@ -2350,7 +2348,7 @@ class _AutoConnectAppsScreenState extends State<AutoConnectAppsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: CupertinoSearchTextField(
               controller: _searchCtrl,
-              placeholder: 'Поиск приложений…',
+              placeholder: S.t('search_apps'),
               onChanged: _filter,
               style: TextStyle(color: _textColor(context), fontSize: 14),
             ),
@@ -2360,7 +2358,7 @@ class _AutoConnectAppsScreenState extends State<AutoConnectAppsScreen> {
             SliverToBoxAdapter(child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
               child: Text(
-                'Активных триггеров: ${_autoConnect.enabledAppsCount}',
+                '${S.t('active_triggers')}: ${_autoConnect.enabledAppsCount}',
                 style: TextStyle(fontSize: 11, color: _accent, fontWeight: FontWeight.w600),
               ),
             )),
@@ -2370,7 +2368,7 @@ class _AutoConnectAppsScreenState extends State<AutoConnectAppsScreen> {
               child: CircularProgressIndicator()))
           else if (_filtered.isEmpty)
             SliverFillRemaining(child: Center(
-              child: Text('Приложения не найдены',
+              child: Text(S.t('apps_not_found'),
                   style: TextStyle(color: _subTextColor(context)))))
           else
             SliverPadding(
@@ -2563,7 +2561,7 @@ class _SplitTunnelAppsScreenState extends State<SplitTunnelAppsScreen> {
         CupertinoNavigationBar(
           backgroundColor: Colors.transparent,
           border: null,
-          middle: Text('Выбор приложений',
+          middle: Text(S.t('select_apps'),
               style: TextStyle(
                   color: light ? Colors.black87 : Colors.white,
                   fontWeight: FontWeight.w700)),
@@ -2579,7 +2577,7 @@ class _SplitTunnelAppsScreenState extends State<SplitTunnelAppsScreen> {
                     }
                     setState(() {});
                   },
-                  child: Text('Очистить',
+                  child: Text(S.t('clear'),
                       style: TextStyle(fontSize: 13, color: _accentPurple)))
               : null,
         ),
@@ -2598,7 +2596,7 @@ class _SplitTunnelAppsScreenState extends State<SplitTunnelAppsScreen> {
                     fontSize: 14,
                     color: light ? Colors.black87 : Colors.white),
                 decoration: InputDecoration(
-                  hintText: 'Поиск приложений…',
+                  hintText: S.t('search_apps'),
                   hintStyle: TextStyle(
                       fontSize: 13,
                       color: light
@@ -2648,7 +2646,7 @@ class _SplitTunnelAppsScreenState extends State<SplitTunnelAppsScreen> {
                   border: Border.all(
                       color: _accentPurple.withOpacity(0.3))),
                 child: Text(
-                  '${selected.length} выбрано',
+                  '${selected.length} ${S.t('selected')}',
                   style: TextStyle(
                       fontSize: 11,
                       color: _accentPurple,
@@ -2659,7 +2657,7 @@ class _SplitTunnelAppsScreenState extends State<SplitTunnelAppsScreen> {
         Expanded(child: _loading
             ? const Center(child: CupertinoActivityIndicator())
             : _filtered.isEmpty
-                ? Center(child: Text('Ничего не найдено',
+                ? Center(child: Text(S.t('nothing_found'),
                     style: TextStyle(color: Colors.white38)))
                 : ListView.builder(
                     physics: const BouncingScrollPhysics(),
@@ -2802,7 +2800,7 @@ class ShareConfigSheet extends StatelessWidget {
             Row(children: [
               Expanded(child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Поделиться нодой', style: TextStyle(
+                Text(S.t('share_node'), style: const TextStyle(
                     fontSize: 16, fontWeight: FontWeight.w800,
                     color: Colors.white)),
                 Text(config.displayName, style: TextStyle(
@@ -2828,7 +2826,7 @@ class ShareConfigSheet extends StatelessWidget {
                       child: const SizedBox.expand())),
               )),
             const SizedBox(height: 8),
-            Text('Сканируй QR чтобы добавить ноду',
+            Text(S.t('scan_qr_hint'),
                 style: TextStyle(fontSize: 10, color: Colors.white30)),
             const SizedBox(height: 20),
 
@@ -2853,7 +2851,7 @@ class ShareConfigSheet extends StatelessWidget {
                       Clipboard.setData(ClipboardData(text: link));
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: const Text('Ссылка скопирована'),
+                          content: Text(S.t('link_copied')),
                           backgroundColor:
                               Colors.black87,
                           behavior: SnackBarBehavior.floating,
@@ -2875,7 +2873,7 @@ class ShareConfigSheet extends StatelessWidget {
                         Icon(Icons.copy_rounded,
                             size: 13, color: _accentBlue),
                         const SizedBox(width: 4),
-                        Text('Копировать',
+                        Text(S.t('copy'),
                             style: TextStyle(
                                 fontSize: 10, color: _accentBlue)),
                       ])),
@@ -2903,13 +2901,13 @@ class ShareConfigSheet extends StatelessWidget {
                   boxShadow: [BoxShadow(
                       color: _accent.withOpacity(0.2),
                       blurRadius: 16)]),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.share_rounded,
+                    const Icon(Icons.share_rounded,
                         size: 18, color: Colors.white),
-                    SizedBox(width: 10),
-                    Text('ПОДЕЛИТЬСЯ',
+                    const SizedBox(width: 10),
+                    Text(S.t('share_caps'),
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w900,
@@ -3222,8 +3220,8 @@ class _BypassHealthPanel extends StatelessWidget {
       case BypassHealth.healthy:
         final ms = BypassHealthMonitor.latencyOf(p.id);
         return ms > 0 ? '$ms мс' : 'OK';
-      case BypassHealth.degraded: return 'тормозит';
-      case BypassHealth.down:     return 'отключён';
+      case BypassHealth.degraded: return S.t('slow');
+      case BypassHealth.down:     return S.t('disabled');
     }
   }
 
@@ -3245,10 +3243,10 @@ class _BypassHealthPanel extends StatelessWidget {
               shape: BoxShape.circle, color: Color(0xFF22D3A5),
               boxShadow: [BoxShadow(color: Color(0x6622D3A5), blurRadius: 8)])),
             const SizedBox(width: 9),
-            Text('Состояние обходов', style: const TextStyle(color: Colors.white,
+            Text(S.t('bypass_status'), style: const TextStyle(color: Colors.white,
               fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.3)),
             const Spacer(),
-            Text('обновляется', style: TextStyle(
+            Text(S.t('updating'), style: TextStyle(
               color: Colors.white.withOpacity(0.35), fontSize: 10.5)),
           ]),
           const SizedBox(height: 4),
