@@ -51,6 +51,65 @@ class SingBoxConfigBuilder {
     } catch (_) { return null; }
   }
 
+  // VLESS + Reality + gRPC-транспорт (sing-box transport type 'grpc').
+  static Map<String, dynamic>? vlessRealityGrpcOutbound(String link,
+      {String? sni, String fingerprint = 'chrome', String service = 'grpc'}) {
+    final ob = vlessRealityOutbound(link, sni: sni, fingerprint: fingerprint);
+    if (ob == null) return null;
+    ob.remove('flow'); // gRPC несовместим с XTLS-Vision flow
+    ob['transport'] = {'type': 'grpc', 'service_name': service};
+    return ob;
+  }
+
+  // Trojan (sing-box type 'trojan'): trojan://password@host:port?sni=...
+  static Map<String, dynamic>? trojanOutbound(String link,
+      {String? sni, String fingerprint = 'chrome'}) {
+    try {
+      if (!link.startsWith('trojan://')) return null;
+      final core = link.contains('#') ? link.substring(0, link.indexOf('#')) : link;
+      final uri  = Uri.parse(core);
+      final pw   = uri.userInfo;
+      if (pw.isEmpty || uri.host.isEmpty) return null;
+      final q = uri.queryParameters;
+      return {
+        'type': 'trojan',
+        'tag': 'proxy',
+        'server': uri.host,
+        'server_port': uri.port > 0 ? uri.port : 443,
+        'password': pw,
+        'tls': {
+          'enabled': true,
+          'server_name': sni ?? q['sni'] ?? uri.host,
+          'utls': {'enabled': true, 'fingerprint': fingerprint},
+        },
+      };
+    } catch (_) { return null; }
+  }
+
+  // Hysteria2 (sing-box type 'hysteria2') — то, чего НЕ умеет xray-core.
+  // Возвращается в строй после переезда ядра на sing-box. hy2://pw@host:port?sni=
+  static Map<String, dynamic>? hysteria2Outbound(String link, {String? sni}) {
+    try {
+      final m = RegExp(r'^(hy2|hysteria2)://').firstMatch(link);
+      if (m == null) return null;
+      final core = link.contains('#') ? link.substring(0, link.indexOf('#')) : link;
+      final uri  = Uri.parse(core.replaceFirst(RegExp(r'^hysteria2://'), 'hy2://'));
+      if (uri.host.isEmpty) return null;
+      final q = uri.queryParameters;
+      return {
+        'type': 'hysteria2',
+        'tag': 'proxy',
+        'server': uri.host,
+        'server_port': uri.port > 0 ? uri.port : 443,
+        if (uri.userInfo.isNotEmpty) 'password': uri.userInfo,
+        'tls': {
+          'enabled': true,
+          'server_name': sni ?? q['sni'] ?? uri.host,
+        },
+      };
+    } catch (_) { return null; }
+  }
+
   // Полный конфиг: tun-inbound + proxy-outbound + direct + базовый роутинг.
   // Строится вокруг любого outbound (напр. из vlessRealityOutbound).
   static Map<String, dynamic> fullConfig(Map<String, dynamic> outbound) => {

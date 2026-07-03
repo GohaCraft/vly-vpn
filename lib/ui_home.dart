@@ -2819,11 +2819,12 @@ class ShareConfigSheet extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 color: Colors.white,
-                child: SizedBox(
-                  width: 200, height: 200,
-                  child: CustomPaint(
-                      painter: _QrPainter(link),
-                      child: const SizedBox.expand())),
+                child: QrImageView(
+                  data: link,
+                  version: QrVersions.auto,
+                  size: 200,
+                  backgroundColor: Colors.white,
+                  errorCorrectionLevel: QrErrorCorrectLevel.M),
               )),
             const SizedBox(height: 8),
             Text(S.t('scan_qr_hint'),
@@ -2923,58 +2924,7 @@ class ShareConfigSheet extends StatelessWidget {
   }
 }
 
-// Простой QR painter — матрица точек
-class _QrPainter extends CustomPainter {
-  final String data;
-  const _QrPainter(this.data);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Простой визуальный QR-паттерн (заглушка)
-    // В продакшене заменить на qr_flutter пакет
-    final paint = Paint()..color = Colors.black;
-    final cell  = size.width / 21;
-    final hash  = data.hashCode.abs();
-
-    // Угловые маркеры
-    _drawFinder(canvas, paint, 0, 0, cell);
-    _drawFinder(canvas, paint, 14, 0, cell);
-    _drawFinder(canvas, paint, 0, 14, cell);
-
-    // Данные (псевдослучайные на основе хэша)
-    final rng = data.codeUnits;
-    for (int r = 0; r < 21; r++) {
-      for (int c = 0; c < 21; c++) {
-        if (r < 9 && c < 9) continue;
-        if (r < 9 && c > 11) continue;
-        if (r > 11 && c < 9) continue;
-        final bit = (rng[(r * 21 + c) % rng.length] + hash) % 2;
-        if (bit == 1) {
-          canvas.drawRect(
-              Rect.fromLTWH(c * cell, r * cell, cell - 0.5, cell - 0.5),
-              paint);
-        }
-      }
-    }
-  }
-
-  void _drawFinder(Canvas c, Paint p, int col, int row, double cell) {
-    c.drawRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH(col * cell, row * cell, 7 * cell, 7 * cell),
-        Radius.circular(cell * 0.8)), p);
-    c.drawRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH((col + 1) * cell, (row + 1) * cell, 5 * cell, 5 * cell),
-        Radius.circular(cell * 0.5)),
-        Paint()..color = Colors.white);
-    c.drawRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH((col + 2) * cell, (row + 2) * cell, 3 * cell, 3 * cell),
-        Radius.circular(cell * 0.3)), p);
-  }
-
-  @override bool shouldRepaint(_) => false;
-}
-
-// ── Share helper (заглушка — заменить на share_plus пакет) ───────────────────
+// ── Share helper (нативный ACTION_SEND через канал vly_vpn/share) ────────────
 class Share {
   static Future<void> share(String text, {String? subject}) async {
     try {

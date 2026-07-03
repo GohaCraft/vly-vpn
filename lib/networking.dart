@@ -266,9 +266,10 @@ class BypassRulesEngine {
       {'priority': 9, 'type': 'add_reality_sni',     'params': {'sni': 'dl.google.com'}},
       {'priority': 10,'type': 'add_reality_sni',     'params': {'sni': 'update.microsoft.com'}},
       {'priority': 11,'type': 'trojan_ws_fallback',  'params': {'port': 443, 'path': '/api/v1'}},
-      // (Hysteria2 убран — xray-core не запускает QUIC/hy2, конфиг нерабочий)
-      // Zapret: локальный DPI bypass как последний рубеж перед CDN
-      {'priority': 13,'type': 'zapret_bypass',       'params': {'strategy': 'disorder'}},
+      // (Hysteria2 и Zapret убраны из каскада: xray-core не запускает hy2, а
+      //  Zapret требует внешний nfqueue-процесс, которого на стоковом Android
+      //  нет — обе давали фантомную попытку. ZapretBridge остаётся, но включается
+      //  только явным kZapretConfig['enabled'] при наличии внешнего zapret.)
       {'priority': 14,'type': 'cdn_fallback',         'params': {'url': 'vly-vpn.workers.dev'}},
     ]},
     // DNS отравление
@@ -296,9 +297,7 @@ class BypassRulesEngine {
       {'priority': 4, 'type': 'add_reality_sni',      'params': {'sni': 'vk.com'}},           // VK
       {'priority': 5, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/cdn'}},
       {'priority': 6, 'type': 'change_transport',     'params': {'transport': 'grpc', 'service': 'gun'}},
-      // (Hysteria2 убран — xray-core не запускает QUIC/hy2, конфиг нерабочий)
-      // Zapret DPI bypass перед CDN
-      {'priority': 8, 'type': 'zapret_bypass',        'params': {'strategy': 'fake_sni'}},
+      // (Hysteria2 и Zapret убраны — нерабочи текущим ядром/окружением)
       {'priority': 9, 'type': 'cdn_fallback',          'params': {'url': 'vly-vpn.workers.dev'}},
       {'priority': 10,'type': 'cdn_fallback',          'params': {'url': 'vly-cdn.pages.dev'}},
       {'priority': 11,'type': 'shadow_fallback',       'params': {}},
@@ -315,8 +314,7 @@ class BypassRulesEngine {
       {'priority': 8, 'type': 'add_reality_sni',      'params': {'sni': 'gateway.icloud.com'}},
       {'priority': 9, 'type': 'add_reality_sni',      'params': {'sni': 'mask.icloud.com'}},
       {'priority': 10,'type': 'trojan_ws_fallback',   'params': {'port': 443, 'path': '/stream'}},
-      // Zapret fake_sni: маскировка под разрешённый домен
-      {'priority': 11,'type': 'zapret_bypass',        'params': {'strategy': 'fake_sni'}},
+      // (Zapret убран из каскада — требует внешний nfqueue, фантомная попытка)
       {'priority': 12,'type': 'cdn_fallback',          'params': {'url': 'vly-vpn.workers.dev'}},
     ]},
     // Stealth: TCP reset (активная блокировка DPI)

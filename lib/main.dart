@@ -16,6 +16,7 @@ import 'package:crypto/crypto.dart';
 import 'package:pointycastle/export.dart' as pc;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';

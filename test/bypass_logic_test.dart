@@ -383,6 +383,27 @@ void main() {
           'vless://u@h:443?security=tls#N'), isNull);
       expect(SingBoxConfigBuilder.vlessRealityOutbound('trojan://x@h:443'), isNull);
     });
+    test('VLESS+Reality+gRPC → transport grpc, без flow', () {
+      final ob = SingBoxConfigBuilder.vlessRealityGrpcOutbound(
+          'vless://u@h:443?pbk=K&sid=S#N', service: 'GunService')!;
+      expect(ob['transport'], {'type': 'grpc', 'service_name': 'GunService'});
+      expect(ob.containsKey('flow'), isFalse);
+    });
+    test('Trojan → корректный outbound', () {
+      final ob = SingBoxConfigBuilder.trojanOutbound(
+          'trojan://pass@srv.io:8443?sni=vk.com#N')!;
+      expect(ob['type'], 'trojan');
+      expect(ob['password'], 'pass');
+      expect((ob['tls'] as Map)['server_name'], 'vk.com');
+    });
+    test('Hysteria2 → sing-box type hysteria2 (то, чего нет в xray)', () {
+      final ob = SingBoxConfigBuilder.hysteria2Outbound(
+          'hy2://secret@srv.io:443?sni=ya.ru#N')!;
+      expect(ob['type'], 'hysteria2');
+      expect(ob['server'], 'srv.io');
+      expect(ob['password'], 'secret');
+      expect((ob['tls'] as Map)['server_name'], 'ya.ru');
+    });
     test('полный конфиг: tun-inbound + proxy/direct + роутинг', () {
       final json = SingBoxConfigBuilder.buildVlessReality(
           'vless://u@h:443?pbk=K&sid=S#N')!;
