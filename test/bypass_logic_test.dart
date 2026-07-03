@@ -394,6 +394,19 @@ void main() {
     });
   });
 
+  group('Crash reporter — анонимность сигнатуры', () {
+    test('сигнатура содержит тип, но НЕ текст исключения (данные юзера)', () {
+      CrashReporter.record(
+        const FormatException('secret vless://user@1.2.3.4:443'),
+        StackTrace.current);
+      final sig = CrashReporter.recent.first;
+      expect(sig.contains('FormatException'), isTrue);
+      expect(sig.contains('vless://'), isFalse);
+      expect(sig.contains('1.2.3.4'), isFalse);
+      expect(sig.contains('secret'), isFalse);
+    });
+  });
+
   group('Проверка обновлений', () {
     test('валидный payload с новым build парсится', () {
       final u = AppUpdate.decode({

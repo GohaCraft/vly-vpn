@@ -995,6 +995,9 @@ class Telemetry {
 
   static void errorCode(String code) => _add('error', {'code': code});
 
+  // Анонимная сигнатура краша (тип исключения + место в коде, без сообщения).
+  static void crash(String signature) => _add('crash', {'sig': signature});
+
   static void connectOutcome({required bool success, int attempts = 0}) =>
       _add('connect', {'ok': success, if (attempts > 0) 'tries': attempts});
 
@@ -1083,6 +1086,76 @@ class UpdateChecker {
     try {
       await const MethodChannel('vly_vpn/share')
           .invokeMethod('openUrl', {'url': u.url});
+    } catch (_) {}
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CRASH REPORTER — основа наблюдаемости (sideload → сторовой аналитики нет)
+//
+//  Ловит необработанные ошибки (Flutter framework + async), чтобы после релиза
+//  было видно, ЧТО ломается. Хранит последние N сигнатур локально (для Dev
+//  Dashboard) и, ТОЛЬКО если включена телеметрия (opt-in), шлёт анонимную
+//  сигнатуру.
+//
+//  🔒 Приватность: сигнатура = ТИП исключения + место в НАШЕМ коде
+//     (package:vpn_new/...:line). СООБЩЕНИЕ исключения НЕ включаем — оно может
+//     содержать адрес ноды/URL/данные пользователя.
+// ═══════════════════════════════════════════════════════════════════════════
+class CrashReporter {
+  static const _key = 'crash_log_v1';
+  static const _max = 20;
+  static final List<String> _recent = [];
+  static List<String> get recent => List.unmodifiable(_recent);
+
+  static void install() {
+    final prev = FlutterError.onError;
+    FlutterError.onError = (details) {
+      prev?.call(details);                 // сохраняем дефолтный вывод в консоль
+      record(details.exception, details.stack);
+    };
+    ui.PlatformDispatcher.instance.onError = (error, stack) {
+      record(error, stack);
+      return true;                         // проглатываем, не роняем процесс
+    };
+  }
+
+  static void record(Object error, StackTrace? stack) {
+    try {
+      final type  = error.runtimeType.toString();
+      final frame = _topFrame(stack);
+      final sig   = frame.isEmpty ? type : '$type @ $frame';
+      _recent.insert(0, '${DateTime.now().toIso8601String()}  $sig');
+      while (_recent.length > _max) { _recent.removeLast(); }
+      _persist();
+      Telemetry.crash(sig);                // уйдёт только при включённой телеметрии
+    } catch (_) {}
+  }
+
+  // Первый фрейм ИЗ НАШЕГО кода (без значений аргументов) — безопасно и полезно.
+  static String _topFrame(StackTrace? stack) {
+    if (stack == null) return '';
+    final s = stack.toString();
+    final m = RegExp(r'package:vpn_new/[\w/]+\.dart:\d+').firstMatch(s);
+    if (m != null) return m.group(0)!;
+    final first = s.split('\n').firstWhere(
+        (l) => l.trim().isNotEmpty, orElse: () => '');
+    return first.length > 80 ? first.substring(0, 80) : first;
+  }
+
+  static Future<void> _persist() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setStringList(_key, _recent);
+    } catch (_) {}
+  }
+
+  static Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      _recent
+        ..clear()
+        ..addAll(p.getStringList(_key) ?? const []);
     } catch (_) {}
   }
 }

@@ -2022,6 +2022,10 @@ class _DevDashboardState extends State<_DevDashboard> {
       _DevRow('AI running',        '${vpn.devAiAgent.isRunning}'),
       _DevRow('Current strategy',  stratId > 0 ? '#$stratId' : '—'),
       _DevRow('Arsenal size',      '${BypassArsenal.strategies.length} strategies'),
+      _DevRow('Recent errors',     '${CrashReporter.recent.length}',
+          color: CrashReporter.recent.isEmpty ? null : Colors.orangeAccent),
+      if (CrashReporter.recent.isNotEmpty)
+        _DevRow('Last error',      CrashReporter.recent.first, color: Colors.orangeAccent),
       const SizedBox(height: 12),
       _DevSection('STRATEGY BLACKLIST (${blacklist.length} заблокировано, 5 мин TTL)'),
       if (blacklist.isEmpty)

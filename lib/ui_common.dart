@@ -732,6 +732,8 @@ class VlyScaffold extends StatelessWidget {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  CrashReporter.install();       // ловим необработанные ошибки (основа наблюдаемости)
+  await CrashReporter.load();
   await S.init();
   await _autoConnect.load();
   startFpsMonitor(); // FPS мониторинг — авто-деградация на слабых устройствах
