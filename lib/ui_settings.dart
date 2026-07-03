@@ -225,24 +225,24 @@ class _TunnelPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Настройки туннеля', child: Column(
+    return _SubPage(title: S.t('tunnel_settings'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
 
       _SubSection(S.t('routing')),
       _SwitchRow(
         icon: Icons.route_outlined, iconColor: const Color(0xFF26A69A),
-        title: 'Умная маршрутизация',
-        subtitle: 'RU-домены → прямо, заблокированные → VPN',
+        title: S.t('smart_routing'),
+        subtitle: S.t('sub_smart_routing'),
         value: true, onChanged: null,
         trailing: const Icon(Icons.check_circle, color: Colors.greenAccent, size: 18)),
       const SizedBox(height: 4),
       _SubSection(S.t('ip_preference')),
       _RadioGroup<String>(
         value: vpn.ipPreference,
-        options: const [
-          ('auto',  '🌐 Авто',  'IPv4 с fallback на IPv6'),
-          ('ipv4',  '4️⃣  IPv4',  'Только IPv4 адреса'),
-          ('ipv6',  '6️⃣  IPv6',  'Только IPv6 адреса'),
+        options: [
+          ('auto',  S.t('ip_auto'),  S.t('ip_auto_d')),
+          ('ipv4',  '4️⃣  IPv4',  S.t('ip_v4_d')),
+          ('ipv6',  '6️⃣  IPv6',  S.t('ip_v6_d')),
         ],
         onChanged: vpn.setIpPreference),
 
@@ -250,45 +250,44 @@ class _TunnelPage extends StatelessWidget {
       _SubSection(S.t('mux_enable')),
       _SwitchRow(
         icon: Icons.compress_rounded, iconColor: const Color(0xFF42A5F5),
-        title: 'Включить MUX',
-        subtitle: 'Уплотнение TCP-потоков — снижает overhead на повторные подключения',
+        title: S.t('mux_on'),
+        subtitle: S.t('sub_mux'),
         value: vpn.enableMux,
         onChanged: vpn.setEnableMux,
-        hint: 'MUX (мультиплексирование): несколько запросов идут через один TLS туннель. Снижает задержку при частых подключениях. Не совместим с VLESS+Reality — включается только для VMess/Trojan.'),
+        hint: S.t('hint_mux')),
       _InfoCard(
         icon: Icons.info_outline_rounded,
-        text: 'MUX уменьшает количество TLS-рукопожатий. '
-              'Отключи если замечаешь лаги на мобильном интернете.'),
+        text: S.t('info_mux')),
 
       const SizedBox(height: 16),
       _SubSection(S.t('tun_enable')),
       _SwitchRow(
         icon: Icons.router_outlined, iconColor: const Color(0xFF7C4DFF),
-        title: 'Включить TUN',
-        subtitle: 'sing-box стиль — перехватывает весь трафик ОС',
+        title: S.t('tun_on'),
+        subtitle: S.t('sub_tun'),
         value: vpn.enableTun,
         onChanged: vpn.setEnableTun,
-        hint: 'TUN — виртуальный сетевой интерфейс. Перехватывает ВЕСЬ трафик ОС включая UDP, DNS, QUIC. В отличие от SOCKS5/HTTP прокси — ни одно приложение не «пройдёт мимо».'),
+        hint: S.t('hint_tun')),
       if (vpn.enableTun) ...[
         const SizedBox(height: 4),
         _RadioGroup<String>(
           value: vpn.tunMode,
-          options: const [
-            ('mixed',   'Смешанный',  'TCP + UDP через tun2socks'),
-            ('fakedns', 'FakeDNS',    'DNS перехват для снижения утечек'),
+          options: [
+            ('mixed',   S.t('tun_mixed'),  S.t('tun_mixed_d')),
+            ('fakedns', 'FakeDNS',    S.t('tun_fakedns_d')),
           ],
           onChanged: vpn.setTunMode),
         const SizedBox(height: 8),
         _SwitchRow(
           icon: Icons.dns_outlined, iconColor: const Color(0xFF29B6F6),
-          title: 'DNS для TUN',
-          subtitle: 'Использовать DoH внутри туннеля',
+          title: S.t('dns_for_tun'),
+          subtitle: S.t('sub_dns_tun'),
           value: vpn.enableDns,
           onChanged: vpn.setEnableDns),
         if (vpn.enableDns) ...[
           const SizedBox(height: 4),
           _TextInputRow(
-            label: 'DNS адрес',
+            label: S.t('dns_addr'),
             hint: '1.1.1.1',
             value: vpn.dnsAddress,
             onChanged: vpn.setDnsAddress),
@@ -299,16 +298,16 @@ class _TunnelPage extends StatelessWidget {
       _SubSection(S.t('section_data')),
       _SwitchRow(
         icon: Icons.analytics_outlined, iconColor: const Color(0xFFFF7043),
-        title: 'Анализ пакетов',
-        subtitle: 'DPI-детектирование типа трафика для маршрутизации',
+        title: S.t('packet_analysis'),
+        subtitle: S.t('sub_packet'),
         value: vpn.enablePacketSniff,
         onChanged: vpn.setPacketSniff,
-        hint: 'Vly анализирует SNI/HTTP Host каждого пакета и маршрутизирует по содержимому. Например: gosuslugi.ru → прямо, instagram.com → через VPN. Требует чуть больше CPU.'),
+        hint: S.t('hint_packet')),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.swap_horiz_rounded, iconColor: const Color(0xFF78909C),
-        title: 'Системный прокси',
-        subtitle: 'Также устанавливать HTTP/HTTPS прокси в системе',
+        title: S.t('system_proxy'),
+        subtitle: S.t('sub_system_proxy'),
         value: vpn.enableSystemProxy,
         onChanged: vpn.setSystemProxy),
     ]));
@@ -322,26 +321,24 @@ class _LanPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Локальная сеть (LAN)', child: Column(
+    return _SubPage(title: S.t('lan_share'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
       _InfoCard(
         icon: Icons.wifi_tethering_rounded,
-        text: 'Разрешает другим устройствам в сети использовать '
-              'Vly как прокси-сервер. Включает прослушивание на '
-              '0.0.0.0 вместо 127.0.0.1.'),
+        text: S.t('info_lan')),
       const SizedBox(height: 16),
-      _SubSection('ДОСТУП'),
+      _SubSection(S.t('access_caps')),
       _SwitchRow(
         icon: Icons.wifi_tethering_rounded, iconColor: const Color(0xFF42A5F5),
-        title: 'Разрешить из LAN',
-        subtitle: 'Раздавать интернет устройствам в локальной сети',
+        title: S.t('allow_lan'),
+        subtitle: S.t('sub_allow_lan'),
         value: vpn.enableLan,
         onChanged: vpn.setEnableLan),
       if (vpn.enableLan) ...[
         const SizedBox(height: 12),
         _InfoCard(
           icon: Icons.info_outline_rounded,
-          text: 'Socks5:\n0.0.0.0:10808  HTTP: 0.0.0.0:10809\nУкажи эти адреса на других устройствах.'),
+          text: S.t('info_socks')),
       ],
     ]));
   }
@@ -354,72 +351,72 @@ class _SubSettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Параметры обновления', child: Column(
+    return _SubPage(title: S.t('update_params'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-      _SubSection('АВТООБНОВЛЕНИЕ'),
+      _SubSection(S.t('auto_update_caps')),
       _SwitchRow(
         icon: Icons.update_rounded, iconColor: const Color(0xFF29B6F6),
-        title: 'Автообновление подписок',
-        subtitle: 'Обновлять ноды по расписанию',
+        title: S.t('title_auto_upd'),
+        subtitle: S.t('sub2_auto_upd'),
         value: vpn.subAutoUpdate,
         onChanged: vpn.setSubAutoUpdate),
       if (vpn.subAutoUpdate) ...[
         const SizedBox(height: 4),
         _StepperRow(
-          label: 'Интервал (часы)',
+          label: S.t('interval_hours'),
           value: vpn.subUpdateInterval,
           min: 1, max: 72, step: 1,
           onChanged: vpn.setSubInterval),
       ],
 
       const SizedBox(height: 16),
-      _SubSection('ПАРАМЕТРЫ ЗАПУСКА'),
+      _SubSection(S.t('startup_params_caps')),
       _SwitchRow(
         icon: Icons.refresh_rounded, iconColor: const Color(0xFF26A69A),
-        title: 'Обновить при открытии',
-        subtitle: 'Загружать новые ноды каждый раз при запуске',
+        title: S.t('upd_on_open'),
+        subtitle: S.t('sub_upd_on_open'),
         value: vpn.subUpdateOnOpen,
         onChanged: vpn.setSubUpdateOnOpen),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.speed_rounded, iconColor: const Color(0xFFFFCA28),
-        title: 'Пинговать при открытии',
-        subtitle: 'Измерять задержку нод при запуске',
+        title: S.t('ping_on_open'),
+        subtitle: S.t('sub_ping_on_open'),
         value: vpn.subPingOnOpen,
         onChanged: vpn.setSubPingOnOpen),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.play_arrow_rounded, iconColor: const Color(0xFF66BB6A),
-        title: 'Подключаться при открытии',
-        subtitle: 'Автоматически подключиться при запуске',
+        title: S.t('connect_on_open'),
+        subtitle: S.t('sub_connect_on_open'),
         value: vpn.subConnectOnOpen,
         onChanged: vpn.setSubConnectOnOpen),
 
       const SizedBox(height: 16),
-      _SubSection('ЛОГИКА'),
+      _SubSection(S.t('logic_caps')),
       _SwitchRow(
         icon: Icons.filter_list_off_rounded, iconColor: const Color(0xFF78909C),
-        title: 'Разрешить дубликаты',
-        subtitle: 'Не удалять одинаковые ноды из разных подписок',
+        title: S.t('allow_dups'),
+        subtitle: S.t('allow_dups_desc'),
         value: vpn.subAllowDups,
         onChanged: vpn.setSubAllowDups),
 
       const SizedBox(height: 16),
-      _SubSection('СОРТИРОВКА'),
+      _SubSection(S.t('sorting_caps')),
       _RadioGroup<String>(
         value: vpn.subSortMode,
-        options: const [
-          ('none',  'Без сортировки', 'В порядке получения из подписки'),
-          ('ping',  'По пингу',       'Лучшие ноды первыми'),
-          ('alpha', 'По алфавиту',    'A → Z по имени ноды'),
+        options: [
+          ('none',  S.t('sort_none'), S.t('sort_none_d')),
+          ('ping',  S.t('sort_ping'),       S.t('sort_ping_d')),
+          ('alpha', S.t('sort_alpha'),    S.t('sort_alpha_d')),
         ],
         onChanged: vpn.setSubSortMode),
 
       const SizedBox(height: 16),
       _SubSection('USER AGENT'),
       _TextInputRow(
-        label: 'User-Agent запросов',
+        label: S.t('ua_requests'),
         hint: 'Vly/$kAppVersion/Android',
         value: vpn.subUserAgent,
         onChanged: vpn.setSubUserAgent),
@@ -434,37 +431,35 @@ class _PingSettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Настройки пинга', child: Column(
+    return _SubPage(title: S.t('ping_settings'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-      _SubSection('ТИП ПИНГА'),
+      _SubSection(S.t('ping_type_caps')),
       _RadioGroup<String>(
         value: vpn.pingType,
-        options: const [
-          ('tcp',   'TCP',        'Прямое TCP соединение — быстро, точно'),
-          ('proxy', 'via Proxy',  'Через VPN туннель — реальная задержка'),
-          ('icmp',  'ICMP',       'PING команда — требует root'),
+        options: [
+          ('tcp',   'TCP',        S.t('ping_tcp_d')),
+          ('proxy', 'via Proxy',  S.t('ping_proxy_d')),
+          ('icmp',  'ICMP',       S.t('ping_icmp_d')),
         ],
         onChanged: vpn.setPingType),
 
       const SizedBox(height: 16),
-      _SubSection('ТЕСТОВЫЙ URL'),
+      _SubSection(S.t('test_url_caps')),
       _TextInputRow(
-        label: 'URL для проверки',
+        label: S.t('url_to_check'),
         hint: 'https://www.gstatic.com/generate_204',
         value: vpn.pingUrl,
         onChanged: vpn.setPingUrl),
       _InfoCard(
         icon: Icons.info_outline_rounded,
-        text: 'URL должен возвращать HTTP 200-204. '
-              'Рекомендуется: gstatic.com/generate_204 (Google) '
-              'или connectivitycheck.gstatic.com'),
+        text: S.t('info_ping_url')),
 
       const SizedBox(height: 16),
-      _SubSection('РЕЗУЛЬТАТ'),
-      _DetailRow2('📊', 'Отображение', 'Время (мс) или статус OK/FAIL'),
-      _DetailRow2('🔄', 'Повторов', '3 попытки, берём медиану'),
-      _DetailRow2('⏱', 'Таймаут', '3000 мс на попытку'),
+      _SubSection(S.t('result_caps')),
+      _DetailRow2('📊', S.t('res_display'), S.t('res_display_d')),
+      _DetailRow2('🔄', S.t('res_repeats'), S.t('res_repeats_d')),
+      _DetailRow2('⏱', S.t('res_timeout'), S.t('res_timeout_d')),
     ]));
   }
 }
