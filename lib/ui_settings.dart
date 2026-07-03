@@ -890,7 +890,7 @@ class _ProfilesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Профили', child: Column(children: [
+    return _SubPage(title: S.t('profiles'), child: Column(children: [
       ...vpn.profiles.asMap().entries.map((e) {
         final prof = e.value;
         final isActive = prof.id == vpn.activeProfileId;
@@ -1284,19 +1284,19 @@ class _StealthPage extends StatelessWidget {
       _StealthStatusCard(vpn: vpn),
       const SizedBox(height: 16),
 
-      _SubSection('АНТИ-DPI'),
+      _SubSection(S.t('anti_dpi_caps')),
       _SwitchRow(
         icon: Icons.broken_image_outlined, iconColor: const Color(0xFF7C4DFF),
-        title: 'Stealth режим',
-        subtitle: 'Включает все анти-DPI механизмы',
+        title: S.t('stealth_mode_title'),
+        subtitle: S.t('stealth_mode_sub2'),
         value: vpn.stealthMode,
         onChanged: (v) => vpn.setStealthMode(v),
-        hint: 'Мастер-переключатель всех stealth функций. Включает фрагментацию TLS, ротацию SNI, jitter задержки. DPI не может определить тип трафика.'),
+        hint: S.t('hint_stealth_master')),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.scatter_plot_outlined, iconColor: const Color(0xFF7C4DFF),
-        title: 'TLS Фрагментация',
-        subtitle: 'Разбивает ClientHello на 1-3 части · JA4+ bypass',
+        title: S.t('tls_frag'),
+        subtitle: S.t('tls_frag_sub2'),
         value: vpn.stealthFragment,
         onChanged: (v) => vpn.setStealthFragment(v),
         hint: S.t('hint_tls_frag')),
@@ -1461,8 +1461,7 @@ class _BypassPage extends StatelessWidget {
     return _SubPage(title: S.t('wl_bypass_title'), child: Column(children: [
       _InfoCard(
         icon: Icons.info_outline_rounded,
-        text: 'Трафик маскируется под HTTPS и проходит через CDN. '
-            'Используй если VPN заблокирован на уровне протокола.'),
+        text: S.t('info_wl_bypass_short')),
       const SizedBox(height: 12),
       _DetailRow2('🔒', 'Порт', '443 (HTTPS)'),
       _DetailRow2('🌐', S.t('transport'), S.t('wl_transport_val')),
@@ -1742,7 +1741,7 @@ class _AboutPageState extends State<_AboutPage> {
     } else if (_tapCount >= 3) {
       // Показываем прогресс (незаметно для обычного пользователя)
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('🛠 ${5 - _tapCount} тапа до Dev Dashboard',
+        content: Text('🛠 ${5 - _tapCount} ${S.t('dev_taps_hint')}',
             style: const TextStyle(fontSize: 11)),
         duration: const Duration(milliseconds: 800),
         backgroundColor: const Color(0xFF1A1A2E),
@@ -1754,7 +1753,7 @@ class _AboutPageState extends State<_AboutPage> {
 
   @override
   Widget build(BuildContext context) {
-    return _SubPage(title: 'О приложении', child: Column(children: [
+    return _SubPage(title: S.t('about_app'), child: Column(children: [
       // Логотип
       // VLY иконка с неоновым свечением
       Container(
@@ -1787,8 +1786,8 @@ class _AboutPageState extends State<_AboutPage> {
         onLongPress: () {
           Clipboard.setData(ClipboardData(
               text: 'Vly v$kAppVersion build $kAppBuild'));
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Версия скопирована'),
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(S.t('version_copied')),
             duration: Duration(seconds: 2),
             backgroundColor: Color(0xFF1B2A1B)));
         },
@@ -1797,7 +1796,7 @@ class _AboutPageState extends State<_AboutPage> {
               fontSize: 11, color: Colors.white.withOpacity(0.35),
               letterSpacing: 1)),
           const SizedBox(height: 4),
-          Text('Удержи для копирования', style: TextStyle(
+          Text(S.t('hold_to_copy'), style: TextStyle(
               fontSize: 9, color: Colors.white.withOpacity(0.15))),
         ])),
       const SizedBox(height: 24),
@@ -2417,12 +2416,12 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
     } else if (!reachable && !expectReachable) {
       // Заблокированный недоступен без VPN — правильно
       statusColor = Colors.blueAccent;
-      statusText  = 'Блок ✓';
+      statusText  = S.t('status_blocked');
       statusIcon  = Icons.shield_rounded;
     } else if (!reachable && expectReachable) {
       // RU домен недоступен — ПРОБЛЕМА (VPN режет РФ трафик?)
       statusColor = Colors.redAccent;
-      statusText  = 'Нет!';
+      statusText  = S.t('status_fail');
       statusIcon  = Icons.error_rounded;
     } else {
       // Заблокированный доступен — VPN не подключён
@@ -2454,7 +2453,7 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
   @override
   Widget build(BuildContext context) {
     return VlyScaffold(
-      title: 'Тест белых списков',
+      title: S.t('whitelist_test'),
       trailing: GestureDetector(
         onTap: _testing ? null : _runTest,
         child: Container(
@@ -2463,7 +2462,7 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
             color: _accent.withOpacity(0.15),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: _accent.withOpacity(0.4))),
-          child: Text(_testing ? 'Тест...' : 'Запустить',
+          child: Text(_testing ? S.t('testing_btn') : S.t('run_btn'),
               style: TextStyle(fontSize: 11, color: _accent,
                   fontWeight: FontWeight.bold)),
         )),
@@ -2473,22 +2472,22 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
         children: [
           _InfoCard(
             icon: Icons.info_outline_rounded,
-            text: 'Проверяет доступность ключевых доменов.\n🟢 РФ домены должны быть доступны всегда.\n🔵 Заблокированные — только через VPN.\nЕсли РФ домен недоступен — проблема в маршрутизации.',
+            text: S.t('info_wl_test'),
           ),
           const SizedBox(height: 16),
 
-          _SubSection('РФ ДОМЕНЫ (должны быть доступны)'),
+          _SubSection(S.t('ru_domains_caps')),
           ..._ruDomains.map((e) => _domainRow(e.$1, e.$2, true)),
 
           const SizedBox(height: 16),
-          _SubSection('ЗАБЛОКИРОВАННЫЕ (без VPN — недоступны)'),
+          _SubSection(S.t('blocked_caps')),
           ..._blockedDomains.map((e) => _domainRow(e.$1, e.$2, false)),
 
           if (_testing) ...[
             const SizedBox(height: 16),
             const Center(child: CupertinoActivityIndicator()),
             const SizedBox(height: 8),
-            const Center(child: Text('Проверяем доступность...',
+            Center(child: Text(S.t('checking_avail'),
                 style: TextStyle(fontSize: 11, color: Colors.white38))),
           ],
         ],
@@ -2814,7 +2813,7 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
         context: context,
         builder: (_) => AlertDialog(
           backgroundColor: const Color(0xFF1A1A2E),
-          title: const Text('Путь к фото/GIF',
+          title: Text(S.t('photo_path_title'),
               style: TextStyle(color: Colors.white, fontSize: 15)),
           content: TextField(
             controller: ctrl,
@@ -2830,14 +2829,14 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context),
-                child: const Text('Отмена', style: TextStyle(color: Colors.white54))),
+                child: Text(S.t('cancel'), style: const TextStyle(color: Colors.white54))),
             TextButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-                child: Text('ОК', style: TextStyle(color: _accent))),
+                child: Text(S.t('ok'), style: TextStyle(color: _accent))),
           ]));
       if (path == null || path.isEmpty) return;
       if (!File(path).existsSync()) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Файл не найден'), backgroundColor: Colors.red));
+          SnackBar(content: Text(S.t('file_not_found')), backgroundColor: Colors.red));
         return;
       }
       final ext  = path.split('.').last.toLowerCase();
@@ -2846,7 +2845,7 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
       if (mounted) setState(() {});
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+          SnackBar(content: Text('${S.t('error')}: $e'), backgroundColor: Colors.red));
     }
   }
 
@@ -2861,7 +2860,7 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
     return VlyBlobBg(child: Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
-        title: const Text('Моя тема',
+        title: Text(S.t('my_theme'),
           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
               color: Colors.white)),
       ),
@@ -2900,23 +2899,23 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
                   child: Icon(Icons.power_settings_new_rounded,
                       color: app.customAccent, size: 26)),
                 const SizedBox(height: 10),
-                Text('ПРЕДПРОСМОТР', style: TextStyle(
+                Text(S.t('preview_caps'), style: TextStyle(
                     color: app.customAccent, fontSize: 11,
                     fontWeight: FontWeight.w800, letterSpacing: 2)),
               ]))),
           Padding(
             padding: const EdgeInsets.only(bottom: 18, left: 4),
-            child: Text('Изменения применяются сразу',
+            child: Text(S.t('applies_immediately'),
               style: TextStyle(color: Colors.white.withOpacity(0.35),
                   fontSize: 11))),
 
           // ── ЦВЕТ АКЦЕНТА ────────────────────────────────────────────────
-          _SectionLabel('Цвет акцента'),
-          _ColorRow(label: 'Акцент', color: app.customAccent,
+          _SectionLabel(S.t('accent_color')),
+          _ColorRow(label: S.t('accent'), color: app.customAccent,
             onTap: () => _showColorPicker(context, app.customAccent, (c) {
               app.saveCustomTheme(accent: c); setState((){});
             })),
-          _ColorRow(label: 'Акцент 2', color: app.customAccent2,
+          _ColorRow(label: S.t('accent2'), color: app.customAccent2,
             onTap: () => _showColorPicker(context, app.customAccent2, (c) {
               app.saveCustomTheme(accent2: c); setState((){});
             })),
@@ -2924,16 +2923,16 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
           const SizedBox(height: 16),
 
           // ── ЦВЕТ ФОНА ────────────────────────────────────────────────────
-          _SectionLabel('Цвет фона'),
-          _ColorRow(label: 'Фон', color: app.customBg,
+          _SectionLabel(S.t('bg_color')),
+          _ColorRow(label: S.t('bg'), color: app.customBg,
             onTap: () => _showColorPicker(context, app.customBg, (c) {
               app.saveCustomTheme(bg: c); setState((){});
             })),
-          _ColorRow(label: 'Блоб 1', color: app.customBlob1,
+          _ColorRow(label: S.t('blob1'), color: app.customBlob1,
             onTap: () => _showColorPicker(context, app.customBlob1, (c) {
               app.saveCustomTheme(blob1: c); setState((){});
             })),
-          _ColorRow(label: 'Блоб 2', color: app.customBlob2,
+          _ColorRow(label: S.t('blob2'), color: app.customBlob2,
             onTap: () => _showColorPicker(context, app.customBlob2, (c) {
               app.saveCustomTheme(blob2: c); setState((){});
             })),
@@ -2941,7 +2940,7 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
           const SizedBox(height: 16),
 
           // ── ФОН — ФОТО / GIF ─────────────────────────────────────────────
-          _SectionLabel('Фото / GIF фон'),
+          _SectionLabel(S.t('photo_gif_bg')),
           GestureDetector(
             onTap: _pickPhoto,
             child: Container(
@@ -2957,14 +2956,14 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
                 const SizedBox(width: 12),
                 Expanded(child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Выбрать фото или GIF',
+                  Text(S.t('choose_photo_gif'),
                     style: TextStyle(color: Colors.white.withOpacity(0.9),
                         fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),
                   Text(
                     app.hasCustomMedia
                       ? app.customMediaPath.split('/').last
-                      : 'JPG, PNG, GIF — до 20 МБ',
+                      : S.t('photo_hint'),
                     style: TextStyle(
                       color: app.hasCustomMedia
                         ? _accent : Colors.white.withOpacity(0.4),
@@ -3012,7 +3011,7 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
                 borderRadius: BorderRadius.circular(16),
                 gradient: LinearGradient(colors: [
                   app.customAccent, app.customAccent2])),
-              child: const Text('Готово',
+              child: Text(S.t('done'),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white, fontSize: 15,
                     fontWeight: FontWeight.w700, letterSpacing: 0.5))),
