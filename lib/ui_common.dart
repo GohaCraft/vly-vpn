@@ -772,6 +772,23 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _tab = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOnboard());
+  }
+
+  // Первый запуск: если конфигов ещё нет — показываем онбординг один раз.
+  Future<void> _maybeOnboard() async {
+    final p = await SharedPreferences.getInstance();
+    if ((p.getBool('onboarded_v1') ?? false) || !mounted) return;
+    final vpn = Provider.of<VpnProvider>(context, listen: false);
+    if (vpn.configs.isNotEmpty) { await p.setBool('onboarded_v1', true); return; }
+    if (!mounted) return;
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => const OnboardingScreen(), fullscreenDialog: true));
+  }
+
   // Публичный метод для переключения таба из дочерних виджетов
   void switchTab(int i) => setState(() => _tab = i);
 
@@ -795,6 +812,77 @@ class _MainShellState extends State<MainShell> {
         light: light,
       ),
     );
+  }
+}
+
+// ── Онбординг первого запуска ──────────────────────────────────────────────────
+// Основа: объясняет, что нужен конфиг, и ведёт в существующий поток добавления.
+// (Встроенных серверов пока нет — бэкенд позже; здесь честно направляем юзера.)
+class OnboardingScreen extends StatelessWidget {
+  const OnboardingScreen({super.key});
+
+  static Future<void> _markSeen() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool('onboarded_v1', true);
+  }
+
+  Widget _step(IconData icon, String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Row(children: [
+      Container(width: 40, height: 40,
+        decoration: BoxDecoration(shape: BoxShape.circle,
+          color: _accent.withOpacity(0.12),
+          border: Border.all(color: _accent.withOpacity(0.3))),
+        child: Icon(icon, color: _accent, size: 20)),
+      const SizedBox(width: 14),
+      Expanded(child: Text(text, style: TextStyle(
+          fontSize: 13.5, height: 1.35, color: Colors.white.withOpacity(0.85)))),
+    ]));
+
+  @override
+  Widget build(BuildContext context) {
+    final vpn = Provider.of<VpnProvider>(context, listen: false);
+    return VlyBlobBg(child: Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SafeArea(child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+        child: Column(children: [
+          const Spacer(flex: 2),
+          Image.asset('assets/images/vly_icon.png', width: 92, height: 92,
+              fit: BoxFit.contain),
+          const SizedBox(height: 18),
+          ShaderMask(
+            shaderCallback: (b) => const LinearGradient(colors: [
+              Color(0xFFFF2D55), Color(0xFFFF6B35), Color(0xFFFFAA60)]).createShader(b),
+            child: const Text('VLY', style: TextStyle(fontSize: 30,
+                fontWeight: FontWeight.w900, letterSpacing: 6, color: Colors.white))),
+          const SizedBox(height: 8),
+          Text(S.t('onb_tagline'), textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.55))),
+          const Spacer(),
+          _step(Icons.vpn_key_rounded, S.t('onb_step1')),
+          _step(Icons.bolt_rounded,    S.t('onb_step2')),
+          _step(Icons.lock_rounded,    S.t('onb_step3')),
+          const Spacer(flex: 2),
+          GestureDetector(
+            onTap: () { _markSeen(); Navigator.pop(context); _showAddMenu(context, vpn); },
+            child: Container(
+              width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(colors: [_accent, _accent.withOpacity(0.7)]),
+                boxShadow: [BoxShadow(color: _accent.withOpacity(0.3), blurRadius: 16)]),
+              child: Text(S.t('onb_add_config'), textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 15,
+                    fontWeight: FontWeight.w800)))),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () { _markSeen(); Navigator.pop(context); },
+            child: Text(S.t('onb_later'),
+              style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13))),
+        ]),
+      )),
+    ));
   }
 }
 
