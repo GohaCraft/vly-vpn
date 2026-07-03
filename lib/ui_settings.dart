@@ -1299,32 +1299,29 @@ class _StealthPage extends StatelessWidget {
         subtitle: 'Разбивает ClientHello на 1-3 части · JA4+ bypass',
         value: vpn.stealthFragment,
         onChanged: (v) => vpn.setStealthFragment(v),
-        hint: 'TLS ClientHello разбивается на 2-4 пакета по 20-100 байт. DPI видит фрагменты и не распознаёт VPN. Обходит JA4+/JA3 fingerprinting. Рекомендуется всегда включать.'),
+        hint: S.t('hint_tls_frag')),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.rotate_90_degrees_cw_outlined, iconColor: const Color(0xFF7C4DFF),
-        title: 'Reality SNI ротация',
+        title: S.t('reality_sni_rot'),
         subtitle: 'dl.google.com · icloud.com · microsoft.com',
         value: vpn.stealthRealitySni,
         onChanged: (v) => vpn.setStealthRealitySni(v),
-        hint: 'SNI — имя сервера в TLS handshake. Каждый раз берём SNI из белого списка провайдер (Google, Apple, Microsoft). DPI видит соединение к легитимному домену, не к VPN серверу.'),
+        hint: S.t('hint_reality_sni')),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.local_fire_department_outlined, iconColor: const Color(0xFFFF7043),
-        title: 'Warm-up прогрев',
-        subtitle: 'HTTP запрос к Google перед VPN туннелем',
+        title: S.t('warmup_title'),
+        subtitle: S.t('warmup_sub2'),
         value: vpn.stealthWarmup,
         onChanged: (v) => vpn.setStealthWarmup(v),
-        hint: 'Перед VPN соединением делаем обычный HTTPS запрос к Google. DPI видит: браузер открыл страницу, потом подключился к VPN. Паттерн как у реального пользователя.'),
+        hint: S.t('hint_warmup')),
 
       const SizedBox(height: 16),
-      _SubSection('СИБИРСКАЯ БЛОКИРОВКА'),
+      _SubSection(S.t('siberia_block_caps')),
       _InfoCard(
         icon: Icons.shield_outlined,
-        text: 'провайдер детектирует burst TLS соединений к одному IP '
-              '(3+ за 5 сек) и блокирует сервер на 2 минуты. '
-              'Siberia Shield пейсит соединения и использует один '
-              'мультиплексированный туннель вместо множества.'),
+        text: S.t('info_siberia')),
       const SizedBox(height: 8),
       _SwitchRow(
         icon: Icons.shield_moon_outlined, iconColor: const Color(0xFF00BCD4),
@@ -1332,22 +1329,19 @@ class _StealthPage extends StatelessWidget {
         subtitle: 'Connection pacing · Single-tunnel XMUX · Decoy traffic',
         value: vpn.siberiaShield,
         onChanged: (v) => vpn.setSiberiaShield(v),
-        hint: 'Защита от «Сибирской блокировки»: DPI блокирует сервер при 2+ SYN за 8 сек. Siberia Shield: пейсит соединения (1 за 8 сек), шлёт decoy HTTPS трафик к белым доменам между сессиями.'),
+        hint: S.t('hint_siberia')),
 
       const SizedBox(height: 8),
       _SwitchRow(
         icon: Icons.apps_rounded, iconColor: const Color(0xFF7C4DFF),
-        title: 'Per-App обход 📱',
+        title: S.t('per_app_bypass'),
         subtitle: 'Telegram · YouTube · TikTok · Instagram · Discord · X',
         value: vpn.perAppBypass,
         onChanged: (v) => vpn.setPerAppBypass(v),
-        hint: 'Определяет сервис по доменам/IP назначения и применяет точный обход '
-              'под каждое приложение: Telegram (+форки AyuGram/ExtraGram — общие серверы), '
-              'YouTube, TikTok, Instagram, Discord, X. Трафик этих сервисов гарантированно '
-              'идёт через VPN. Включено по умолчанию.'),
+        hint: S.t('hint_per_app')),
 
       const SizedBox(height: 16),
-      _SubSection('SNI ПУЛ'),
+      _SubSection(S.t('sni_pool_caps')),
       ...kRealitySniPool.asMap().entries.map((e) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: Container(
@@ -1374,11 +1368,10 @@ class _StealthPage extends StatelessWidget {
           ])))),
 
       const SizedBox(height: 16),
-      _SubSection('DEAD DROP ЗЕРКАЛА'),
+      _SubSection(S.t('dead_drop_caps')),
       _InfoCard(
         icon: Icons.cloud_off_outlined,
-        text: 'Если основной сервер недоступен — ноды берутся из '
-            'GitHub Gist или DNS TXT записи автоматически.'),
+        text: S.t('info_deaddrop')),
       const SizedBox(height: 8),
       ...kDeadDropMirrors.map((m) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
@@ -1436,13 +1429,13 @@ class _StealthStatusCard extends StatelessWidget {
         const SizedBox(width: 14),
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(active ? 'STEALTH АКТИВЕН' : 'STEALTH ВЫКЛЮЧЕН',
+          Text(active ? S.t('stealth_active') : S.t('stealth_off'),
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
                   color: color, letterSpacing: 1.5)),
           const SizedBox(height: 4),
           Text(active
               ? 'JA4+ bypass · TLS fragment · Reality SNI'
-              : 'Нажми переключатель выше для активации',
+              : S.t('stealth_tap_hint'),
               style: TextStyle(fontSize: 10, color: color.withOpacity(0.6))),
         ])),
         if (active && vpn.stealthHandshakeFails > 0)
@@ -1465,14 +1458,14 @@ class _BypassPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Обход белых списков', child: Column(children: [
+    return _SubPage(title: S.t('wl_bypass_title'), child: Column(children: [
       _InfoCard(
         icon: Icons.info_outline_rounded,
         text: 'Трафик маскируется под HTTPS и проходит через CDN. '
             'Используй если VPN заблокирован на уровне протокола.'),
       const SizedBox(height: 12),
       _DetailRow2('🔒', 'Порт', '443 (HTTPS)'),
-      _DetailRow2('🌐', 'Транспорт', 'WebSocket через CDN'),
+      _DetailRow2('🌐', S.t('transport'), S.t('wl_transport_val')),
       _DetailRow2('🎭', 'SNI', 'speed.cloudflare.com'),
       _DetailRow2('📡', 'DNS', 'DoH — 1.1.1.1'),
       const SizedBox(height: 16),
@@ -1480,7 +1473,7 @@ class _BypassPage extends StatelessWidget {
         icon: vpn.whitelistBypassActive
             ? Icons.close_rounded : Icons.public_off_rounded,
         label: vpn.whitelistBypassActive
-            ? 'Деактивировать' : 'Активировать обход',
+            ? S.t('deactivate') : S.t('activate_bypass'),
         color: vpn.whitelistBypassActive
             ? Colors.redAccent : const Color(0xFF7C4DFF),
         onTap: vpn.activateWhitelistBypass),
@@ -1494,30 +1487,30 @@ class _AutoConnectPage extends StatelessWidget {
   const _AutoConnectPage();
   @override
   Widget build(BuildContext context) {
-    return _SubPage(title: 'Автоподключение', child: Column(children: [
+    return _SubPage(title: S.t('auto_connect'), child: Column(children: [
       _SwitchRow(
         icon: Icons.wifi_outlined, iconColor: const Color(0xFF29B6F6),
-        title: 'Открытый WiFi',
-        subtitle: 'Включать VPN при подключении к незащищённой сети',
+        title: S.t('open_wifi'),
+        subtitle: S.t('sub_open_wifi'),
         value: _autoConnect.onOpenWifi,
         onChanged: _autoConnect.toggleWifi),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.wifi_lock_outlined, iconColor: const Color(0xFF66BB6A),
-        title: 'Любой новый WiFi',
-        subtitle: 'Включать VPN при смене сети',
+        title: S.t('any_new_wifi'),
+        subtitle: S.t('sub_any_new_wifi'),
         value: _autoConnect.onNewWifi,
         onChanged: _autoConnect.toggleNewWifi),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.signal_cellular_alt_rounded, iconColor: const Color(0xFFFFA726),
-        title: 'Мобильный интернет',
-        subtitle: 'Включать при переходе на мобильные данные',
+        title: S.t('mobile_data'),
+        subtitle: S.t('sub_mobile_data'),
         value: _autoConnect.onMobileData,
         onChanged: _autoConnect.toggleMobile),
       const SizedBox(height: 16),
       _ActionBtn(
-        icon: Icons.apps_rounded, label: 'Выбрать приложения-триггеры',
+        icon: Icons.apps_rounded, label: S.t('select_trigger_apps'),
         color: const Color(0xFF29B6F6),
         onTap: () => Navigator.push(context, CupertinoPageRoute(
             builder: (_) => const AutoConnectAppsScreen()))),
@@ -1533,9 +1526,9 @@ class _AppearancePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = Provider.of<AppProvider>(context);
     final light = Theme.of(context).brightness == Brightness.light;
-    return _SubPage(title: 'Тема и скины', child: Column(
+    return _SubPage(title: S.t('theme_skins'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _SubSection('ТЕМА'),
+      _SubSection(S.t('theme_caps')),
       Container(
         decoration: BoxDecoration(
           color: light ? Colors.white.withOpacity(0.7) : Colors.white.withOpacity(0.06),
@@ -1561,7 +1554,7 @@ class _AppearancePage extends StatelessWidget {
                   fontWeight: sel ? FontWeight.bold : FontWeight.normal)))));
         }).toList())),
       const SizedBox(height: 20),
-      _SubSection('СКИН'),
+      _SubSection(S.t('skin_caps')),
       _SkinPicker(app: app),
     ]));
   }
@@ -1631,7 +1624,7 @@ class _HistoryPage extends StatelessWidget {
     final vpn   = Provider.of<VpnProvider>(context);
     final light = Theme.of(context).brightness == Brightness.light;
     return _SubPage(
-      title: 'История подключений',
+      title: S.t('connection_history'),
       trailing: vpn.connectionHistory.isNotEmpty
           ? GestureDetector(
               onTap: vpn.clearHistory,
@@ -1639,10 +1632,10 @@ class _HistoryPage extends StatelessWidget {
                   fontSize: 12, color: Colors.redAccent)))
           : null,
       child: vpn.connectionHistory.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
-              child: Center(child: Text('Нет записей',
-                  style: TextStyle(fontSize: 13, color: Colors.white38))))
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(child: Text(S.t('no_records'),
+                  style: const TextStyle(fontSize: 13, color: Colors.white38))))
           : Column(children: vpn.connectionHistory.asMap().entries.map((e) {
               final r      = e.value;
               final isLast = e.key == vpn.connectionHistory.length - 1;
