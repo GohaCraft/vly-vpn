@@ -3,8 +3,55 @@ part of 'main.dart';
 
 
 class BackupEngine {
+  // ── НАСТОЯЩАЯ КРИПТА: AES-256-GCM + PBKDF2-HMAC-SHA256 (формат v5) ─────────
+  // Раньше бэкап «шифровался» самопальным XOR (в комментарии буквально «Это не
+  // AES»). Для security-инструмента это неприемлемо. Теперь: ключ растягивается
+  // PBKDF2 (100k итераций HMAC-SHA256) из пароля+соли, шифрование AES-256-GCM
+  // даёт и конфиденциальность, и аутентификацию (GCM-тег ловит подмену/неверный
+  // пароль). Старый XOR-путь оставлен ТОЛЬКО для восстановления старых бэкапов.
+  static const int _pbkdf2Iterations = 100000;
+  static const int _fmtV5 = 5; // байт-версия формата AES-GCM
+
+  static Uint8List _deriveKeyPbkdf2(String password, List<int> salt) {
+    final d = pc.PBKDF2KeyDerivator(pc.HMac(pc.SHA256Digest(), 64))
+      ..init(pc.Pbkdf2Parameters(
+          Uint8List.fromList(salt), _pbkdf2Iterations, 32));
+    return d.process(Uint8List.fromList(utf8.encode(password)));
+  }
+
+  // [v5(1)][salt(16)][nonce(12)][ciphertext+GCM-tag(16)]
+  static List<int> _aesGcmEncrypt(List<int> data, String password) {
+    final rng   = Random.secure();
+    final salt  = List<int>.generate(16, (_) => rng.nextInt(256));
+    final nonce = List<int>.generate(12, (_) => rng.nextInt(256));
+    final key   = _deriveKeyPbkdf2(password, salt);
+    final gcm = pc.GCMBlockCipher(pc.AESEngine())
+      ..init(true, pc.AEADParameters(pc.KeyParameter(key), 128,
+          Uint8List.fromList(nonce), Uint8List(0)));
+    final ct = gcm.process(Uint8List.fromList(data));
+    return [_fmtV5, ...salt, ...nonce, ...ct];
+  }
+
+  // null → неверный пароль / повреждение / подмена (GCM-тег не сходится).
+  static List<int>? _aesGcmDecrypt(List<int> data, String password) {
+    if (data.isEmpty || data[0] != _fmtV5) return null;
+    if (data.length < 1 + 16 + 12 + 16) return null;
+    final salt  = data.sublist(1, 17);
+    final nonce = data.sublist(17, 29);
+    final ct    = data.sublist(29);
+    final key   = _deriveKeyPbkdf2(password, salt);
+    try {
+      final gcm = pc.GCMBlockCipher(pc.AESEngine())
+        ..init(false, pc.AEADParameters(pc.KeyParameter(key), 128,
+            Uint8List.fromList(nonce), Uint8List(0)));
+      return gcm.process(Uint8List.fromList(ct));
+    } catch (_) {
+      return null; // InvalidCipherText: неверный пароль или подмена
+    }
+  }
+
+  // ── LEGACY (XOR) — только для чтения старых бэкапов v3/v4 ──────────────────
   // Key stretching: повторяем ключ через многократное XOR + перестановки
-  // Это не AES, но значительно лучше простого XOR
   static List<int> _deriveKey(String password, List<int> salt) {
     if (password.isEmpty) return salt.isEmpty ? List.filled(32, 0x42) : salt;
     final pw = utf8.encode(password);
@@ -77,38 +124,39 @@ class BackupEngine {
   static String export(List<VlyProfile> profiles, String activeId, String password) {
     final payload = jsonEncode({
       'magic':    kBackupMagic,
-      'version':  4,
+      'version':  5,
       'ts':       DateTime.now().millisecondsSinceEpoch,
       'activeId': activeId,
       'profiles': profiles.map((p) => p.toJson()).toList(),
     });
     final bytes     = utf8.encode(payload);
-    final encrypted = _encrypt(bytes, password);
+    final encrypted = _aesGcmEncrypt(bytes, password); // AES-256-GCM
     return base64.encode(encrypted);
   }
 
   static Map<String, dynamic>? import(String b64, String password) {
     try {
-      final bytes     = base64.decode(b64.trim());
-      final decrypted = _decrypt(bytes, password);
-      if (decrypted == null) return null; // неверный пароль
+      final bytes = base64.decode(b64.trim());
 
-      // Обратная совместимость: старый формат v3 без checksum
-      List<int> plainBytes = decrypted;
-      Map<String, dynamic>? result;
-      try {
-        result = jsonDecode(utf8.decode(plainBytes)) as Map<String, dynamic>;
-      } catch (_) {
-        // Пробуем старый XOR-формат v3
-        final key = utf8.encode(password);
-        final old = List.generate(bytes.length, (i) => bytes[i] ^ key[i % key.length]);
+      // Новый формат v5 (AES-GCM) — по байт-версии в начале.
+      Map<String, dynamic>? _tryJson(List<int>? plain) {
+        if (plain == null) return null;
         try {
-          result = jsonDecode(utf8.decode(old)) as Map<String, dynamic>;
+          final m = jsonDecode(utf8.decode(plain));
+          return (m is Map<String, dynamic> && m['magic'] == kBackupMagic) ? m : null;
         } catch (_) { return null; }
       }
 
-      if (result['magic'] != kBackupMagic) return null;
-      return result;
+      final v5 = _tryJson(_aesGcmDecrypt(bytes, password));
+      if (v5 != null) return v5;
+
+      // ── LEGACY: старые бэкапы XOR v4 (salt+checksum) и v3 (голый XOR) ──────
+      final v4 = _tryJson(_decrypt(bytes, password));
+      if (v4 != null) return v4;
+
+      final key = utf8.encode(password);
+      final v3  = List.generate(bytes.length, (i) => bytes[i] ^ key[i % key.length]);
+      return _tryJson(v3);
     } catch (_) { return null; }
   }
 }

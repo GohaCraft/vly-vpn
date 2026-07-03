@@ -373,6 +373,27 @@ void main() {
     });
   });
 
+  group('Бэкап — настоящая крипта (AES-256-GCM + PBKDF2)', () {
+    test('export → import round-trip восстанавливает данные', () {
+      final b64 = BackupEngine.export([], 'active-1', 'S3cret!');
+      final m = BackupEngine.import(b64, 'S3cret!');
+      expect(m, isNotNull);
+      expect(m!['activeId'], 'active-1');
+      expect(m['magic'], kBackupMagic);
+      expect(m['version'], 5);
+    });
+    test('неверный пароль → null (GCM-тег не сходится)', () {
+      final b64 = BackupEngine.export([], 'a', 'right-password');
+      expect(BackupEngine.import(b64, 'wrong-password'), isNull);
+    });
+    test('подмена шифротекста ловится (integrity)', () {
+      final b64 = BackupEngine.export([], 'a', 'pw');
+      final bytes = base64.decode(b64);
+      bytes[bytes.length - 1] ^= 0xFF; // портим GCM-тег
+      expect(BackupEngine.import(base64.encode(bytes), 'pw'), isNull);
+    });
+  });
+
   group('Проверка обновлений', () {
     test('валидный payload с новым build парсится', () {
       final u = AppUpdate.decode({
