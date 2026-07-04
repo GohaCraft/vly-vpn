@@ -75,6 +75,13 @@ object AppsHelper {
 
         val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
 
+        // Бюджет на суммарный размер base64-иконок. Весь список идёт одним
+        // ответом через Binder, у которого лимит транзакции ~1 МБ. При большом
+        // числе приложений полный набор иконок его превышал →
+        // TransactionTooLargeException → пустой ответ → «ничего не найдено».
+        // Держим иконки в пределах бюджета; список приложений возвращаем ВСЕГДА
+        // (у кого не хватило бюджета — рисуем в UI аватар-заглушку).
+        var iconBudget = 700_000
         for (pkg in packages) {
             // Пропускаем системные приложения без launcher иконки
             val isSystem = (pkg.flags and ApplicationInfo.FLAG_SYSTEM) != 0
@@ -87,11 +94,15 @@ object AppsHelper {
                 pm.getApplicationLabel(pkg).toString()
             } catch (_: Exception) { pkg.packageName }
 
-            // Иконка — конвертируем в base64 PNG (маленький размер)
-            val iconBase64 = try {
-                val drawable = pm.getApplicationIcon(pkg.packageName)
-                drawableToBase64(drawable, 48)
-            } catch (_: Exception) { "" }
+            // Иконку кодируем только пока не исчерпан бюджет транзакции.
+            val iconBase64 = if (iconBudget > 0) {
+                try {
+                    val drawable = pm.getApplicationIcon(pkg.packageName)
+                    val b64 = drawableToBase64(drawable, 44)
+                    iconBudget -= b64.length
+                    b64
+                } catch (_: Exception) { "" }
+            } else ""
 
             apps.add(mapOf(
                 "packageName" to pkg.packageName,
