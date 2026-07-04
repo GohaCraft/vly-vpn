@@ -328,6 +328,14 @@ void main() {
           lessThan(AiMemory.blockAffinity(BlockType.portBlocked, 'vless_reality_vk')));
     });
 
+    test('адаптивный таймаут пробы: быстрым — короче, неизученным — полный', () {
+      expect(AiMemory.adaptiveProbeTimeoutMs(null), 3000);   // неизучено → полный
+      expect(AiMemory.adaptiveProbeTimeoutMs(0), 3000);      // нет данных → полный
+      expect(AiMemory.adaptiveProbeTimeoutMs(150), 1000);    // 150×4=600 → пол 1000
+      expect(AiMemory.adaptiveProbeTimeoutMs(500), 2000);    // 500×4=2000
+      expect(AiMemory.adaptiveProbeTimeoutMs(2000), 3000);   // 2000×4 → потолок 3000
+    });
+
     test('cold-rank правило: в whitelist-сети RU-стратегии впереди «иностранных»', () {
       // vless_reality_vk (RU-friendly) должна идти РАНЬШЕ vless_grpc_plain
       // (не whitelist-friendly) при активном белом списке.

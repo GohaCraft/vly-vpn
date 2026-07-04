@@ -396,6 +396,14 @@ class AiMemory {
 
   static int? latencyFor(String net, String type) => _arms[net]?[type]?.ms;
 
+  // Адаптивный таймаут пробы: известную быструю стратегию не ждём полные 3с —
+  // если за 4× её исторической задержки не подключилась, она сейчас не работает,
+  // быстрее переходим к следующей. Неизученную ждём полный бюджет. [1000..3000]мс.
+  static int adaptiveProbeTimeoutMs(int? learnedMs) {
+    if (learnedMs == null || learnedMs <= 0) return 3000;
+    return (learnedMs * 4).clamp(1000, 3000);
+  }
+
   // Диагностика/тесты: сырая статистика руки (или null, если не изучена).
   static Map<String, int>? statsFor(String net, String type) {
     final a = _arms[net]?[type];
@@ -1064,8 +1072,11 @@ class AiBypassAgent {
         // «наугад». Теперь пробуем реальный TLS-коннект к ноде и принимаем
         // только то, что измеримо работает.
         final sw = Stopwatch()..start();
+        // Адаптивный таймаут: быстрым проверенным стратегиям не даём висеть 3с.
+        final probeTimeout = Duration(milliseconds:
+            AiMemory.adaptiveProbeTimeoutMs(AiMemory.latencyFor(net, s.type)));
         final ok = await BypassProber.probe(result)
-            .timeout(const Duration(seconds: 3), onTimeout: () => false);
+            .timeout(probeTimeout, onTimeout: () => false);
         sw.stop();
         if (ok) {
           // +win + задержка + фиксация как активной руки (одним вызовом).
