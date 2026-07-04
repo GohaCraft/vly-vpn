@@ -269,10 +269,9 @@ class BypassRulesEngine {
       {'priority': 9, 'type': 'add_reality_sni',     'params': {'sni': 'dl.google.com'}},
       {'priority': 10,'type': 'add_reality_sni',     'params': {'sni': 'update.microsoft.com'}},
       {'priority': 11,'type': 'trojan_ws_fallback',  'params': {'port': 443, 'path': '/api/v1'}},
-      // (Hysteria2 и Zapret убраны из каскада: xray-core не запускает hy2, а
-      //  Zapret требует внешний nfqueue-процесс, которого на стоковом Android
-      //  нет — обе давали фантомную попытку. ZapretBridge остаётся, но включается
-      //  только явным kZapretConfig['enabled'] при наличии внешнего zapret.)
+      // (Hysteria2 и Zapret убраны: xray-core не запускает hy2, а Zapret требует
+      //  внешний nfqueue-процесс, которого на стоковом Android нет — обе давали
+      //  фантомную попытку.)
       {'priority': 14,'type': 'cdn_fallback',         'params': {'url': 'vly-vpn.workers.dev'}},
     ]},
     // DNS отравление
@@ -745,24 +744,6 @@ class BypassRulesEngine {
           q['flow']       = 'xtls-rprx-vision';
           q['fp']         = StealthEngine.randomFingerprint();
           link = uri.replace(queryParameters: q).toString();
-        } catch (_) {}
-        break;
-
-      // Zapret DPI bypass — активирует локальный Zapret как промежуточный прокси.
-      // Zapret работает на уровне пакетов (nfqueue/windivert) — не меняет VPN протокол.
-      // Эффективен когда DPI блокирует по TLS fingerprint или делает TCP RST.
-      // Стратегии: fake_sni | disorder | split | ttl_trick
-      // ВАЖНО: Zapret должен быть установлен и запущен на устройстве отдельно.
-      case 'zapret_bypass':
-        try {
-          final strategy = p['strategy'] as String? ?? 'fake_sni';
-          // Zapret не меняет VPN ссылку — он работает на уровне ОС.
-          // Помечаем ссылку что нужен Zapret, VpnProvider активирует ZapretBridge.
-          // Используем fragment URI (#) чтобы не ломать парсинг протокола.
-          if (!link.contains('zapret=')) {
-            final sep = link.contains('#') ? '&' : '#';
-            link = '$link${sep}zapret=$strategy';
-          }
         } catch (_) {}
         break;
 

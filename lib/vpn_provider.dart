@@ -1430,10 +1430,10 @@ class VpnProvider extends ChangeNotifier {
                       errStr.contains('reset') || errStr.contains('timeout') ||
                       errStr.contains('refused') || errStr.contains('connection');
 
-      // Логируем тип для Dev Dashboard
+      // Логируем определённый тип блокировки для Dev Dashboard. Реальный выбор
+      // стратегии дальше делает адаптивный бандит в AiMemory/каскаде.
       if (blockType != BlockType.timeout) {
-        final prio = NetworkCountermeasures2026.prioritizedStrategies(blockType).take(3).join(',');
-        _log('🔍 Тип блокировки: ${blockType.name} → приоритет стратегий: $prio');
+        _log('🔍 Тип блокировки: ${blockType.name}');
       }
 
       if (isBlock) {

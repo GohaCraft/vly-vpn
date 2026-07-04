@@ -190,28 +190,6 @@ const kHysteria2Defaults = {
   },
 };
 
-// ── Zapret интеграция ────────────────────────────────────────────────────────
-// Zapret — локальный инструмент обхода DPI (не VPN, работает на сетевом уровне)
-// Используется как ДОПОЛНЕНИЕ к VPN когда DPI активно блокирует TLS handshake
-// Режимы: fake_sni (подмена SNI) + disorder (переупорядочивание пакетов)
-// Источник: github.com/bol-van/zapret
-const kZapretConfig = {
-  'enabled':     false,            // по умолчанию выключен — только если VPN упал
-  'httpPort':    1080,             // локальный SOCKS5 порт Zapret
-  'strategies': [
-    'fake_sni',     // подменяет SNI в ClientHello → DPI видит разрешённый домен
-    'disorder',     // переупорядочивает TLS пакеты → DPI не собирает fingerprint
-    'split',        // split TLS ClientHello → аналог fragment в Xray
-    'ttl_trick',    // TTL=5 для первого пакета → DPI не видит, сервер видит
-  ],
-  'fakeSniFallback': 'www.yandex.ru',  // SNI для подмены — Яндекс всегда в whitelist
-};
-
-// Zapret/GoodbyeDPI локальный порт (запускается отдельно на устройстве)
-const int    kZapretLocalPort     = 1080;  // SOCKS5 порт Zapret
-const String kZapretDefaultSni    = 'www.microsoft.com'; // SNI для fake_sni стратегии
-
-
 // Warm-up домены — реальный HTTPS трафик перед VPN туннелем
 // Warm-up домены обновлены март 2026:
 // Используем те же URL что запрашивает Android при подключении к WiFi
