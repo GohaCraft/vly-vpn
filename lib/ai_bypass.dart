@@ -293,6 +293,23 @@ class AiMemory {
     return true;
   }
 
+  // Обратная связь по КАЧЕСТВУ живой сессии (не только connect-проба). Устойчиво
+  // здоровая активная рука получает доп. подтверждение (+win) — «реально держит»,
+  // а не просто прошла пробу; устойчиво деградировавшая (throttle, но не смерть)
+  // получает мягкий минус (+loss). Так модель различает «подключилось и стабильно»
+  // и «подключилось, но душат». Уважает грейс. Возвращает true, если применилось.
+  static bool reinforceActive({required bool healthy}) {
+    final n = _activeNet, t = _activeType;
+    if (n == null || t == null) return false;
+    if (!pastPenalizeGrace(_activeSinceMs, _now)) return false;
+    final a = _arms[n]?[t];
+    if (a == null) return false;
+    if (healthy) { a.wins++; } else { a.losses++; }
+    a.seenMs = _now;
+    _scheduleSave();
+    return true;
+  }
+
   // Период полураспада доказательств. Среда НЕ стационарна (цензура меняется
   // за недели), поэтому старые wins/losses «выцветают» к нейтральному приору 0.5:
   // задушенная месяц назад стратегия получает второй шанс, а давно не

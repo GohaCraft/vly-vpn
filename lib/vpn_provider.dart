@@ -439,9 +439,11 @@ class VpnProvider extends ChangeNotifier {
   // uploadSpeed/downloadSpeed приходят каждую секунду через onStatusChanged
   // Здесь только обновляем sessionDuration
 
+  int _sessionReinforce = 0; // сколько раз подтвердили активную руку за сессию (кэп)
   void _startTrafficTimer() {
     _trafficTimer?.cancel();
     sessionDuration = Duration.zero;
+    _sessionReinforce = 0;
     _trafficTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_disposed || !isConnected) return;
       if (_connectedAt != null) {
@@ -450,6 +452,25 @@ class VpnProvider extends ChangeNotifier {
       // Обновляем уведомление каждые 5 сек чтобы не нагружать систему
       if (sessionDuration.inSeconds % 5 == 0) {
         _updatePersistentNotif();
+      }
+      // Каждые 3 минуты — обратная связь ИИ по КАЧЕСТВУ живой сессии: устойчиво
+      // здоровая стратегия получает +доверие, деградирующая (throttle) — минус.
+      // Не только connect-проба, а реальное поведение сквозь туннель. Decay не
+      // даёт раздуть доверие за одну длинную сессию.
+      final s = sessionDuration.inSeconds;
+      // Кэп на сессию: не даём одной длинной сессии раздуть доверие (после ~6
+      // подтверждений стратегия и так надёжно «проверена в бою»).
+      if (s > 0 && s % 180 == 0 && _sessionReinforce < 6 &&
+          BypassHealthMonitor.isRunning) {
+        final bad   = BypassHealthMonitor.degradedServices.length +
+                      BypassHealthMonitor.downServices.length;
+        final total = ServiceBypassProfiles.all.length;
+        final healthy = bad < (total / 3).ceil(); // <1/3 деградировано → здорова
+        if (AiMemory.reinforceActive(healthy: healthy)) {
+          _sessionReinforce++;
+          _log(healthy ? '📈 Сессия стабильна (${s ~/ 60}м) — +доверие стратегии'
+                       : '📉 Сессия деградирует — −доверие стратегии');
+        }
       }
       _notify();
     });

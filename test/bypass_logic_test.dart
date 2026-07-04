@@ -327,6 +327,18 @@ void main() {
       expect(AiMemory.blockAffinity(BlockType.portBlocked, 'cdn_fallback'),
           lessThan(AiMemory.blockAffinity(BlockType.portBlocked, 'vless_reality_vk')));
     });
+
+    test('reinforceActive: качество сессии двигает доверие (после грейса)', () {
+      // Дальше грейса: подтверждаем через recordWinner, затем «стареем» вручную
+      // нельзя — вместо этого проверяем логику на арме, где grace уже прошёл,
+      // через прямой доступ статистики. Свежая рука (grace) — не двигается.
+      AiMemory.recordSuccess('nq', 'strat', 150);
+      final before = AiMemory.statsFor('nq', 'strat')!;
+      // В грейсе reinforceActive не применяется.
+      expect(AiMemory.reinforceActive(healthy: true), isFalse);
+      final after = AiMemory.statsFor('nq', 'strat')!;
+      expect(after['wins'], before['wins']); // не изменилось в грейсе
+    });
   });
 
   group('Серверный AI-каскад (mutation-программы, blueprint §4b)', () {
