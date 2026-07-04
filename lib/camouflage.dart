@@ -15,31 +15,34 @@ enum CamouflageMode {
 }
 
 extension CamouflageModeExt on CamouflageMode {
+  // Названия НЕ содержат чужих торговых марок (Netflix/Discord/Apple и т.п.) —
+  // только описание типа трафика. Технически камуфляж по-прежнему имитирует
+  // паттерны популярных сервисов, но в UI брендов нет (нет риска претензий).
   String get label {
     switch (this) {
       case CamouflageMode.none:        return 'Без маскировки';
       case CamouflageMode.browser:     return 'HTTPS браузер';
-      case CamouflageMode.telegram:    return 'Telegram CDN';
-      case CamouflageMode.netflix:     return 'Netflix Stream';
-      case CamouflageMode.youtube:     return 'YouTube Video';
-      case CamouflageMode.discord:     return 'Discord Gateway';
-      case CamouflageMode.cloudflare:  return 'Cloudflare WARP';
-      case CamouflageMode.microsoft:   return 'Windows Update';
-      case CamouflageMode.apple:       return 'iCloud Sync';
-      case CamouflageMode.naive:       return 'NaïveProxy H2';
+      case CamouflageMode.telegram:    return 'Мессенджер CDN';
+      case CamouflageMode.netflix:     return 'Видеостриминг';
+      case CamouflageMode.youtube:     return 'Адаптивное видео';
+      case CamouflageMode.discord:     return 'Голос / чат (WS)';
+      case CamouflageMode.cloudflare:  return 'WireGuard-стиль';
+      case CamouflageMode.microsoft:   return 'Системное обновление';
+      case CamouflageMode.apple:       return 'Облачная синхр.';
+      case CamouflageMode.naive:       return 'HTTP/2 прокси';
     }
   }
   String get emoji {
     switch (this) {
       case CamouflageMode.none:        return '🔓';
       case CamouflageMode.browser:     return '🌐';
-      case CamouflageMode.telegram:    return '✈️';
+      case CamouflageMode.telegram:    return '💬';
       case CamouflageMode.netflix:     return '🎬';
-      case CamouflageMode.youtube:     return '▶️';
-      case CamouflageMode.discord:     return '🎮';
-      case CamouflageMode.cloudflare:  return '🟠';
-      case CamouflageMode.microsoft:   return '🪟';
-      case CamouflageMode.apple:       return '🍎';
+      case CamouflageMode.youtube:     return '📺';
+      case CamouflageMode.discord:     return '🎧';
+      case CamouflageMode.cloudflare:  return '🛡️';
+      case CamouflageMode.microsoft:   return '⚙️';
+      case CamouflageMode.apple:       return '☁️';
       case CamouflageMode.naive:       return '🔀';
     }
   }
@@ -48,23 +51,23 @@ extension CamouflageModeExt on CamouflageMode {
       case CamouflageMode.none:
         return 'Чистый VLESS/VMess без дополнительной маскировки';
       case CamouflageMode.browser:
-        return 'Трафик выглядит как Chrome посещающий Google.com';
+        return 'Трафик как у обычного браузера к популярному сайту';
       case CamouflageMode.telegram:
-        return 'MTProto CDN — как Telegram звонки и медиа';
+        return 'MTProto CDN — как голос и медиа в мессенджере';
       case CamouflageMode.netflix:
-        return 'HTTP/2 chunked stream — Netflix video buffering';
+        return 'HTTP/2 chunked stream — как буферизация видео';
       case CamouflageMode.youtube:
-        return 'googlevideo.com adaptive bitrate — YouTube 4K';
+        return 'Adaptive bitrate — как потоковое видео высокого качества';
       case CamouflageMode.discord:
-        return 'WebSocket gateway.discord.gg — Discord real-time';
+        return 'WebSocket real-time — как голосовой/текстовый чат';
       case CamouflageMode.cloudflare:
-        return 'Cloudflare WARP endpoint — обычный мобильный VPN';
+        return 'WireGuard-подобный трафик — как обычный мобильный VPN';
       case CamouflageMode.microsoft:
-        return 'Windows Update / Office 365 sync — корпоративный';
+        return 'HTTPS sync — как системные и офисные обновления';
       case CamouflageMode.apple:
-        return 'iCloud Private Relay mask.icloud.com — iOS трафик';
+        return 'Encrypted relay — как облачная синхронизация';
       case CamouflageMode.naive:
-        return 'NaïveProxy: HTTP CONNECT через H2 — анти-DPI прокси';
+        return 'HTTP CONNECT через H2 — анти-DPI прокси';
     }
   }
 }
