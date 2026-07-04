@@ -816,21 +816,8 @@ class AiBypassAgent {
 
   void stop() { _isRunning = false; }
 
-  // Случайный CDN-подобный путь — DPI думает что это обращение к CDN, не VPN
-  static String _randomCdnPath() {
-    final ts = DateTime.now();
-    final paths = [
-      '/cdn-cgi/trace',
-      '/api/v${ts.second % 5 + 1}/stream',
-      '/upload/chunk/${ts.millisecond}',
-      '/static/media/bundle.${ts.minute.toRadixString(16)}.js',
-      '/api/graphql/ws',
-      '/live/hls/stream${ts.second % 4}.m3u8',
-      '/push/notify/${ts.millisecond.toRadixString(16)}',
-      '/ws/v2/connect',
-    ];
-    return paths[ts.millisecondsSinceEpoch % paths.length];
-  }
+  // (Удалён _randomCdnPath: мёртвый — путь для ws/CDN-транспорта задаётся в
+  //  конкретных стратегиях, случайный генератор нигде не вызывался.)
 
 
 

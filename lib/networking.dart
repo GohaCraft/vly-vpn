@@ -792,21 +792,8 @@ class BypassRulesEngine {
     );
   }
 
-  // Выбирает SNI по тиру доверия для обхода белых списков
-  // Tier 0: Яндекс — Ростелеком Сибирь никогда не блокирует
-  // Tier 1: VK/Mail.ru — в белом списке провайдер
-  // Tier 2: Microsoft/Apple — корпоративный whitelist
-  static String _whitelistSniByTier(int tier) {
-    const t0 = ['yandex.ru', 'ya.ru', 'mail.yandex.ru', 'yastatic.net'];
-    const t1 = ['vk.com', 'userapi.com', 'mail.ru', 'ok.ru', 'sber.ru', 'gosuslugi.ru'];
-    const t2 = ['update.microsoft.com', 'www.apple.com', 'mask.icloud.com'];
-    switch (tier) {
-      case 0:  return t0[DateTime.now().millisecond % t0.length];
-      case 1:  return t1[DateTime.now().millisecond % t1.length];
-      case 2:  return t2[DateTime.now().millisecond % t2.length];
-      default: return 'yandex.ru';
-    }
-  }
+  // (Удалён _whitelistSniByTier: мёртвый — выбор SNI-фронта делает измеряющий
+  //  WhitelistBypassEngine.getBestSni, а не случайный тир-селектор.)
 }
 
 class BypassProber {
