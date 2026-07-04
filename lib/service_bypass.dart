@@ -23,7 +23,10 @@ class ServiceBypassProfile {
   final IconData      icon;
   final List<String>  domains;   // домены сервиса (+ поддомены)
   final List<String>  ips;       // CIDR диапазоны (нужно для Telegram)
-  final String        strategy;  // рекомендуемый тип обхода (тюнинг/ИИ)
+  // Информационная метка типа обхода. ВНИМАНИЕ: сейчас НЕ применяется per-service
+  // (весь трафик сервиса роутится через 'proxy' в buildRoutingRules); поле —
+  // задел на будущее. Не путать с типами каскада (namespace другой).
+  final String        strategy;
   final String        note;
 
   const ServiceBypassProfile({
