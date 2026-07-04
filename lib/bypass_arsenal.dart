@@ -133,19 +133,11 @@ class BypassArsenal {
     {'id': 114, 'name': '🟡 Whitelist: AWS',          'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'aws'}},
     {'id': 115, 'name': '🟡 Whitelist: Fastly',       'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'fastly'}},
     {'id': 116, 'name': '🟡 Whitelist: Akamai',       'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'akamai'}},
-    // ── TIER QUIC/HTTP3: Обход DPI через QUIC (04.04.2026) ──────────────────
-    // MTProxy мёртв (01.04.2026) — DPI детектит Fake-TLS по TLS fingerprint
-    // QUIC/HTTP3 — DPI ещё не умеет полноценно анализировать QUIC
-    // Источник: bypasscore.com/blog/vpn-detection-bypass-dpi-evasion (18.03.2026)
-    {'id': 121, 'name': '⚡ QUIC: Google h3',        'type': 'quic_h3_fallback',      'priority': 0, 'params': {'sni':'www.google.com','alpn':'h3'}},
-    {'id': 122, 'name': '⚡ QUIC: Cloudflare h3',     'type': 'quic_h3_fallback',      'priority': 0, 'params': {'sni':'cloudflare.com','alpn':'h3'}},
-    {'id': 123, 'name': '⚡ QUIC: MS Azure h3',       'type': 'quic_h3_fallback',      'priority': 0, 'params': {'sni':'azure.microsoft.com','alpn':'h3'}},
-    {'id': 124, 'name': '⚡ HTTP3: CDN Tunnel',       'type': 'http3_cdn_tunnel',      'priority': 0, 'params': {'cdn':'cloudflare'}},
-    {'id': 125, 'name': '⚡ HTTP3: Edge Worker',      'type': 'http3_cdn_tunnel',      'priority': 0, 'params': {'cdn':'workers'}},
-    // ── TIER RESIDENTIAL: Residential IP + Smart Timer ───────────────────────
-    {'id': 126, 'name': '🏠 Residential: EU IP',      'type': 'residential_ip',        'priority': 0, 'params': {'region':'eu'}},
-    {'id': 127, 'name': '🏠 Residential: US IP',      'type': 'residential_ip',        'priority': 0, 'params': {'region':'us'}},
-    {'id': 128, 'name': '🏠 Residential: Asia IP',    'type': 'residential_ip',        'priority': 0, 'params': {'region':'asia'}},
+    // (Убраны QUIC/HTTP3 и Residential-IP стратегии: они лишь помечали ссылку
+    //  маркером quic=/h3tunnel=/residential=, который connect-путь НИКОГДА не
+    //  читал → конфиг не менялся, попытка тратилась впустую. Смена транспорта на
+    //  QUIC вдобавок требует поддержки на сервере, а IP-тип сервера с клиента
+    //  сменить нельзя в принципе. Это был театр — удалено.)
   ];
 
   static final _rng = Random();

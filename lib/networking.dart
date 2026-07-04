@@ -780,46 +780,9 @@ class BypassRulesEngine {
         } catch (_) {}
         break;
 
-      // QUIC/HTTP3 fallback — DPI ещё не умеет анализировать QUIC
-      // Источник: bypasscore.com/blog/vpn-detection-bypass-dpi-evasion (18.03.2026)
-      // QUIC = UDP-based, encrypted multiplexed streams, indistinguishable from HTTP/3
-      case 'quic_h3_fallback':
-        try {
-          final sni = p['sni'] as String? ?? 'www.google.com';
-          final alpn = p['alpn'] as String? ?? 'h3';
-          // Помечаем ссылку для VpnProvider
-          if (!link.contains('quic=')) {
-            final sep = link.contains('#') ? '&' : '#';
-            link = '$link${sep}quic=$sni&alpn=$alpn';
-          }
-        } catch (_) {}
-        break;
-
-      // HTTP3 CDN Tunnel — CDN edge relay через QUIC
-      // Трафик идёт через CDN (Cloudflare Workers / edge functions)
-      // DPI видит обычный HTTP/3 к CDN, не VPN
-      case 'http3_cdn_tunnel':
-        try {
-          final cdn = p['cdn'] as String? ?? 'cloudflare';
-          if (!link.contains('h3tunnel=')) {
-            final sep = link.contains('#') ? '&' : '#';
-            link = '$link${sep}h3tunnel=$cdn';
-          }
-        } catch (_) {}
-        break;
-
-      // Residential IP — проверка что IP сервера не дата-центр
-      // Дата-центры (AS хостингов) в чёрных списках провайдер
-      // Residential IP выглядит как домашний пользователь
-      case 'residential_ip':
-        try {
-          final region = p['region'] as String? ?? 'eu';
-          if (!link.contains('residential=')) {
-            final sep = link.contains('#') ? '&' : '#';
-            link = '$link${sep}residential=$region';
-          }
-        } catch (_) {}
-        break;
+      // (Кейсы quic_h3_fallback / http3_cdn_tunnel / residential_ip удалены:
+      //  они ставили маркер quic=/h3tunnel=/residential=, который connect-путь
+      //  не читал — конфиг не менялся, попытка тратилась зря. Это был театр.)
     }
     return VpnConfig(
       name: '${orig.name} [AI]', link: link,
