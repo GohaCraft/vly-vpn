@@ -208,8 +208,13 @@ class _ConnectCard extends StatelessWidget {
         st = vpn.stealthStatus.isNotEmpty ? vpn.stealthStatus : S.t('connecting');
         break;
       case 'ERROR':      sc = const Color(0xFFFF3B30); st = S.t('error');        break;
-      // FIX: в светлой теме используем тёмный цвет вместо white38 (невидим)
-      default:           sc = light ? const Color(0xFF1C1C1E) : Colors.white60;
+      // Отключено — красим кнопку в АКЦЕНТ ТЕМЫ: она меняется вместе с темой
+      // (в т.ч. кастомной), но остаётся яркой и не сливается с фоном. Статусы
+      // connected/connecting/error сохраняют семантические зелёный/оранж/красный.
+      // В светлой теме подмешиваем тёмный, чтобы светлый акцент не пропадал.
+      default:           sc = light
+                              ? Color.lerp(_accent, Colors.black, 0.35)!
+                              : _accent;
                          st = S.t('disconnected');
     }
 
