@@ -1118,7 +1118,13 @@ class VpnProvider extends ChangeNotifier {
       }
 
       return jsonEncode(j);
-    } catch (_) { return cfg; }
+    } catch (e, st) {
+      // Патч не применился → защита (anti-WebRTC/telemetry/API-dump) тихо не
+      // работает. Возвращаем исходный конфиг, чтобы подключение не сорвалось,
+      // но фиксируем причину, иначе провал невидим при диагностике.
+      CrashReporter.record(e, st);
+      return cfg;
+    }
   }
 
   Future<void> _connectWith(VpnConfig cfg) async {
@@ -1343,7 +1349,11 @@ class VpnProvider extends ChangeNotifier {
           }
           configStr = jsonEncode(jRoute);
         }
-      } catch (_) {}
+      } catch (e) {
+        // Smart routing не применился → трафик пойдёт без RU-правил обхода.
+        // Не критично для самого коннекта, но диагностически важно знать.
+        _log('⚠️ smart routing skip: $e');
+      }
 
       // Telegram Protocol (JSON, мгновенно)
       final host = _extractHost(cfg.link);
