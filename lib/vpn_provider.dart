@@ -2095,28 +2095,41 @@ class VpnProvider extends ChangeNotifier {
   Future<void> saveNow() async {
     _saveDebounce?.cancel();
     _saveDebounce = null;
+    final p = await SharedPreferences.getInstance();
+    // Профили (ноды/конфиги) — критичные данные. Сохраняем их изолированно от
+    // остальных настроек: ошибка сериализации одного профиля не должна
+    // заблокировать запись флагов, и наоборот — иначе теряем всё разом.
     try {
       _prof.configsJson = _configs.map((c) => c.toMap()).toList();
-      final p    = await SharedPreferences.getInstance();
       final json = jsonEncode(profiles.map((x) => x.toJson()).toList());
-      await p.setString('vly_profiles',       _obfuscate(json));
-      await p.setString('vly_active_profile',  activeProfileId);
-      await p.setInt('selected_index',          selectedIndex);
-      await p.setBool('stealth_mode',           stealthMode);
-      await p.setBool('stealth_fragment',       stealthFragment);
-      await p.setBool('stealth_reality_sni',    stealthRealitySni);
-      await p.setBool('stealth_warmup',         stealthWarmup);
-    } catch (e) { _log('✗ Save: $e'); }
+      await p.setString('vly_profiles',      _obfuscate(json));
+      await p.setString('vly_active_profile', activeProfileId);
+    } catch (e) { _log('✗ Save profiles: $e'); }
+    try {
+      await p.setInt('selected_index',       selectedIndex);
+      await p.setBool('stealth_mode',        stealthMode);
+      await p.setBool('stealth_fragment',    stealthFragment);
+      await p.setBool('stealth_reality_sni', stealthRealitySni);
+      await p.setBool('stealth_warmup',      stealthWarmup);
+    } catch (e) { _log('✗ Save settings: $e'); }
   }
 
   Future<void> loadFromDisk() async {
     try {
       final p = await SharedPreferences.getInstance();
-      final profilesRaw = _deobfuscate(p.getString('vly_profiles'));
-      if (profilesRaw != null) {
-        profiles = (jsonDecode(profilesRaw) as List)
-            .map((j) => VlyProfile.fromJson(j as Map<String, dynamic>))
-            .toList();
+      // Профили парсим изолированно: повреждённый/подменённый блоб не должен
+      // сорвать всю загрузку и оставить приложение без активного профиля
+      // (иначе последующий profiles.first крашит старт).
+      try {
+        final profilesRaw = _deobfuscate(p.getString('vly_profiles'));
+        if (profilesRaw != null) {
+          profiles = (jsonDecode(profilesRaw) as List)
+              .map((j) => VlyProfile.fromJson(j as Map<String, dynamic>))
+              .toList();
+        }
+      } catch (e) {
+        _log('✗ Профили повреждены — восстанавливаю дефолт: $e');
+        profiles = [];
       }
       _ensureDefaultProfile();
       activeProfileId = p.getString('vly_active_profile') ?? profiles.first.id;

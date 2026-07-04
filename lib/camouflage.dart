@@ -109,6 +109,12 @@ class TrafficCamouflageEngine {
       final proto = ob['protocol'] as String? ?? '';
       if (!['vless', 'vmess', 'trojan'].contains(proto)) continue;
 
+      // Reality сам задаёт транспорт на стороне сервера и уже маскирует трафик.
+      // Смена network (на ws/grpc/http) рассинхронизирует клиент с сервером и
+      // оборвёт соединение — камуфляж для Reality-нод пропускаем.
+      final curSec = ((ob['streamSettings'] as Map?)?['security'] as String?) ?? '';
+      if (curSec == 'reality') continue;
+
       final ss = Map<String, dynamic>.from(ob['streamSettings'] as Map? ?? {});
       ss['network'] = network;
       ss[networkSettings.keys.first] = networkSettings.values.first;
