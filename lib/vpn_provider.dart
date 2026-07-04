@@ -960,12 +960,8 @@ class VpnProvider extends ChangeNotifier {
   }
 
 
-  final Map<String, String> _configCache = {};
-  String? _getCachedConfig(String link) => _configCache[link.split('#').first];
-  void _cacheConfig(String link, String config) {
-    _configCache[link.split('#').first] = config;
-    if (_configCache.length > 20) _configCache.remove(_configCache.keys.first);
-  }
+  // (Удалён _configCache: кэш никогда не заполнялся — _cacheConfig не вызывался,
+  //  поэтому _getCachedConfig всегда возвращал null. Мёртвая оптимизация.)
 
   // (Удалён «предиктивный авто-переключатель» ЗАДАЧА 10: был полностью написан,
   //  но НИКОГДА не запускался (_startPredictiveMonitor не вызывался нигде) —
@@ -1285,8 +1281,6 @@ class VpnProvider extends ChangeNotifier {
         }
       }
 
-      // ЗАДАЧА 11: Проверяем кэш перед парсингом
-      if (configStr.isEmpty) configStr = _getCachedConfig(patchedCfg.link) ?? '';
       if (configStr.isEmpty) {
         final V2RayURL parsed = FlutterV2ray.parseFromURL(patchedCfg.link);
         configStr = parsed.getFullConfiguration();
