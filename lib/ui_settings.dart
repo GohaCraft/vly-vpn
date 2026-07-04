@@ -1344,7 +1344,7 @@ class _StealthPage extends StatelessWidget {
       const SizedBox(height: 8),
       _SwitchRow(
         icon: Icons.shield_moon_outlined, iconColor: const Color(0xFF00BCD4),
-        title: 'Siberia Shield 🇷🇺',
+        title: 'Siberia Shield',
         subtitle: 'Connection pacing · Single-tunnel XMUX · Decoy traffic',
         value: vpn.siberiaShield,
         onChanged: (v) => vpn.setSiberiaShield(v),
@@ -1766,7 +1766,7 @@ class _AboutPageState extends State<_AboutPage> {
     } else if (_tapCount >= 3) {
       // Показываем прогресс (незаметно для обычного пользователя)
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('🛠 ${5 - _tapCount} ${S.t('dev_taps_hint')}',
+        content: Text('${5 - _tapCount} ${S.t('dev_taps_hint')}',
             style: const TextStyle(fontSize: 11)),
         duration: const Duration(milliseconds: 800),
         backgroundColor: const Color(0xFF1A1A2E),
@@ -1973,7 +1973,7 @@ class _DevDashboardState extends State<_DevDashboard> {
     return VlyBlobBg(isLight: light, child: Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
-        title: Text('🛠 Dev Dashboard', style: TextStyle(
+        title: Text('Dev Dashboard', style: TextStyle(
             fontSize: 13, fontWeight: FontWeight.w800,
             color: _textColor(context), letterSpacing: 1)),
         actions: [
