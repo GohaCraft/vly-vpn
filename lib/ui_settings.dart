@@ -2870,33 +2870,13 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
 
   Future<void> _pickPhoto() async {
     try {
-      // Используем текстовый ввод пути — FilePicker требует отдельной зависимости
-      final ctrl = TextEditingController();
-      final path = await showDialog<String>(
-        context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: const Color(0xFF1A1A2E),
-          title: Text(S.t('photo_path_title'),
-              style: TextStyle(color: Colors.white, fontSize: 15)),
-          content: TextField(
-            controller: ctrl,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: '/storage/emulated/0/Pictures/bg.jpg',
-              hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.07),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none)),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context),
-                child: Text(S.t('cancel'), style: const TextStyle(color: Colors.white54))),
-            TextButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-                child: Text(S.t('ok'), style: TextStyle(color: _accent))),
-          ]));
-      if (path == null || path.isEmpty) return;
+      // Системный выбор изображения/GIF из галереи (Android Photo Picker —
+      // разрешений не требует). Файл копируется плагином в хранилище приложения,
+      // поэтому путь стабилен между запусками.
+      final XFile? file = await ImagePicker().pickImage(
+        source: ImageSource.gallery, imageQuality: 92);
+      if (file == null) return; // пользователь отменил
+      final path = file.path;
       if (!File(path).existsSync()) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(S.t('file_not_found')), backgroundColor: Colors.red));
@@ -2917,6 +2897,53 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
     if (mounted) setState(() {});
   }
 
+  // Поделиться темой: копируем код в буфер и открываем системный share-лист.
+  Future<void> _shareTheme(AppProvider app) async {
+    final code = app.exportThemeCode();
+    await Clipboard.setData(ClipboardData(text: code));
+    try {
+      await const MethodChannel('vly_vpn/share').invokeMethod('share', {
+        'text': '${S.t('share_theme_msg')}\n\n$code',
+        'subject': 'Vly Theme',
+      });
+    } catch (_) {/* нет нативного share — код уже в буфере обмена */}
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(S.t('theme_code_copied'))));
+  }
+
+  // Импорт темы друга: вставить код → применить.
+  Future<void> _importTheme(AppProvider app) async {
+    final ctrl = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        title: Text(S.t('import_theme'),
+            style: const TextStyle(color: Colors.white, fontSize: 15)),
+        content: TextField(
+          controller: ctrl, autofocus: true, maxLines: 3, minLines: 1,
+          style: const TextStyle(color: Colors.white, fontSize: 12),
+          decoration: InputDecoration(
+            hintText: S.t('paste_theme_code'),
+            hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+            filled: true, fillColor: Colors.white.withOpacity(0.07),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context),
+              child: Text(S.t('cancel'), style: const TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+              child: Text(S.t('ok'), style: TextStyle(color: _accent))),
+        ]));
+    if (code == null || code.isEmpty) return;
+    final ok = await app.importThemeCode(code);
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? S.t('theme_imported') : S.t('invalid_theme_code')),
+      backgroundColor: ok ? null : Colors.red));
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = Provider.of<AppProvider>(context);
@@ -2931,41 +2958,60 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
         padding: EdgeInsets.fromLTRB(16, GlassAppBar.totalHeight(context) + 8, 16, 40),
         children: [
 
-          // ── ПРЕВЬЮ (всегда отражает редактируемую тему, вживую) ─────────
+          // ── ПРЕВЬЮ — живой мини-макет главного экрана с выбранной темой ──
+          // Показывает реальный фон (фото/GIF или блобы), кнопку питания в
+          // стиле приложения и акцентные чипы — как будет выглядеть на самом деле.
           Container(
-            height: 140,
+            height: 168,
             margin: const EdgeInsets.only(bottom: 8),
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               color: app.customBg,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-                colors: [
-                  app.customBlob1.withOpacity(0.55),
-                  app.customBg,
-                  app.customBlob2.withOpacity(0.45),
-                ]),
-              border: Border.all(color: app.customAccent.withOpacity(0.3)),
+              border: Border.all(color: app.customAccent.withOpacity(0.35)),
               boxShadow: [BoxShadow(
                   color: app.customAccent.withOpacity(0.25), blurRadius: 20)],
             ),
-            child: Center(child: Column(
-              mainAxisAlignment: MainAxisAlignment.center, children: [
-                Container(
-                  width: 50, height: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: app.customAccent, width: 2),
-                    gradient: LinearGradient(colors: [
-                      app.customAccent.withOpacity(0.25),
-                      app.customAccent2.withOpacity(0.15)])),
-                  child: Icon(Icons.power_settings_new_rounded,
-                      color: app.customAccent, size: 26)),
-                const SizedBox(height: 10),
-                Text(S.t('preview_caps'), style: TextStyle(
-                    color: app.customAccent, fontSize: 11,
-                    fontWeight: FontWeight.w800, letterSpacing: 2)),
-              ]))),
+            child: Stack(fit: StackFit.expand, children: [
+              // Слой фона: фото/GIF если выбрано, иначе градиент из блобов
+              if (app.hasCustomMedia)
+                Image.file(File(app.customMediaPath), fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox())
+              else
+                DecoratedBox(decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    colors: [
+                      app.customBlob1.withOpacity(0.65),
+                      app.customBg,
+                      app.customBlob2.withOpacity(0.55),
+                    ]))),
+              // Затемнение поверх фото, чтобы кнопка читалась
+              if (app.hasCustomMedia)
+                DecoratedBox(decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                    colors: [Colors.black.withOpacity(0.15),
+                             Colors.black.withOpacity(0.45)]))),
+              // Контент: кнопка питания в стиле приложения + статус + чипы
+              Center(child: Column(
+                mainAxisAlignment: MainAxisAlignment.center, children: [
+                  _PreviewPowerButton(
+                    accent: app.customAccent, accent2: app.customAccent2),
+                  const SizedBox(height: 12),
+                  Text(S.t('connected').toUpperCase(), style: TextStyle(
+                      color: app.customAccent, fontSize: 11,
+                      fontWeight: FontWeight.w800, letterSpacing: 2.5,
+                      shadows: [Shadow(color: app.customAccent.withOpacity(0.5),
+                          blurRadius: 10)])),
+                  const SizedBox(height: 10),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    _PreviewChip('AUTO', app.customAccent),
+                    const SizedBox(width: 6),
+                    _PreviewChip('STEALTH', app.customAccent2),
+                  ]),
+                ])),
+            ])),
           Padding(
             padding: const EdgeInsets.only(bottom: 18, left: 4),
             child: Text(S.t('applies_immediately'),
@@ -3060,6 +3106,44 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
             const SizedBox(height: 8),
           ],
 
+          const SizedBox(height: 16),
+
+          // ── ОБМЕН ТЕМАМИ ─────────────────────────────────────────────────
+          _SectionLabel(S.t('share_theme_caps')),
+          Row(children: [
+            Expanded(child: GestureDetector(
+              onTap: () => _shareTheme(app),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: app.customAccent.withOpacity(0.14),
+                  border: Border.all(color: app.customAccent.withOpacity(0.4))),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.ios_share_rounded, size: 16, color: app.customAccent),
+                  const SizedBox(width: 8),
+                  Text(S.t('share_theme'), style: TextStyle(
+                      color: app.customAccent, fontSize: 12.5,
+                      fontWeight: FontWeight.w700)),
+                ])))),
+            const SizedBox(width: 10),
+            Expanded(child: GestureDetector(
+              onTap: () => _importTheme(app),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white.withOpacity(0.05),
+                  border: Border.all(color: Colors.white.withOpacity(0.14))),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Icon(Icons.download_rounded, size: 16, color: Colors.white70),
+                  const SizedBox(width: 8),
+                  Text(S.t('import_theme'), style: const TextStyle(
+                      color: Colors.white70, fontSize: 12.5,
+                      fontWeight: FontWeight.w700)),
+                ])))),
+          ]),
+
           const SizedBox(height: 24),
 
           // ── ГОТОВО (тема уже активна — кнопка просто закрывает) ──────────
@@ -3091,6 +3175,45 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
       isScrollControlled: true,
       builder: (_) => _ColorPickerSheet(current: current, onChanged: onChanged));
   }
+}
+
+// Кнопка питания для превью — повторяет стиль реальной _LiquidGlassButton
+// (свечение + радиальный градиент + блик), но статична.
+class _PreviewPowerButton extends StatelessWidget {
+  final Color accent, accent2;
+  const _PreviewPowerButton({required this.accent, required this.accent2});
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 62, height: 62,
+    decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [
+      BoxShadow(color: accent.withOpacity(0.55), blurRadius: 28),
+      BoxShadow(color: accent.withOpacity(0.25), blurRadius: 50),
+    ]),
+    child: Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          center: const Alignment(-0.3, -0.4), radius: 1.0,
+          colors: [Colors.white.withOpacity(0.24),
+                   accent.withOpacity(0.20), Colors.black.withOpacity(0.22)]),
+        border: Border.all(color: accent.withOpacity(0.6), width: 1.5)),
+      child: Icon(Icons.power_settings_new_rounded, color: accent, size: 28,
+          shadows: [Shadow(color: accent.withOpacity(0.6), blurRadius: 14)])));
+}
+
+// Мини-чип статуса для превью (AUTO / STEALTH).
+class _PreviewChip extends StatelessWidget {
+  final String label; final Color color;
+  const _PreviewChip(this.label, this.color);
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.18),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withOpacity(0.45))),
+    child: Text(label, style: TextStyle(color: color, fontSize: 8,
+        fontWeight: FontWeight.w800, letterSpacing: 1)));
 }
 
 // Строка выбора цвета

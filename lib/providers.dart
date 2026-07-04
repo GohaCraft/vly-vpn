@@ -121,6 +121,49 @@ class AppProvider extends ChangeNotifier {
     _safeNotify();
   }
 
+  // ── Обмен темами ────────────────────────────────────────────────────────
+  // Кодируем 5 цветов темы в компактную строку, которой можно поделиться.
+  // Фон-фото не шарится (это файл на устройстве) — только палитра.
+  static const _themePrefix = 'VLY-THEME:';
+
+  String exportThemeCode() {
+    final m = {
+      'v': 1,
+      'a':  _customAccent.value,  'a2': _customAccent2.value,
+      'bg': _customBg.value,      'b1': _customBlob1.value,
+      'b2': _customBlob2.value,
+    };
+    return _themePrefix + base64Url.encode(utf8.encode(jsonEncode(m)));
+  }
+
+  // Возвращает true при успешном импорте, false — если код не распознан.
+  Future<bool> importThemeCode(String code) async {
+    try {
+      var s = code.trim();
+      final idx = s.indexOf(_themePrefix);
+      if (idx >= 0) s = s.substring(idx + _themePrefix.length).trim();
+      // Дополняем паддинг base64Url при необходимости.
+      s = s.replaceAll(RegExp(r'\s'), '');
+      final pad = s.length % 4;
+      if (pad != 0) s = s + '=' * (4 - pad);
+      final m = jsonDecode(utf8.decode(base64Url.decode(s))) as Map<String, dynamic>;
+      int col(String k, int def) {
+        final v = m[k];
+        return v is int ? v : (v is num ? v.toInt() : def);
+      }
+      await saveCustomTheme(
+        accent:  Color(col('a',  0xFF00E5FF)),
+        accent2: Color(col('a2', 0xFF4FC3F7)),
+        bg:      Color(col('bg', 0xFF050610)),
+        blob1:   Color(col('b1', 0xFF1A237E)),
+        blob2:   Color(col('b2', 0xFF0D47A1)),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> setLocale(VlyLocale l) async {
     _locale = l;
     await S.setLocale(l);
