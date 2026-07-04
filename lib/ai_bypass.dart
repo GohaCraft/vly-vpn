@@ -296,13 +296,26 @@ class AiMemory {
     return a == null ? null : {'wins': a.wins, 'losses': a.losses, 'ms': a.ms};
   }
 
+  // UCB-исследование: среда НЕ стационарна (цензура меняется), поэтому чистый
+  // жадный выбор застревает — рука, которой не повезло на старте, хоронится
+  // навсегда. Мягкий бонус недоизученным рукам заставляет их иногда пере-
+  // пробовать. Вес мал (не перебивает явного лидера, только near-ties).
+  static const double _exploreC = 0.08;
+  static double _ucbScore(_Arm a, double lnTotal) {
+    final trials = a.wins + a.losses;
+    final explore = trials > 0 ? _exploreC * sqrt(lnTotal / trials) : _exploreC;
+    return _score(a) + explore;
+  }
+
   // Стратегии этой сети по убыванию скора (лучшие — первыми). Пусто для
   // неизученной сети → каскад идёт в статическом порядке.
   static List<String> rankedTypes(String net) {
     final m = _arms[net];
     if (m == null || m.isEmpty) return const [];
+    final total = m.values.fold<int>(0, (s, a) => s + a.wins + a.losses);
+    final lnTotal = total > 1 ? log(total.toDouble()) : 0.0;
     final e = m.entries.toList()
-      ..sort((a, b) => _score(b.value).compareTo(_score(a.value)));
+      ..sort((a, b) => _ucbScore(b.value, lnTotal).compareTo(_ucbScore(a.value, lnTotal)));
     return e.map((x) => x.key).toList();
   }
 

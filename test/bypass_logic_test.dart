@@ -275,6 +275,27 @@ void main() {
       expect(ms, greaterThan(120));
       expect(ms, lessThan(320));
     });
+
+    test('UCB-исследование: при равном скоре недоизученная рука выше (анти-lock-in)', () {
+      // «heavy» — много проб (40), надёжность 0.5, 100ms.
+      for (var i = 0; i < 20; i++) { AiMemory.recordSuccess('n7', 'heavy', 100); }
+      for (var i = 0; i < 20; i++) { AiMemory.recordFailure('n7', 'heavy'); }
+      // «fresh» — мало проб (2), та же надёжность 0.5, те же 100ms.
+      AiMemory.recordSuccess('n7', 'fresh', 100);
+      AiMemory.recordFailure('n7', 'fresh');
+      // Базовый скор равен → UCB-бонус поднимает недоизученную «fresh» первой,
+      // чтобы среда-нестационар не хоронила стратегию навсегда.
+      expect(AiMemory.rankedTypes('n7').first, 'fresh');
+    });
+
+    test('UCB не перебивает явного лидера (исследование мягкое)', () {
+      // Явный победитель: много побед, без поражений, быстрый.
+      for (var i = 0; i < 12; i++) { AiMemory.recordSuccess('n8', 'winner', 90); }
+      // Слабая, но недоизученная рука не должна вытеснить лидера.
+      AiMemory.recordSuccess('n8', 'weak', 400);
+      AiMemory.recordFailure('n8', 'weak');
+      expect(AiMemory.rankedTypes('n8').first, 'winner');
+    });
   });
 
   group('Серверный AI-каскад (mutation-программы, blueprint §4b)', () {
