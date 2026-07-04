@@ -328,6 +328,20 @@ void main() {
           lessThan(AiMemory.blockAffinity(BlockType.portBlocked, 'vless_reality_vk')));
     });
 
+    test('cold-rank правило: в whitelist-сети RU-стратегии впереди «иностранных»', () {
+      // vless_reality_vk (RU-friendly) должна идти РАНЬШЕ vless_grpc_plain
+      // (не whitelist-friendly) при активном белом списке.
+      final ru      = AiMemory.coldRank(BlockType.tlsFingerprint, true, 'vless_reality_vk');
+      final foreign = AiMemory.coldRank(BlockType.tlsFingerprint, true, 'vless_grpc_plain');
+      expect(ru, lessThan(foreign));
+      // Без whitelist контекст-штрафа нет — решает только родство к блоку.
+      final ruNoWl      = AiMemory.coldRank(BlockType.tlsFingerprint, false, 'vless_reality_vk');
+      final foreignNoWl = AiMemory.coldRank(BlockType.tlsFingerprint, false, 'vless_grpc_plain');
+      expect((foreignNoWl - ruNoWl).abs(), lessThan(400)); // без штрафа разрыв мал
+      expect(AiMemory.isWhitelistFriendly('vless_xhttp'), isTrue);
+      expect(AiMemory.isWhitelistFriendly('vless_grpc_plain'), isFalse);
+    });
+
     test('reinforceActive: качество сессии двигает доверие (после грейса)', () {
       // Дальше грейса: подтверждаем через recordWinner, затем «стареем» вручную
       // нельзя — вместо этого проверяем логику на арме, где grace уже прошёл,

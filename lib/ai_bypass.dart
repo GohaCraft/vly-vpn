@@ -374,6 +374,26 @@ class AiMemory {
     }
   }
 
+  // Признак «RU-дружественной» стратегии: работает через whitelisted SNI-фронт
+  // (Reality/xHTTP/Vision/whitelist-fronting по RU-домену). В whitelist-сети
+  // только такие и проходят.
+  static bool isWhitelistFriendly(String type) =>
+      type.contains('reality') || type.contains('xhttp') ||
+      type.contains('vision')  || type.contains('whitelist');
+
+  // ПРАВИЛО холодного старта: комбинирует родство к типу блока и контекст сети.
+  // Меньше = раньше в каскаде (для ещё не изученных стратегий).
+  //  1) В whitelist-сети «иностранные»/plain стратегии обречены (пропускает
+  //     только whitelisted SNI) → отправляем их глубоко вниз.
+  //  2) Внутри группы — по родству к наблюдаемому типу блокировки.
+  static int coldRank(BlockType bt, bool whitelistActive, String type) {
+    var r = blockAffinity(bt, type) * 20;
+    if (whitelistActive && !isWhitelistFriendly(type)) {
+      r += 400; // не-RU стратегия в белом списке — почти бесполезна, вниз
+    }
+    return r;
+  }
+
   static int? latencyFor(String net, String type) => _arms[net]?[type]?.ms;
 
   // Диагностика/тесты: сырая статистика руки (или null, если не изучена).
@@ -1007,7 +1027,8 @@ class AiBypassAgent {
     int rank(BypassStrategy s) {
       final i = ranked.indexOf(s.type);
       if (i >= 0) return i;                        // изучено → по скору
-      return 1000 + AiMemory.blockAffinity(bt, s.type) * 20 + s.priority;
+      // холодная стратегия → правило (тип блока + контекст whitelist), затем статика
+      return 1000 + AiMemory.coldRank(bt, whitelistActive, s.type) + s.priority;
     }
     limited.sort((a, b) => rank(a).compareTo(rank(b)));
     final leader = ranked.isNotEmpty ? ranked.first : null;
