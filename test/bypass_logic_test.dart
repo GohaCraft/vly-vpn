@@ -520,4 +520,42 @@ void main() {
       expect(AppProvider.decodeThemeColors(''), isNull);
     });
   });
+
+  group('IP-нормализатор (у каждого API свои имена полей)', () {
+    test('ipwho.is: isp внутри connection', () {
+      final info = IpInfo.fromApiJson({
+        'ip': '1.2.3.4', 'country': 'Germany', 'country_code': 'DE',
+        'city': 'Berlin', 'connection': {'isp': 'Hetzner', 'org': 'Hetzner'},
+      });
+      expect(info.ip, '1.2.3.4');
+      expect(info.country, 'Germany');
+      expect(info.countryCode, 'DE');
+      expect(info.city, 'Berlin');
+      expect(info.isp, 'Hetzner');
+    });
+    test('freeipapi: ipAddress/countryName/cityName (раньше давало сплошные —)', () {
+      final info = IpInfo.fromApiJson({
+        'ipAddress': '9.9.9.9', 'countryName': 'France',
+        'countryCode': 'FR', 'cityName': 'Paris',
+      });
+      expect(info.ip, '9.9.9.9');
+      expect(info.country, 'France');
+      expect(info.city, 'Paris');
+    });
+    test('geojs: organization_name', () {
+      final info = IpInfo.fromApiJson({
+        'ip': '8.8.8.8', 'country': 'United States', 'country_code': 'US',
+        'city': 'Mountain View', 'organization_name': 'Google LLC',
+      });
+      expect(info.isp, 'Google LLC');
+      expect(info.ip, '8.8.8.8');
+    });
+    test('пустые/отсутствующие поля → прочерк, не краш', () {
+      final info = IpInfo.fromApiJson({'ip': '5.5.5.5'});
+      expect(info.ip, '5.5.5.5');
+      expect(info.country, '—');
+      expect(info.isp, '—');
+      expect(info.countryCode, '');
+    });
+  });
 }

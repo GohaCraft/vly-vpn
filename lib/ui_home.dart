@@ -480,6 +480,31 @@ class IpInfo {
   factory IpInfo.empty() => const IpInfo(
       ip: '—', country: '—', countryCode: '', city: '—',
       isp: '—', dns: '—', isVpn: false);
+
+  // Единый нормализатор ответа IP-API. У каждого сервиса свои имена полей
+  // (ip/query/ipAddress, country/countryName, isp/org/connection.isp…), поэтому
+  // берём первое непустое значение из известных синонимов. Тестируемо.
+  factory IpInfo.fromApiJson(Map j, {String dns = '—'}) {
+    String pick(List<Object?> vals, [String fallback = '—']) {
+      for (final v in vals) {
+        if (v == null) continue;
+        final s = v.toString().trim();
+        if (s.isNotEmpty && s != 'null') return s;
+      }
+      return fallback;
+    }
+    final conn = j['connection'] is Map ? j['connection'] as Map : const {};
+    return IpInfo(
+      ip:          pick([j['ip'], j['query'], j['ipAddress']]),
+      country:     pick([j['country_name'], j['countryName'], j['country']]),
+      countryCode: pick([j['country_code'], j['countryCode'], j['cc']], ''),
+      city:        pick([j['city'], j['cityName']]),
+      isp:         pick([j['org'], j['isp'], j['organization_name'],
+                         conn['isp'], conn['org']]),
+      dns:         dns,
+      isVpn:       false,
+    );
+  }
 }
 
 class IpCheckProvider extends ChangeNotifier {
@@ -569,29 +594,9 @@ class IpCheckProvider extends ChangeNotifier {
 
         client.close();
 
-        // Единый нормализатор: у каждого API свои имена полей. Берём первое
-        // непустое значение, приводим к строке (некоторые отдают числа).
-        String pick(List<Object?> vals, [String fallback = '—']) {
-          for (final v in vals) {
-            if (v == null) continue;
-            final s = v.toString().trim();
-            if (s.isNotEmpty && s != 'null') return s;
-          }
-          return fallback;
-        }
-        // isp у ipwho.is лежит внутри connection: {isp, org}
-        final conn = j['connection'] is Map ? j['connection'] as Map : const {};
-
-        return IpInfo(
-          ip:          pick([j['ip'], j['query'], j['ipAddress']]),
-          country:     pick([j['country_name'], j['countryName'], j['country']]),
-          countryCode: pick([j['country_code'], j['countryCode'], j['cc']], ''),
-          city:        pick([j['city'], j['cityName']]),
-          isp:         pick([j['org'], j['isp'], j['organization_name'],
-                             conn['isp'], conn['org']]),
-          dns:         dnsServer,
-          isVpn:       false,
-        );
+        // Единый нормализатор (у каждого API свои имена полей) — вынесен в
+        // IpInfo.fromApiJson и покрыт тестами.
+        return IpInfo.fromApiJson(j, dns: dnsServer);
       } catch (_) {
         client.close(force: true);
         continue; // пробуем следующий API
