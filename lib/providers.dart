@@ -147,23 +147,21 @@ class AppProvider extends ChangeNotifier {
   // Фон-фото не шарится (это файл на устройстве) — только палитра.
   static const _themePrefix = 'VLY-THEME:';
 
-  String exportThemeCode() {
-    final m = {
-      'v': 1,
-      'a':  _customAccent.value,  'a2': _customAccent2.value,
-      'bg': _customBg.value,      'b1': _customBlob1.value,
-      'b2': _customBlob2.value,
-    };
+  // Чистое кодирование палитры в код (тестируемо, без состояния).
+  static String encodeThemeColors({
+    required int accent, required int accent2, required int bg,
+    required int blob1, required int blob2,
+  }) {
+    final m = {'v': 1, 'a': accent, 'a2': accent2, 'bg': bg, 'b1': blob1, 'b2': blob2};
     return _themePrefix + base64Url.encode(utf8.encode(jsonEncode(m)));
   }
 
-  // Возвращает true при успешном импорте, false — если код не распознан.
-  Future<bool> importThemeCode(String code) async {
+  // Чистое декодирование кода в 5 цветов. null — код не распознан.
+  static Map<String, Color>? decodeThemeColors(String code) {
     try {
       var s = code.trim();
       final idx = s.indexOf(_themePrefix);
       if (idx >= 0) s = s.substring(idx + _themePrefix.length).trim();
-      // Дополняем паддинг base64Url при необходимости.
       s = s.replaceAll(RegExp(r'\s'), '');
       final pad = s.length % 4;
       if (pad != 0) s = s + '=' * (4 - pad);
@@ -172,17 +170,32 @@ class AppProvider extends ChangeNotifier {
         final v = m[k];
         return v is int ? v : (v is num ? v.toInt() : def);
       }
-      await saveCustomTheme(
-        accent:  Color(col('a',  0xFF00E5FF)),
-        accent2: Color(col('a2', 0xFF4FC3F7)),
-        bg:      Color(col('bg', 0xFF050610)),
-        blob1:   Color(col('b1', 0xFF1A237E)),
-        blob2:   Color(col('b2', 0xFF0D47A1)),
-      );
-      return true;
+      // Требуем хотя бы один валидный цветовой ключ, иначе это не наш код.
+      if (!m.containsKey('a') && !m.containsKey('bg')) return null;
+      return {
+        'accent':  Color(col('a',  0xFF00E5FF)),
+        'accent2': Color(col('a2', 0xFF4FC3F7)),
+        'bg':      Color(col('bg', 0xFF050610)),
+        'blob1':   Color(col('b1', 0xFF1A237E)),
+        'blob2':   Color(col('b2', 0xFF0D47A1)),
+      };
     } catch (_) {
-      return false;
+      return null;
     }
+  }
+
+  String exportThemeCode() => encodeThemeColors(
+      accent: _customAccent.value, accent2: _customAccent2.value,
+      bg: _customBg.value, blob1: _customBlob1.value, blob2: _customBlob2.value);
+
+  // Возвращает true при успешном импорте, false — если код не распознан.
+  Future<bool> importThemeCode(String code) async {
+    final c = decodeThemeColors(code);
+    if (c == null) return false;
+    await saveCustomTheme(
+      accent: c['accent'], accent2: c['accent2'], bg: c['bg'],
+      blob1: c['blob1'], blob2: c['blob2']);
+    return true;
   }
 
   Future<void> setLocale(VlyLocale l) async {

@@ -492,4 +492,32 @@ void main() {
       expect(PinnedHttpClient.pinningActive, isFalse);
     });
   });
+
+  group('Обмен темами (кодек)', () {
+    test('round-trip: encode → decode восстанавливает все 5 цветов', () {
+      final code = AppProvider.encodeThemeColors(
+        accent: 0xFFFF4D6D, accent2: 0xFF00E5FF, bg: 0xFF0A0508,
+        blob1: 0xFF7A1030, blob2: 0xFFB71C1C);
+      final c = AppProvider.decodeThemeColors(code);
+      expect(c, isNotNull);
+      expect(c!['accent']!.value,  0xFFFF4D6D);
+      expect(c['accent2']!.value,  0xFF00E5FF);
+      expect(c['bg']!.value,       0xFF0A0508);
+      expect(c['blob1']!.value,    0xFF7A1030);
+      expect(c['blob2']!.value,    0xFFB71C1C);
+    });
+    test('код терпит пробелы/переносы вокруг (вставка из мессенджера)', () {
+      final code = AppProvider.encodeThemeColors(
+        accent: 0xFF112233, accent2: 0xFF445566, bg: 0xFF778899,
+        blob1: 0xFFAABBCC, blob2: 0xFFDDEEFF);
+      final c = AppProvider.decodeThemeColors('  \n$code \n ');
+      expect(c, isNotNull);
+      expect(c!['accent']!.value, 0xFF112233);
+    });
+    test('мусор/чужой текст → null', () {
+      expect(AppProvider.decodeThemeColors('просто текст'), isNull);
+      expect(AppProvider.decodeThemeColors('VLY-THEME:!!!не base64!!!'), isNull);
+      expect(AppProvider.decodeThemeColors(''), isNull);
+    });
+  });
 }
