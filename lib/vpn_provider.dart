@@ -1990,48 +1990,38 @@ class VpnProvider extends ChangeNotifier {
       return;
     }
 
+    if (_configs.isEmpty || selectedIndex >= _configs.length) {
+      whitelistBypassStatus = 'FAILED';
+      _log('✗ Нет активной ноды для обхода');
+      _notify();
+      await Future.delayed(const Duration(seconds: 2));
+      whitelistBypassStatus = 'IDLE';
+      _notify();
+      return;
+    }
+
     whitelistBypassStatus = 'ACTIVATING';
     _notify();
     _log('🌐 Активируем обход белых списков...');
 
     try {
-      // Шаг 1 — применяем CDN стратегию к текущей ноде
-      if (_configs.isEmpty) {
-        whitelistBypassStatus = 'FAILED';
-        _log('✗ Нет нод для обхода');
-        _notify();
-        await Future.delayed(const Duration(seconds: 2));
-        whitelistBypassStatus = 'IDLE';
-        _notify();
-        return;
-      }
-
-      // Патчим текущую конфигурацию под CDN обход
-      if (selectedIndex >= _configs.length) {
-        whitelistBypassActive = false;
-        whitelistBypassStatus = 'IDLE';
-        _log('✗ Нет активной ноды для обхода');
-        _notify(); return;
-      }
-      final cur  = _configs[selectedIndex];
-      // Модифицируем link: меняем порт на 443 и добавляем WS параметры
-      String patchedLink = cur.link;
+      // Берём ИЗМЕРЕННЫЙ лучший whitelist-фронт: движок проверяет живость фронтов
+      // в текущей сети и ранжирует по задержке. Раньше кнопка жёстко зашивала
+      // speed.cloudflare.com + слепо форсила ws/tls/443 — это игнорировало
+      // измерение и РВАЛО Reality-ноды (сервер не ждёт ws). Теперь SNI-фронт
+      // накладывается суффиксом #whitelist_df=, который connect-путь применяет
+      // корректно под каждый протокол (в т.ч. Reality/Vision), не ломая транспорт.
+      String sni;
       try {
-        final uri = Uri.parse(patchedLink);
-        // Меняем порт на 443 и добавляем параметры CDN
-        final newParams = Map<String, String>.from(uri.queryParameters)
-          ..['type']     = 'ws'
-          ..['security'] = 'tls'
-          ..['sni']      = 'speed.cloudflare.com'
-          ..['path']     = '%2Fvpn';
-        patchedLink = uri.replace(port: 443, queryParameters: newParams).toString();
-      } catch (_) {
-        // Если не удалось распарсить — используем оригинал
-        patchedLink = cur.link;
-      }
+        sni = await WhitelistBypassEngine.getBestSni()
+            .timeout(const Duration(seconds: 4), onTimeout: () => 'vk.com');
+      } catch (_) { sni = 'vk.com'; }
+
+      final cur  = _configs[selectedIndex];
+      final base = cur.link.split('#whitelist_df=').first;
       final patched = VpnConfig(
         name:       '${cur.name} [WL]',
-        link:       patchedLink,
+        link:       '$base#whitelist_df=${Uri.encodeComponent(sni)}',
         customName: '',
         groupName:  cur.groupName,
         sourceUrl:  cur.sourceUrl,
@@ -2041,12 +2031,17 @@ class VpnProvider extends ChangeNotifier {
 
       whitelistBypassActive = true;
       whitelistBypassStatus = 'ACTIVE';
-      _log('✅ Обход белых списков: АКТИВЕН (порт 443, WS, CDN SNI)');
+      _log('✅ Обход белых списков: SNI-фронт «$sni» (измерен движком)');
       _notify();
 
-      // Реконнект с пропатченным конфигом
+      // Реконнект с наложением whitelist_df. НЕ через _reconnect (он срезает
+      // суффикс whitelist_df), а напрямую через _connectWith, который его читает.
       if (isConnected) {
-        await _reconnect(patched);
+        _isRotating = true; _notify();
+        try { await _v2ray.stopV2Ray(); } catch (_) {}
+        await Future.delayed(const Duration(milliseconds: 350));
+        if (!_disposed) await _connectWith(patched);
+        _isRotating = false; _notify();
       }
     } catch (e) {
       whitelistBypassActive = false;
