@@ -260,6 +260,10 @@ class VpnProvider extends ChangeNotifier {
         stealthHandshakeFails = 0;
         _killSwitchReconnects = 0;
         _cancelWd();
+        // Репутация ноды: реальный коннект = +доверие этому host.
+        if (selectedIndex < _configs.length) {
+          NodeMemory.record(_extractHost(_configs[selectedIndex].link), ok: true);
+        }
         _connectedAt = DateTime.now();
         _startTrafficTimer();
         // Real-time мониторинг здоровья обходов — мгновенный детект отключения.
@@ -286,6 +290,10 @@ class VpnProvider extends ChangeNotifier {
         if (prev == 'CONNECTING' && !_isRotating) {
           _failCount++;
           _log('⚠ Fail #$_failCount/$maxFails');
+          // Репутация ноды: не удалось поднять туннель = −доверие этому host.
+          if (selectedIndex < _configs.length) {
+            NodeMemory.record(_extractHost(_configs[selectedIndex].link), ok: false);
+          }
           if (_failCount >= maxFails) _scheduleBypass();
         }
         if (prev == 'CONNECTED') {
@@ -674,6 +682,7 @@ class VpnProvider extends ChangeNotifier {
     // _autoConnect.load() - disabled
     // Долговременная память ИИ: победители по классам сетей + блеклист.
     AiMemory.load();
+    NodeMemory.load(); // репутация нод (reliability × ping) для авто-выбора
     // Анонимная диагностика (opt-in): применяем сохранённый выбор пользователя.
     Telemetry.init().then((_) => Telemetry.configure(enabled: _prof.telemetryEnabled));
     // Проверка обновлений (sideload → авто-апдейта нет). При наличии — покажем.
@@ -1918,10 +1927,14 @@ class VpnProvider extends ChangeNotifier {
 
       if (!isAutoMode) { isAutoRunning = false; _notify(); return; }
 
+      // Ранжируем не по чистому пингу, а по репутации × скорость: надёжная нода
+      // на 60мс медленнее лучше «быстрой», чей туннель стабильно режут. Скор
+      // выше = лучше. Неизученные ноды опираются на пинг (нейтральная надёжность).
       final alive = _configs
           .where((c) => c.pingMs > 0 && c.pingMs < 9000)
           .toList()
-        ..sort((a, b) => a.pingMs.compareTo(b.pingMs));
+        ..sort((a, b) => NodeMemory.score(_extractHost(b.link), b.pingMs)
+            .compareTo(NodeMemory.score(_extractHost(a.link), a.pingMs)));
 
       if (alive.isEmpty) {
         isAutoRunning = false;

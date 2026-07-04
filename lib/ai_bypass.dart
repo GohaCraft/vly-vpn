@@ -542,6 +542,92 @@ class AiMemory {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+//  NODE MEMORY — репутация НОД (не только стратегий).
+//
+//  Авто-выбор ноды раньше шёл ЧИСТО по пингу: нода с пингом 40мс, чей VPN-
+//  handshake стабильно режется DPI, выбиралась вперёд надёжной ноды на 60мс
+//  медленнее. Пинг ≠ рабочий туннель. Теперь ранжируем ноды по
+//  reliability × ping-speed: сколько раз реально подключились/держали против
+//  сколько раз провал. Учится между запусками, лечится затуханием (нода могла
+//  разблокироваться). Ключ — host ноды (стабилен между сессиями).
+// ═══════════════════════════════════════════════════════════════════════════
+class _NodeStat {
+  int ok, fail, seenMs;
+  _NodeStat({this.ok = 0, this.fail = 0, required this.seenMs});
+  Map<String, dynamic> toJson() => {'o': ok, 'f': fail, 's': seenMs};
+  static _NodeStat fromJson(Map j) => _NodeStat(
+      ok: (j['o'] as num?)?.toInt() ?? 0,
+      fail: (j['f'] as num?)?.toInt() ?? 0,
+      seenMs: (j['s'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch);
+}
+
+class NodeMemory {
+  static const _key = 'ai_node_memory_v1';
+  static const _staleAfter = Duration(days: 30);
+  static final Map<String, _NodeStat> _stats = {};
+  static Timer? _saveDebounce;
+  static int get _now => DateTime.now().millisecondsSinceEpoch;
+
+  static void record(String host, {required bool ok}) {
+    if (host.isEmpty) return;
+    final s = _stats.putIfAbsent(host, () => _NodeStat(seenMs: _now));
+    if (ok) s.ok++; else s.fail++;
+    s.seenMs = _now;
+    _schedule();
+  }
+
+  // Чистая ранжирующая функция (тестируемо): выше = лучше нода.
+  // reliability (Лаплас, с затуханием старого evidence к нейтрали) × ping-speed.
+  static double rankScore(int pingMs, int ok, int fail, {double ageDays = 0}) {
+    final reliability = AiMemory.reliabilityDecayed(ok, fail, ageDays);
+    final pingSpeed = 1000.0 / (pingMs.clamp(1, 9999) + 100);
+    return reliability * pingSpeed;
+  }
+
+  // Скор конкретной ноды по её host и текущему пингу.
+  static double score(String host, int pingMs) {
+    final s = _stats[host];
+    if (s == null) return rankScore(pingMs, 0, 0);
+    final ageDays = (_now - s.seenMs) / 86400000.0;
+    return rankScore(pingMs, s.ok, s.fail, ageDays: ageDays);
+  }
+
+  static Map<String, int>? statsFor(String host) {
+    final s = _stats[host];
+    return s == null ? null : {'ok': s.ok, 'fail': s.fail};
+  }
+
+  static void _schedule() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 3), save);
+  }
+
+  static Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_key);
+      if (raw == null) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      _stats.clear();
+      j.forEach((host, v) { if (v is Map) _stats[host] = _NodeStat.fromJson(v); });
+      // Чистим протухшее.
+      final cutoff = _now - _staleAfter.inMilliseconds;
+      _stats.removeWhere((_, s) => s.seenMs < cutoff);
+    } catch (_) {}
+  }
+
+  static Future<void> save() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_key,
+          jsonEncode(_stats.map((h, s) => MapEntry(h, s.toJson()))));
+    } catch (_) {}
+  }
+
+  static void resetAll() => _stats.clear();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 //  MUTATION PROGRAM — серверно-обновляемый AI-каскад (без пересборки app)
 //
 //  Реализует «client integration» из blueprint §4b в форме, которая реально

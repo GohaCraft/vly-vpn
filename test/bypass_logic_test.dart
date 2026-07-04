@@ -328,6 +328,17 @@ void main() {
           lessThan(AiMemory.blockAffinity(BlockType.portBlocked, 'vless_reality_vk')));
     });
 
+    test('репутация нод: надёжная медленнее бьёт быструю-но-битую', () {
+      // Нода A: пинг 40мс, но 0 успехов / 8 провалов (туннель режут).
+      final a = NodeMemory.rankScore(40, 0, 8);
+      // Нода B: пинг 90мс, 8 успехов / 0 провалов (стабильна).
+      final b = NodeMemory.rankScore(90, 8, 0);
+      expect(b, greaterThan(a)); // надёжную выбираем, несмотря на больший пинг
+      // Неизученные ноды ранжируются по пингу (нейтральная надёжность 0.5).
+      expect(NodeMemory.rankScore(40, 0, 0),
+          greaterThan(NodeMemory.rankScore(90, 0, 0)));
+    });
+
     test('адаптивный таймаут пробы: быстрым — короче, неизученным — полный', () {
       expect(AiMemory.adaptiveProbeTimeoutMs(null), 3000);   // неизучено → полный
       expect(AiMemory.adaptiveProbeTimeoutMs(0), 3000);      // нет данных → полный
