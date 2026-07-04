@@ -94,8 +94,11 @@ class SelfHealingMirror {
           try {
             final decoded = utf8.decode(base64.decode(
                 data.length % 4 == 0 ? data : data + '=' * (4 - data.length % 4)));
-            final parsed  = jsonDecode(decoded) as Map<String, dynamic>;
-            final nodes   = List<String>.from(parsed['nodes'] ?? []);
+            // DNS TXT — самый ненадёжный источник (ответ может быть подменён
+            // on-path атакующим). Прогоняем через ту же строгую валидацию, что
+            // и остальные источники: только известные протоколы, лимит длины,
+            // без инъекции переносов строк.
+            final nodes = _validateNodes(decoded);
             if (nodes.isNotEmpty) {
               log('✅ DNS TXT nodes: ${nodes.length}');
               return nodes;
