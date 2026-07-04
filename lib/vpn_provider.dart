@@ -1697,17 +1697,12 @@ class VpnProvider extends ChangeNotifier {
           .where((c) => c.sourceUrl != url)
           .map((c) => c.link).toSet();
       // Строгая валидация: строка = нода ТОЛЬКО если начинается с известной
-      // VPN-схемы. Иначе подписка, вернувшая HTML/капчу/Happ-crypt (у которой
-      // внутри есть https://…), плодила мусорные «ноды» вроде "<SCRIPT>…".
-      const validProtos = [
-        'vless://', 'vmess://', 'trojan://', 'ss://', 'ssr://',
-        'hysteria2://', 'hy2://', 'hysteria://', 'wireguard://',
-        'shadowtls://', 'tuic://', 'juicity://', 'naive+https://',
-      ];
+      // VPN-схемы (VpnConfig.isSupportedNodeLink). Иначе подписка, вернувшая
+      // HTML/капчу/Happ-crypt, плодила мусорные «ноды» вроде "<SCRIPT>…".
       for (final line in raw.split(RegExp(r'[\n\r]+'))) {
         final l = line.trim();
         final lower = l.toLowerCase();
-        if (!validProtos.any((p) => lower.startsWith(p))) continue; // не конфиг
+        if (!VpnConfig.isSupportedNodeLink(l)) continue; // не конфиг
         if (otherLinks.contains(l) || !seen.add(l)) continue; // дубль (другой источник / внутри)
         String name = '';
         if (l.contains('#')) {
@@ -1716,10 +1711,8 @@ class VpnProvider extends ChangeNotifier {
             if (n.isNotEmpty) name = n;
           } catch (_) {}
         }
-        // Санитизация имени: убираем управляющие символы и <>, чтобы даже
-        // подставленная в метку HTML-инъекция не отображалась как имя ноды.
-        name = name.replaceAll(RegExp(r'[\x00-\x1f<>]'), '').trim();
-        if (name.length > 48) name = '${name.substring(0, 48)}…';
+        // Санитизация имени (убирает управляющие символы/<>, режет длину).
+        name = VpnConfig.sanitizeNodeName(name);
         if (name.isEmpty) {
           // Нет метки — осмысленное имя из хоста вместо безликого "Node".
           final host = _extractHost(l);

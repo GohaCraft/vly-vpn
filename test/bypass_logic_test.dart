@@ -558,4 +558,25 @@ void main() {
       expect(info.countryCode, '');
     });
   });
+
+  group('Парсинг подписки (защита от мусорных нод)', () {
+    test('валидные схемы принимаются, HTML/мусор — нет', () {
+      expect(VpnConfig.isSupportedNodeLink('vless://u@h:443#N'), isTrue);
+      expect(VpnConfig.isSupportedNodeLink('HY2://x@h:443'), isTrue); // регистр
+      expect(VpnConfig.isSupportedNodeLink('trojan://p@h:443'), isTrue);
+      // HTML-страница со ссылкой внутри — НЕ нода
+      expect(VpnConfig.isSupportedNodeLink('<script>var x="https://y"'), isFalse);
+      expect(VpnConfig.isSupportedNodeLink('  https://captcha.example  '), isFalse);
+      expect(VpnConfig.isSupportedNodeLink(''), isFalse);
+    });
+    test('санитизация имени срезает HTML-инъекцию и управляющие символы', () {
+      expect(VpnConfig.sanitizeNodeName('<SCRIPT>WINDOW.__H'), 'SCRIPTWINDOW.__H');
+      expect(VpnConfig.sanitizeNodeName('  Node   '), 'Node');
+      // Длинное имя обрезается с многоточием.
+      final long = 'A' * 80;
+      final out = VpnConfig.sanitizeNodeName(long);
+      expect(out.length, lessThanOrEqualTo(49));
+      expect(out.endsWith('…'), isTrue);
+    });
+  });
 }
