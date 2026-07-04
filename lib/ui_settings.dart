@@ -1128,6 +1128,23 @@ class _ProtectionPage extends StatelessWidget {
         title: S.t('kill_switch'), subtitle: S.t('kill_switch_sub'),
         value: vpn.killSwitch,
         onChanged: vpn.setKillSwitch),
+      const SizedBox(height: 8),
+      // Честно: наш переключатель делает мгновенный авто-реконнект, но полностью
+      // заблокировать трафик в момент обрыва может только сама ОС (Always-on VPN
+      // + Lockdown). Ведём пользователя туда одной кнопкой.
+      _InfoCard(icon: Icons.info_outline, text: S.t('kill_switch_note')),
+      const SizedBox(height: 8),
+      _ActionRow(
+        icon: Icons.verified_user_outlined, iconColor: const Color(0xFF43A047),
+        title: S.t('always_on_vpn'), subtitle: S.t('always_on_vpn_sub'),
+        actionLabel: S.t('open'),
+        onTap: () async {
+          final ok = await vpn.openSystemVpnSettings();
+          if (context.mounted && !ok) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(S.t('always_on_vpn_hint'))));
+          }
+        }),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.autorenew_rounded, iconColor: const Color(0xFF29B6F6),

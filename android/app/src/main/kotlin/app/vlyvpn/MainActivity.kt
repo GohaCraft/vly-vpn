@@ -81,6 +81,28 @@ class MainActivity : FlutterActivity() {
                             result.error("OPEN_ERROR", e.message, null)
                         }
                     }
+                    "openVpnSettings" -> {
+                        // Открыть системный экран VPN (Always-on VPN + Lockdown).
+                        // Настоящий kill switch на Android — это системная блокировка
+                        // соединений без VPN; приложение не может её включить за
+                        // пользователя, но может привести его сюда одной кнопкой.
+                        try {
+                            startActivity(android.content.Intent(
+                                    android.provider.Settings.ACTION_VPN_SETTINGS)
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                            result.success(true)
+                        } catch (e: Exception) {
+                            // На части прошивок экрана нет — откатываемся на общие настройки.
+                            try {
+                                startActivity(android.content.Intent(
+                                        android.provider.Settings.ACTION_SETTINGS)
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                                result.success(false)
+                            } catch (e2: Exception) {
+                                result.error("OPEN_ERROR", e2.message, null)
+                            }
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }

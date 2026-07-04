@@ -545,6 +545,20 @@ class VpnProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
+  // Открыть системный экран VPN, где включается настоящий kill switch Android
+  // (Always-on VPN + «блокировать соединения без VPN»). Возвращает true, если
+  // открылся именно VPN-экран; false — если только общие настройки (нет экрана).
+  Future<bool> openSystemVpnSettings() async {
+    try {
+      final ok = await const MethodChannel('vly_vpn/share')
+          .invokeMethod<bool>('openVpnSettings');
+      return ok ?? false;
+    } catch (e) {
+      _log('⚠ openVpnSettings: $e');
+      return false;
+    }
+  }
+
   // Постоянное уведомление пока VPN активен — с кнопкой Отключить
   Future<void> _showPersistentNotif() async {
     if (_configs.isEmpty || selectedIndex >= _configs.length) return;
