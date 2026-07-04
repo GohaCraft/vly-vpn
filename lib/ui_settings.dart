@@ -1943,11 +1943,7 @@ class _BypassModeCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(mode.status, style: TextStyle(
                 fontSize: 10,
-                color: mode.status.startsWith('✅')
-                    ? const Color(0xFF00C853)
-                    : mode.status.startsWith('⚠️')
-                        ? const Color(0xFFFFB300)
-                        : const Color(0xFFE53935),
+                color: mode.statusColor,
                 fontWeight: FontWeight.w500)),
             ])),
           // Индикатор выбора

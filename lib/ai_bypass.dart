@@ -95,15 +95,19 @@ extension BypassModeInfo on BypassMode {
   }
   String get status {
     switch (this) {
-      case BypassMode.auto:      return '✅ Рекомендуется — июнь 2026';
-      case BypassMode.hysteria2: return '🚧 Требует ядро sing-box — недоступно';
-      case BypassMode.xhttp:     return '✅ Лучший — Reality-совместим';
-      case BypassMode.realityVk: return '✅ Лучший — Reality detection stable-low';
-      case BypassMode.grpc:      return '✅ Актуально — Reality + gRPC';
-      case BypassMode.shadowtls: return '🚧 Требует ядро sing-box — недоступно';
-      case BypassMode.whitelist: return '⚠️ Белые списки: нужен whitelisted-IP сервер';
+      case BypassMode.auto:      return 'Рекомендуется — июнь 2026';
+      case BypassMode.hysteria2: return 'Требует ядро sing-box — недоступно';
+      case BypassMode.xhttp:     return 'Лучший — Reality-совместим';
+      case BypassMode.realityVk: return 'Лучший — Reality detection stable-low';
+      case BypassMode.grpc:      return 'Актуально — Reality + gRPC';
+      case BypassMode.shadowtls: return 'Требует ядро sing-box — недоступно';
+      case BypassMode.whitelist: return 'Белые списки: нужен whitelisted-IP сервер';
     }
   }
+  // Цвет статуса — заменяет эмодзи-индикатор (✅/🚧/⚠️) на чистый цвет.
+  Color get statusColor => isAvailable
+      ? (isRecommended ? const Color(0xFF00C853) : const Color(0xFF64B5F6))
+      : const Color(0xFFFFA726);
   // Reality-методы (xHTTP/Reality) — приоритет: detection stable-low.
   bool get isRecommended => this == BypassMode.auto || this == BypassMode.xhttp || this == BypassMode.realityVk;
 
