@@ -967,34 +967,12 @@ class VpnProvider extends ChangeNotifier {
     if (_configCache.length > 20) _configCache.remove(_configCache.keys.first);
   }
 
-  // ЗАДАЧА 10: Предиктивное авто-переключение
-  // Мониторим latency каждые 5с — переключаемся ДО разрыва
-  // Как у Cloudflare WARP: переключение на лучшую ноду проактивно
-  Timer? _predictiveTimer;
-  int _lastGoodPing = 9999;
-
-  void _startPredictiveMonitor() {
-    _predictiveTimer?.cancel();
-    _predictiveTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      if (!isConnected || selectedIndex >= _configs.length) return;
-      final cur = _configs[selectedIndex];
-      final ms  = await VpnConfig.tcpPing(cur.link).timeout(
-          const Duration(seconds: 2), onTimeout: () => 9999);
-      
-      // Если ping ухудшился в 3+ раза — начинаем искать лучшую ноду
-      if (ms > _lastGoodPing * 3 && ms < 9999) {
-        _log('⚡ Предиктивное: пинг вырос ${_lastGoodPing}ms → ${ms}ms, ищем лучшее...');
-        unawaited(_autoSelectBest(reconnect: true));
-      } else if (ms < 9999) {
-        _lastGoodPing = ms;
-      }
-    });
-  }
-
-  void _stopPredictiveMonitor() {
-    _predictiveTimer?.cancel();
-    _predictiveTimer = null;
-  }
+  // (Удалён «предиктивный авто-переключатель» ЗАДАЧА 10: был полностью написан,
+  //  но НИКОГДА не запускался (_startPredictiveMonitor не вызывался нигде) —
+  //  заявлял фичу «переключаемся до разрыва», которой по факту не было.
+  //  Проактивное переключение нод — хорошая фича, но её надо делать осознанно:
+  //  с пользовательским тумблером и тестами на устройстве, а не молча switch'ать
+  //  сессию по флуктуации пинга. Кандидат в фазу «логика ИИ».)
 
   Future<void> _autoNext() async {
     if (_configs.isEmpty) { _isRotating = false; return; }
