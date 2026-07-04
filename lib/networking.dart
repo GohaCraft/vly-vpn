@@ -780,22 +780,6 @@ class BypassRulesEngine {
         } catch (_) {}
         break;
 
-      // Adaptive mimicry — имитация полного цифрового следа пользователя
-      // FIX BUG-1.4: теперь реально применяет персону к конфигу
-      case 'adaptive_mimicry':
-        try {
-          // Генерируем новую персону и сбрасываем старую
-          AdaptiveMimicryEngine.resetPersona();
-          AdaptiveMimicryEngine.generatePersona();
-          // Помечаем ссылку маркером
-          if (!link.contains('mimicry=')) {
-            final sep = link.contains('#') ? '&' : '#';
-            final personaName = p['persona'] as String? ?? 'auto';
-            link = '$link${sep}mimicry=$personaName';
-          }
-        } catch (_) {}
-        break;
-
       // QUIC/HTTP3 fallback — DPI ещё не умеет анализировать QUIC
       // Источник: bypasscore.com/blog/vpn-detection-bypass-dpi-evasion (18.03.2026)
       // QUIC = UDP-based, encrypted multiplexed streams, indistinguishable from HTTP/3

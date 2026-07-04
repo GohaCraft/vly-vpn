@@ -133,11 +133,6 @@ class BypassArsenal {
     {'id': 114, 'name': '🟡 Whitelist: AWS',          'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'aws'}},
     {'id': 115, 'name': '🟡 Whitelist: Fastly',       'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'fastly'}},
     {'id': 116, 'name': '🟡 Whitelist: Akamai',       'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'akamai'}},
-    // ── TIER MIMICRY: Адаптивная мимикрия под реального пользователя ────────
-    {'id': 117, 'name': '🎭 Mimicry: Pixel 8 Pro',    'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'pixel8pro'}},
-    {'id': 118, 'name': '🎭 Mimicry: iPhone 15 Pro',  'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'iphone15pro'}},
-    {'id': 119, 'name': '🎭 Mimicry: Win11 Edge',     'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'win11edge'}},
-    {'id': 120, 'name': '🎭 Mimicry: Samsung S24',    'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'samsung_s24'}},
     // ── TIER QUIC/HTTP3: Обход DPI через QUIC (04.04.2026) ──────────────────
     // MTProxy мёртв (01.04.2026) — DPI детектит Fake-TLS по TLS fingerprint
     // QUIC/HTTP3 — DPI ещё не умеет полноценно анализировать QUIC

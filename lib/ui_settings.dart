@@ -2458,6 +2458,15 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
     } catch (_) { return null; }
   }
 
+  Widget _legendRow(Color color, IconData icon, String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Row(children: [
+      Icon(icon, size: 15, color: color),
+      const SizedBox(width: 10),
+      Expanded(child: Text(text, style: const TextStyle(
+          fontSize: 11.5, color: Colors.white70))),
+    ]));
+
   Widget _domainRow(String domain, String label, bool expectReachable) {
     final result = _results[domain];
     final tested = _results.containsKey(domain);
@@ -2537,6 +2546,14 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
             icon: Icons.info_outline_rounded,
             text: S.t('info_wl_test'),
           ),
+          const SizedBox(height: 14),
+
+          // Легенда цветов — чтобы результаты читались однозначно.
+          _SubSection(S.t('legend_caps')),
+          _legendRow(Colors.greenAccent, Icons.check_circle_rounded, S.t('legend_ok')),
+          _legendRow(Colors.blueAccent, Icons.shield_rounded, S.t('legend_blocked')),
+          _legendRow(Colors.redAccent, Icons.error_rounded, S.t('legend_fail')),
+          _legendRow(Colors.orangeAccent, Icons.warning_rounded, S.t('legend_vpnoff')),
           const SizedBox(height: 16),
 
           _SubSection(S.t('ru_domains_caps')),
