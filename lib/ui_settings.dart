@@ -3014,7 +3014,8 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
               Center(child: Column(
                 mainAxisAlignment: MainAxisAlignment.center, children: [
                   _PreviewPowerButton(
-                    accent: app.customAccent, accent2: app.customAccent2),
+                    accent: app.customAccent, accent2: app.customAccent2,
+                    style: app.customButtonStyle),
                   const SizedBox(height: 12),
                   Text(S.t('connected').toUpperCase(), style: TextStyle(
                       color: app.customAccent, fontSize: 11,
@@ -3062,6 +3063,39 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
             onTap: () => _showColorPicker(context, app.customBlob2, (c) {
               app.saveCustomTheme(blob2: c); setState((){});
             })),
+
+          const SizedBox(height: 16),
+
+          // ── СТИЛЬ КНОПКИ ПИТАНИЯ ──────────────────────────────────────────
+          _SectionLabel(S.t('button_style')),
+          Row(children: PowerButtonStyle.values.map((s) {
+            final selected = app.customButtonStyle == s;
+            return Expanded(child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () { app.saveCustomTheme(buttonStyle: s); setState((){}); },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: selected
+                        ? app.customAccent.withOpacity(0.14)
+                        : Colors.white.withOpacity(0.04),
+                    border: Border.all(
+                      color: selected
+                          ? app.customAccent.withOpacity(0.6)
+                          : Colors.white.withOpacity(0.08),
+                      width: selected ? 1.5 : 1)),
+                  child: Column(children: [
+                    _MiniButtonPreview(style: s, accent: app.customAccent),
+                    const SizedBox(height: 6),
+                    Text(S.t('btn_style_${s.name}'), style: TextStyle(
+                        fontSize: 10,
+                        color: selected ? app.customAccent : Colors.white54,
+                        fontWeight: FontWeight.w600)),
+                  ])))));
+          }).toList()),
 
           const SizedBox(height: 16),
 
@@ -3195,27 +3229,71 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
 }
 
 // Кнопка питания для превью — повторяет стиль реальной _LiquidGlassButton
-// (свечение + радиальный градиент + блик), но статична.
+// под выбранный PowerButtonStyle (через общий _powerBtnStyleParams), статична.
 class _PreviewPowerButton extends StatelessWidget {
   final Color accent, accent2;
-  const _PreviewPowerButton({required this.accent, required this.accent2});
+  final PowerButtonStyle style;
+  const _PreviewPowerButton({
+    required this.accent, required this.accent2,
+    this.style = PowerButtonStyle.glass});
   @override
-  Widget build(BuildContext context) => Container(
-    width: 62, height: 62,
-    decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [
-      BoxShadow(color: accent.withOpacity(0.55), blurRadius: 28),
-      BoxShadow(color: accent.withOpacity(0.25), blurRadius: 50),
-    ]),
-    child: Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          center: const Alignment(-0.3, -0.4), radius: 1.0,
-          colors: [Colors.white.withOpacity(0.24),
-                   accent.withOpacity(0.20), Colors.black.withOpacity(0.22)]),
-        border: Border.all(color: accent.withOpacity(0.6), width: 1.5)),
-      child: Icon(Icons.power_settings_new_rounded, color: accent, size: 28,
-          shadows: [Shadow(color: accent.withOpacity(0.6), blurRadius: 14)])));
+  Widget build(BuildContext context) {
+    final st = _powerBtnStyleParams(style, false);
+    final List<Color> core = st.solidFill
+        ? [accent.withOpacity(0.85), accent.withOpacity(0.55), accent.withOpacity(0.35)]
+        : st.ring
+            ? [Colors.transparent, Colors.transparent, Colors.black.withOpacity(0.18)]
+            : [Colors.white.withOpacity(0.24), accent.withOpacity(0.20),
+               Colors.black.withOpacity(0.22)];
+    return Container(
+      width: 62, height: 62,
+      decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [
+        // Свечение масштабируем под размер превью (кнопка ~вдвое меньше реальной).
+        BoxShadow(color: accent.withOpacity(0.55), blurRadius: st.glowA * 0.5),
+        BoxShadow(color: accent.withOpacity(0.25), blurRadius: st.glowB * 0.5),
+      ]),
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            center: const Alignment(-0.3, -0.4), radius: 1.0, colors: core),
+          border: Border.all(
+            color: st.ring ? accent.withOpacity(0.9) : accent.withOpacity(0.6),
+            width: st.ring ? st.border : (st.solidFill ? 0.0 : 1.5))),
+        child: Icon(Icons.power_settings_new_rounded,
+            color: st.solidFill ? Colors.white : accent, size: 28,
+            shadows: [Shadow(color: accent.withOpacity(0.6), blurRadius: 14)])));
+  }
+}
+
+// Мини-превью кнопки для чипа выбора стиля (маленькая, 28px).
+class _MiniButtonPreview extends StatelessWidget {
+  final PowerButtonStyle style; final Color accent;
+  const _MiniButtonPreview({required this.style, required this.accent});
+  @override
+  Widget build(BuildContext context) {
+    final st = _powerBtnStyleParams(style, false);
+    final List<Color> core = st.solidFill
+        ? [accent.withOpacity(0.85), accent.withOpacity(0.45)]
+        : st.ring
+            ? [Colors.transparent, Colors.black.withOpacity(0.18)]
+            : [Colors.white.withOpacity(0.22), accent.withOpacity(0.18)];
+    return Container(
+      width: 30, height: 30,
+      decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [
+        BoxShadow(color: accent.withOpacity(0.5), blurRadius: st.glowA * 0.28),
+      ]),
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            center: const Alignment(-0.3, -0.4), radius: 1.0, colors: core),
+          border: Border.all(
+            color: st.ring ? accent.withOpacity(0.9) : accent.withOpacity(0.55),
+            width: st.ring ? 2.4 : (st.solidFill ? 0.0 : 1.0))),
+        child: Icon(Icons.power_settings_new_rounded, size: 14,
+            color: st.solidFill ? Colors.white : accent)));
+  }
 }
 
 // Мини-чип статуса для превью (AUTO / STEALTH).

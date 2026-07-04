@@ -1,6 +1,18 @@
 // ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last, prefer_final_locals, omit_local_variable_types, always_use_package_imports, curly_braces_in_flow_control_structures, argument_type_not_assignable, invalid_assignment, body_might_complete_normally
 part of 'main.dart';
 
+// Стиль кнопки питания, настраиваемый в редакторе своей темы.
+enum PowerButtonStyle {
+  glass,   // полупрозрачное «жидкое стекло» (по умолчанию)
+  neon,    // яркое свечение + тонкая контурная граница
+  solid,   // залитая акцентом, мягкая тень
+  ring,    // прозрачный центр + толстое акцентное кольцо
+}
+
+PowerButtonStyle _powerBtnStyleFromName(String? n) =>
+    PowerButtonStyle.values.firstWhere((e) => e.name == n,
+        orElse: () => PowerButtonStyle.glass);
+
 class AppProvider extends ChangeNotifier {
   VlyTheme  _theme  = VlyTheme.system;
   VlyLocale _locale = VlyLocale.en;
@@ -15,6 +27,7 @@ class AppProvider extends ChangeNotifier {
   Color  _customBlob2      = const Color(0xFF0D47A1);
   String _customMediaPath  = ''; // путь к фото/GIF
   String _customMediaType  = ''; // 'photo' | 'gif' | ''
+  PowerButtonStyle _customButtonStyle = PowerButtonStyle.glass; // стиль кнопки питания
 
   VlyTheme  get theme  => _theme;
   VlyLocale get locale => _locale;
@@ -30,6 +43,10 @@ class AppProvider extends ChangeNotifier {
   String get customMediaPath => _customMediaPath;
   String get customMediaType => _customMediaType;
   bool   get hasCustomMedia  => _customMediaPath.isNotEmpty && File(_customMediaPath).existsSync();
+  // Стиль кнопки питания активной темы (для кастомной — выбранный, иначе стекло).
+  PowerButtonStyle get powerButtonStyle =>
+      _skinId == VlySkinId.custom ? _customButtonStyle : PowerButtonStyle.glass;
+  PowerButtonStyle get customButtonStyle => _customButtonStyle;
 
   VlySkin _buildCustomSkin() => VlySkin(
     id: VlySkinId.custom,
@@ -65,6 +82,7 @@ class AppProvider extends ChangeNotifier {
     _customBlob2    = Color(p.getInt('ct_blob2')    ?? 0xFF0D47A1);
     _customMediaPath = p.getString('ct_media_path') ?? '';
     _customMediaType = p.getString('ct_media_type') ?? '';
+    _customButtonStyle = _powerBtnStyleFromName(p.getString('ct_btn_style'));
     _applySkin(skin);
     await S.init();
     _locale = S.locale;
@@ -90,6 +108,7 @@ class AppProvider extends ChangeNotifier {
     Color? accent, Color? accent2, Color? bg,
     Color? blob1, Color? blob2,
     String? mediaPath, String? mediaType,
+    PowerButtonStyle? buttonStyle,
   }) async {
     if (accent    != null) _customAccent    = accent;
     if (accent2   != null) _customAccent2   = accent2;
@@ -98,6 +117,7 @@ class AppProvider extends ChangeNotifier {
     if (blob2     != null) _customBlob2     = blob2;
     if (mediaPath != null) _customMediaPath = mediaPath;
     if (mediaType != null) _customMediaType = mediaType;
+    if (buttonStyle != null) _customButtonStyle = buttonStyle;
     _skinId = VlySkinId.custom;
     _applySkin(_buildCustomSkin());
     final p = await SharedPreferences.getInstance();
@@ -108,6 +128,7 @@ class AppProvider extends ChangeNotifier {
     await p.setInt('ct_blob2',    _customBlob2.value);
     await p.setString('ct_media_path', _customMediaPath);
     await p.setString('ct_media_type', _customMediaType);
+    await p.setString('ct_btn_style', _customButtonStyle.name);
     await p.setString('vly_skin', 'custom');
     _safeNotify();
   }

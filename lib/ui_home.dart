@@ -230,6 +230,7 @@ class _ConnectCard extends StatelessWidget {
               status: vpn.status,
               statusColor: sc,
               isLight: light,
+              style: Provider.of<AppProvider>(context).powerButtonStyle,
               onTap: () {
                 HapticFeedback.mediumImpact();
                 vpn.toggle();
@@ -3079,10 +3080,32 @@ class _LiquidGlassButton extends StatefulWidget {
   final Color statusColor;
   final bool isLight;
   final VoidCallback onTap;
+  final PowerButtonStyle style;
   const _LiquidGlassButton({
     required this.status, required this.statusColor,
-    required this.isLight, required this.onTap});
+    required this.isLight, required this.onTap,
+    this.style = PowerButtonStyle.glass});
   @override State<_LiquidGlassButton> createState() => _LiquidGlassButtonState();
+}
+
+// Параметры отрисовки кнопки под выбранный стиль (общие для реальной кнопки и
+// превью в редакторе): сила свечения, толщина границы, заливка/кольцо, блик.
+({double glowA, double glowB, double border, bool sheen, bool solidFill, bool ring})
+_powerBtnStyleParams(PowerButtonStyle s, bool connected) {
+  switch (s) {
+    case PowerButtonStyle.glass:
+      return (glowA: connected ? 50 : 22, glowB: connected ? 90 : 45,
+              border: 1.5, sheen: true,  solidFill: false, ring: false);
+    case PowerButtonStyle.neon:
+      return (glowA: connected ? 70 : 40, glowB: connected ? 120 : 80,
+              border: 2.0, sheen: false, solidFill: false, ring: false);
+    case PowerButtonStyle.solid:
+      return (glowA: connected ? 42 : 20, glowB: connected ? 74 : 38,
+              border: 0.0, sheen: false, solidFill: true,  ring: false);
+    case PowerButtonStyle.ring:
+      return (glowA: connected ? 46 : 22, glowB: connected ? 82 : 42,
+              border: 4.0, sheen: false, solidFill: false, ring: true);
+  }
 }
 
 class _LiquidGlassButtonState extends State<_LiquidGlassButton>
@@ -3110,6 +3133,27 @@ class _LiquidGlassButtonState extends State<_LiquidGlassButton>
     final light = widget.isLight;
     final connected  = widget.status == 'CONNECTED';
     final connecting = widget.status == 'CONNECTING';
+    final st = _powerBtnStyleParams(widget.style, connected);
+
+    // Заливка ядра под стиль: solid — плотный акцент, ring — прозрачный центр,
+    // glass/neon — полупрозрачное стекло (как раньше).
+    final List<Color> coreColors = st.solidFill
+        ? [sc.withOpacity(0.85), sc.withOpacity(connected ? 0.65 : 0.5),
+           sc.withOpacity(0.35)]
+        : st.ring
+            ? [Colors.transparent, Colors.transparent,
+               Colors.black.withOpacity(light ? 0.04 : 0.18)]
+            : (light
+                ? [Colors.white.withOpacity(0.85), sc.withOpacity(0.15),
+                   sc.withOpacity(0.05)]
+                : [Colors.white.withOpacity(connected ? 0.24 : 0.15),
+                   sc.withOpacity(connected ? 0.20 : 0.09),
+                   Colors.black.withOpacity(0.22)]);
+    final double coreBorder = st.ring ? st.border
+        : (st.solidFill ? 0.0 : (light ? 1.5 : 1.5));
+    final Color coreBorderColor = st.ring
+        ? sc.withOpacity(0.9)
+        : sc.withOpacity(light ? 0.72 : 0.50);
 
     return GestureDetector(
       onTapDown: (_) { _anim.forward(); HapticFeedback.mediumImpact(); },
@@ -3126,9 +3170,9 @@ class _LiquidGlassButtonState extends State<_LiquidGlassButton>
                 width: 110, height: 110,
                 decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [
                   BoxShadow(color: sc.withOpacity(connected ? 0.55 : 0.22),
-                      blurRadius: connected ? 50 : 22),
+                      blurRadius: st.glowA),
                   BoxShadow(color: sc.withOpacity(connected ? 0.22 : 0.08),
-                      blurRadius: connected ? 90 : 45),
+                      blurRadius: st.glowB),
                 ])),
 
               // Liquid Glass core — translucent + refraction
@@ -3141,21 +3185,13 @@ class _LiquidGlassButtonState extends State<_LiquidGlassButton>
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                         center: const Alignment(-0.3, -0.4), radius: 1.0,
-                        colors: light
-                            ? [Colors.white.withOpacity(0.85),
-                               sc.withOpacity(0.15),
-                               sc.withOpacity(0.05)]
-                            : [Colors.white.withOpacity(connected ? 0.24 : 0.15),
-                               sc.withOpacity(connected ? 0.20 : 0.09),
-                               Colors.black.withOpacity(0.22)]),
+                        colors: coreColors),
                     border: Border.all(
-                        color: sc.withOpacity(light ? 0.72 : 0.50), width: 1.5)),
+                        color: coreBorderColor, width: coreBorder)),
                   child: Stack(children: [
-                    // Мягкий стеклянный блик сверху. Раньше это была резкая линия
-                    // 1.2px со смещением (left:20/right:46) — она читалась как
-                    // артефакт/полоса на кнопке. Теперь симметричное пятно света,
-                    // затухающее вниз — выглядит как отражение на стекле.
-                    Positioned(top: 6, left: 26, right: 26,
+                    // Мягкий стеклянный блик сверху (только для стеклянного стиля;
+                    // раньше была резкая линия-артефакт, теперь симметричное пятно).
+                    if (st.sheen) Positioned(top: 6, left: 26, right: 26,
                       child: IgnorePointer(child: Container(height: 24,
                         decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(60),
@@ -3173,7 +3209,7 @@ class _LiquidGlassButtonState extends State<_LiquidGlassButton>
                                 backgroundColor: sc.withOpacity(0.2)))
                         : Icon(
                             connected ? Icons.stop_rounded : Icons.power_settings_new_rounded,
-                            size: 44, color: sc,
+                            size: 44, color: st.solidFill ? Colors.white : sc,
                             shadows: [Shadow(color: sc.withOpacity(0.6), blurRadius: 20)])),
                   ])
                 ))),
