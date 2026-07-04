@@ -202,7 +202,7 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.info_outline_rounded,
             iconColor: const Color(0xFF42A5F5),
             title: S.t('about_app'),
-            subtitle: 'v$kAppVersion · build $kAppBuild · 22.03.2026',
+            subtitle: 'v$gAppVersion · build $gAppBuild',
             onTap: () => _push(context, const _AboutPage())),
 
           const SizedBox(height: 32),
@@ -417,7 +417,7 @@ class _SubSettingsPage extends StatelessWidget {
       _SubSection('USER AGENT'),
       _TextInputRow(
         label: S.t('ua_requests'),
-        hint: 'Vly/$kAppVersion/Android',
+        hint: 'Vly/$gAppVersion/Android',
         value: vpn.subUserAgent,
         onChanged: vpn.setSubUserAgent),
     ]));
@@ -1838,14 +1838,14 @@ class _AboutPageState extends State<_AboutPage> {
         onTap: _onVersionTap,
         onLongPress: () {
           Clipboard.setData(ClipboardData(
-              text: 'Vly v$kAppVersion build $kAppBuild'));
+              text: 'Vly v$gAppVersion build $gAppBuild'));
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(S.t('version_copied')),
             duration: Duration(seconds: 2),
             backgroundColor: Color(0xFF1B2A1B)));
         },
         child: Column(children: [
-          Text('v$kAppVersion · build $kAppBuild', style: TextStyle(
+          Text('v$gAppVersion · build $gAppBuild', style: TextStyle(
               fontSize: 11, color: Colors.white.withOpacity(0.35),
               letterSpacing: 1)),
           const SizedBox(height: 4),

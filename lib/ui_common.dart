@@ -734,6 +734,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   CrashReporter.install();       // ловим необработанные ошибки (основа наблюдаемости)
   await CrashReporter.load();
+  await AppInfo.load();          // реальная версия/билд из pubspec (единый источник)
   await S.init();
   await _autoConnect.load();
   startFpsMonitor(); // FPS мониторинг — авто-деградация на слабых устройствах

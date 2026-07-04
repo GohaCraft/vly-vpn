@@ -213,8 +213,30 @@ const String kBackupMagic       = 'VLY_VPN_BACKUP_V1';
 // ─── COLORS ──────────────────────────────────────────────────────────────────
 
 // ── Версия приложения ────────────────────────────────────────────────────────
+// ЕДИНСТВЕННЫЙ источник версии — pubspec.yaml (`version: X.Y.Z+build`). При
+// старте AppInfo.load() читает реальные значения из собранного пакета через
+// package_info_plus и кладёт в gAppVersion/gAppBuild. Константы ниже — только
+// запасной вариант на случай, если плагин не успел/не смог загрузиться (тесты,
+// холодный старт до init). Больше НЕ нужно править версию в двух местах.
 const kAppVersion = '6.4.0';
 const kAppBuild   = '20260628';
+
+// Живые значения версии/билда (обновляются AppInfo.load() из pubspec).
+String gAppVersion = kAppVersion;
+int    gAppBuild   = int.tryParse(kAppBuild) ?? 0;
+
+class AppInfo {
+  // Читаем реальную версию собранного APK — display и update-check берут отсюда,
+  // поэтому версия всегда совпадает с pubspec без ручной синхронизации.
+  static Future<void> load() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (info.version.isNotEmpty) gAppVersion = info.version;
+      final b = int.tryParse(info.buildNumber);
+      if (b != null && b > 0) gAppBuild = b;
+    } catch (_) {/* остаёмся на запасных константах */}
+  }
+}
 
 // ── Responsive breakpoints ────────────────────────────────────────────────────
 // phone < 600  |  tablet 600-840  |  desktop > 840

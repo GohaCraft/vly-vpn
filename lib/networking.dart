@@ -997,7 +997,7 @@ class Telemetry {
     final batch = List<Map<String, dynamic>>.from(_queue);
     _queue.clear();
     final payload = jsonEncode({
-      'iid': _iid, 'app': kAppVersion, 'build': kAppBuild,
+      'iid': _iid, 'app': gAppVersion, 'build': gAppBuild,
       'os': Platform.operatingSystem, 'osv': Platform.operatingSystemVersion,
       'events': batch,
     });
@@ -1019,7 +1019,7 @@ class Telemetry {
 // ═══════════════════════════════════════════════════════════════════════════
 class AppUpdate {
   final String version;   // '6.5.0'
-  final int    build;     // 20260701 (сравнивается с kAppBuild)
+  final int    build;     // pubspec build number (сравнивается с gAppBuild)
   final String url;       // страница загрузки / APK
   final String notes;     // что нового
   final bool   mandatory; // критическое обновление (напр. смена протокола)
@@ -1048,7 +1048,8 @@ class UpdateChecker {
   static AppUpdate? _available;
   static AppUpdate? get available => _available;
 
-  static int get currentBuild => int.tryParse(kAppBuild) ?? 0;
+  // Живой build из pubspec (gAppBuild) — единый источник, что и на экране.
+  static int get currentBuild => gAppBuild;
   // Серверный build строго новее установленного?
   static bool isNewerBuild(int build) => build > currentBuild;
 
