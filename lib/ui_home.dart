@@ -2275,7 +2275,8 @@ class _AutoConnectAppsScreenState extends State<AutoConnectAppsScreen> {
         return a.label.compareTo(b.label);
       });
       if (mounted) setState(() { _all = apps; _filtered = apps; _loading = false; });
-    } catch (e) {
+    } catch (e, st) {
+      CrashReporter.record(e, st);
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -2526,9 +2527,10 @@ class _SplitTunnelAppsScreenState extends State<SplitTunnelAppsScreen> {
         return a.label.compareTo(b.label);
       });
       setState(() { _all = apps; _filtered = apps; _loading = false; });
-    } catch (e) {
-      // Если нативный канал не работает — показываем популярные
-      // fallback — пустой список с подсказкой
+    } catch (e, st) {
+      // Раньше любая ошибка нативного канала молча превращалась в «ничего не
+      // найдено» — не отличить сбой от реально пустого списка. Фиксируем причину.
+      CrashReporter.record(e, st);
       setState(() { _all = []; _filtered = []; _loading = false; });
     }
   }

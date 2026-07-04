@@ -1696,21 +1696,43 @@ class VpnProvider extends ChangeNotifier {
       final otherLinks = _configs
           .where((c) => c.sourceUrl != url)
           .map((c) => c.link).toSet();
+      // Строгая валидация: строка = нода ТОЛЬКО если начинается с известной
+      // VPN-схемы. Иначе подписка, вернувшая HTML/капчу/Happ-crypt (у которой
+      // внутри есть https://…), плодила мусорные «ноды» вроде "<SCRIPT>…".
+      const validProtos = [
+        'vless://', 'vmess://', 'trojan://', 'ss://', 'ssr://',
+        'hysteria2://', 'hy2://', 'hysteria://', 'wireguard://',
+        'shadowtls://', 'tuic://', 'juicity://', 'naive+https://',
+      ];
       for (final line in raw.split(RegExp(r'[\n\r]+'))) {
         final l = line.trim();
-        if (!l.contains('://')) continue;
+        final lower = l.toLowerCase();
+        if (!validProtos.any((p) => lower.startsWith(p))) continue; // не конфиг
         if (otherLinks.contains(l) || !seen.add(l)) continue; // дубль (другой источник / внутри)
-        String name = 'Node';
+        String name = '';
         if (l.contains('#')) {
           try {
             final n = Uri.decodeFull(l.split('#').last).replaceAll('+', ' ').trim();
             if (n.isNotEmpty) name = n;
           } catch (_) {}
         }
-        if (l.startsWith('hy2://') || l.startsWith('hysteria2://')) name = '⚡ $name';
+        // Санитизация имени: убираем управляющие символы и <>, чтобы даже
+        // подставленная в метку HTML-инъекция не отображалась как имя ноды.
+        name = name.replaceAll(RegExp(r'[\x00-\x1f<>]'), '').trim();
+        if (name.length > 48) name = '${name.substring(0, 48)}…';
+        if (name.isEmpty) {
+          // Нет метки — осмысленное имя из хоста вместо безликого "Node".
+          final host = _extractHost(l);
+          name = host.isNotEmpty ? host : '$gname ${fresh.length + 1}';
+        }
+        if (lower.startsWith('hy2://') || lower.startsWith('hysteria2://')) name = '⚡ $name';
         fresh.add(VpnConfig(name: name, link: l, groupName: gname, sourceUrl: url));
       }
-      if (fresh.isEmpty) { _log('✔ $gname +0 (нет нод — список не тронут)'); return; }
+      if (fresh.isEmpty) {
+        _log('✔ $gname +0 (в ответе нет валидных нод — возможно, подписка вернула '
+             'страницу/капчу, а не список; список не тронут)');
+        return;
+      }
 
       // ОБНОВЛЕНИЕ = СИНХРОНИЗАЦИЯ (replace), а не append. Иначе при ротации нод
       // провайдером старые мёртвые ноды копятся в списке навсегда. Сохраняем
