@@ -260,8 +260,8 @@ class _ConnectCard extends StatelessWidget {
                       child: Text(cfg.ping, style: TextStyle(fontSize: 9,
                           fontWeight: FontWeight.bold, color: cfg.pingColor))))),
               ],
-              if (cfg.isAiPatched) const Padding(padding: EdgeInsets.only(left: 5),
-                  child: Text('🤖', style: TextStyle(fontSize: 11))),
+              if (cfg.isAiPatched) Padding(padding: const EdgeInsets.only(left: 5),
+                  child: Icon(Icons.auto_awesome, size: 12, color: _accent)),
             ]),
             const SizedBox(height: 8),
             _ConnectAutoRow(vpn: vpn),
@@ -1863,8 +1863,8 @@ class _GroupHeader extends StatelessWidget {
                 color: Colors.white.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.white.withOpacity(0.10))),
-              child: Text('✎', style: TextStyle(fontSize: 11,
-                  color: _subTextColor(context)))))],
+              child: Icon(Icons.edit_outlined, size: 13,
+                  color: _subTextColor(context))))],
       ]));
   }
 
@@ -2048,7 +2048,7 @@ class _NodeTile extends StatelessWidget {
                       style: TextStyle(fontSize: 13,
                           color: isSel ? _textColor(context) : _textColor(context).withOpacity(0.72),
                           fontWeight: isSel ? FontWeight.w600 : FontWeight.w400))),
-                  if (cfg.isAiPatched) const Padding(padding: EdgeInsets.only(left: 4), child: Text('🤖', style: TextStyle(fontSize: 9))),
+                  if (cfg.isAiPatched) Padding(padding: const EdgeInsets.only(left: 4), child: Icon(Icons.auto_awesome, size: 11, color: _accent)),
                   if (cfg.isManual) Container(margin: const EdgeInsets.only(left: 5),
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                       decoration: BoxDecoration(color: light ? Colors.black.withOpacity(0.06) : Colors.white.withOpacity(0.07),

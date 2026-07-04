@@ -648,8 +648,8 @@ class _CamouflagePage extends StatelessWidget {
                         ? _accent.withOpacity(0.20)
                         : Colors.white.withOpacity(0.06),
                     borderRadius: BorderRadius.circular(12)),
-                  child: Center(child: Text(mode.emoji,
-                      style: const TextStyle(fontSize: 22)))),
+                  child: Center(child: Icon(mode.icon, size: 22,
+                      color: selected ? _accent : Colors.white70))),
                 const SizedBox(width: 14),
                 // Текст
                 Expanded(child: Column(
@@ -792,7 +792,7 @@ class _HelpOverlayState extends State<_HelpOverlay>
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4),
                   blurRadius: 20, spreadRadius: 2)]),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('ℹ️', style: TextStyle(fontSize: 16)),
+              Icon(Icons.info_outline_rounded, size: 16, color: _accent.withOpacity(0.8)),
               const SizedBox(width: 10),
               Expanded(child: Text(widget.text, style: const TextStyle(
                   fontSize: 13, color: Colors.white, height: 1.4))),
@@ -1909,8 +1909,8 @@ class _BypassModeCard extends StatelessWidget {
                   ? _accent.withOpacity(0.2)
                   : Colors.white.withOpacity(0.06),
               borderRadius: BorderRadius.circular(10)),
-            child: Center(child: Text(mode.emoji,
-                style: const TextStyle(fontSize: 20)))),
+            child: Center(child: Icon(mode.icon, size: 20,
+                color: selected ? _accent : Colors.white70))),
           const SizedBox(width: 12),
           // Название + описание
           Expanded(child: Column(
@@ -1930,10 +1930,8 @@ class _BypassModeCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xFF00C853).withOpacity(0.15),
                       borderRadius: BorderRadius.circular(4)),
-                    child: const Text('✓',
-                        style: TextStyle(fontSize: 9,
-                            color: Color(0xFF00C853),
-                            fontWeight: FontWeight.w600))),
+                    child: const Icon(Icons.check_rounded, size: 11,
+                        color: Color(0xFF00C853))),
                 ],
               ]),
               const SizedBox(height: 3),
@@ -3665,7 +3663,7 @@ class _SR extends StatelessWidget {
         Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, color: _subTextColor(context).withOpacity(0.35))),
       ])),
       GestureDetector(onTap: onRen, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text('✎', style: TextStyle(fontSize: 14, color: _subTextColor(context).withOpacity(0.5))))),
+          child: Icon(Icons.edit_outlined, size: 15, color: _subTextColor(context).withOpacity(0.5)))),
       GestureDetector(onTap: onDel, child: const Icon(Icons.close, size: 16, color: Colors.redAccent)),
     ]));
 }

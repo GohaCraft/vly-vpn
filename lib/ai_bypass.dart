@@ -81,6 +81,18 @@ extension BypassModeInfo on BypassMode {
       case BypassMode.whitelist: return '📋';
     }
   }
+  // Векторная иконка (Material) — используется в UI вместо эмодзи.
+  IconData get icon {
+    switch (this) {
+      case BypassMode.auto:      return Icons.auto_awesome;
+      case BypassMode.hysteria2: return Icons.bolt_rounded;
+      case BypassMode.xhttp:     return Icons.public_rounded;
+      case BypassMode.realityVk: return Icons.shield_rounded;
+      case BypassMode.grpc:      return Icons.settings_input_antenna_rounded;
+      case BypassMode.shadowtls: return Icons.lock_rounded;
+      case BypassMode.whitelist: return Icons.checklist_rounded;
+    }
+  }
   String get status {
     switch (this) {
       case BypassMode.auto:      return '✅ Рекомендуется — июнь 2026';

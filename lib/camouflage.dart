@@ -46,6 +46,21 @@ extension CamouflageModeExt on CamouflageMode {
       case CamouflageMode.naive:       return '🔀';
     }
   }
+  // Векторная иконка (Material) для UI вместо эмодзи.
+  IconData get icon {
+    switch (this) {
+      case CamouflageMode.none:        return Icons.lock_open_rounded;
+      case CamouflageMode.browser:     return Icons.public_rounded;
+      case CamouflageMode.telegram:    return Icons.chat_bubble_outline_rounded;
+      case CamouflageMode.netflix:     return Icons.movie_outlined;
+      case CamouflageMode.youtube:     return Icons.smart_display_outlined;
+      case CamouflageMode.discord:     return Icons.headset_mic_outlined;
+      case CamouflageMode.cloudflare:  return Icons.vpn_lock_rounded;
+      case CamouflageMode.microsoft:   return Icons.settings_suggest_outlined;
+      case CamouflageMode.apple:       return Icons.cloud_outlined;
+      case CamouflageMode.naive:       return Icons.shuffle_rounded;
+    }
+  }
   String get description {
     switch (this) {
       case CamouflageMode.none:
