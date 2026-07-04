@@ -32,7 +32,7 @@ const String kNodesUrl          = '$kControlPlaneUrl/nodes.json';
 // Серверные mutation-программы для AI-каскада (обновляются без пересборки app).
 const String kAiMutationsUrl    = '$kControlPlaneUrl/ai_mutations.json';
 // Проверка обновлений (sideload APK: пользователь должен обновляться сам, иначе
-// застрянет на старых версиях протоколов пока ТСПУ эволюционирует).
+// застрянет на старых версиях протоколов пока сеть эволюционирует).
 const String kUpdateUrl         = '$kControlPlaneUrl/version.json';
 // Версия схемы mutation-программы, которую УМЕЕТ интерпретировать этот клиент.
 // Программа с min_client > этого значения отвергается (клиент слишком старый).
