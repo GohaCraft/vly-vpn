@@ -1585,11 +1585,17 @@ class _LanguagePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = Provider.of<AppProvider>(context);
-    return _SubPage(title: S.t('language'), child: GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      childAspectRatio: 3.1,
+    // mainAxisExtent фиксирует ВЫСОТУ ячейки (64px) независимо от ширины экрана.
+    // Раньше был childAspectRatio: 3.1 — высота зависела от ширины, и на телефоне
+    // ячейка выходила ~55px при контенте ~58px → «Bottom overflowed» на КАЖДОМ
+    // языке (и хуже на узких экранах). Теперь высоты хватает всегда.
+    return _SubPage(title: S.t('language'), child: GridView(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        mainAxisExtent: 64,
+      ),
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: VlyLocale.values.map((loc) {

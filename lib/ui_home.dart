@@ -512,14 +512,14 @@ class IpCheckProvider extends ChangeNotifier {
   }
 
   Future<IpInfo> _fetchIpInfo() async {
-    // Список API с fallback — ipapi.co часто возвращает HTML при лимите/блокировке
+    // Только HTTPS-эндпоинты (ip-api.com на free-тарифе отдаёт лишь HTTP →
+    // раньше первый же API падал по TLS). Все они имеют РАЗНЫЕ имена полей —
+    // ниже единый нормализатор, иначе ответ распознавался как сплошные «—».
     final apis = [
-      // ipapi.co disabled (rate limited)
-        // 'https://ipapi.co/json/',
-      'https://ip-api.com/json/?fields=query,country,countryCode,city,isp',
-        'https://freeipapi.com/api/json',
-        'https://api.myip.com',
-      'https://ipwho.is/',
+      'https://ipwho.is/',                       // ip, country, country_code, city, connection.isp
+      'https://get.geojs.io/v1/ip/geo.json',     // ip, country, country_code, city, organization_name
+      'https://freeipapi.com/api/json',          // ipAddress, countryName, countryCode, cityName
+      'https://api.myip.com',                    // ip, country, cc
     ];
 
     for (final apiUrl in apis) {
@@ -540,8 +540,8 @@ class IpCheckProvider extends ChangeNotifier {
 
         final j = jsonDecode(body) as Map<String, dynamic>;
 
-        // Проверяем что запрос не вернул ошибку
-        if (j['error'] == true || j['status'] == 'fail') {
+        // Проверяем что запрос не вернул ошибку (у каждого API свой флаг)
+        if (j['error'] == true || j['status'] == 'fail' || j['success'] == false) {
           client.close(force: true);
           continue;
         }
@@ -563,13 +563,26 @@ class IpCheckProvider extends ChangeNotifier {
 
         client.close();
 
-        // Нормализуем ответ из разных API
+        // Единый нормализатор: у каждого API свои имена полей. Берём первое
+        // непустое значение, приводим к строке (некоторые отдают числа).
+        String pick(List<Object?> vals, [String fallback = '—']) {
+          for (final v in vals) {
+            if (v == null) continue;
+            final s = v.toString().trim();
+            if (s.isNotEmpty && s != 'null') return s;
+          }
+          return fallback;
+        }
+        // isp у ipwho.is лежит внутри connection: {isp, org}
+        final conn = j['connection'] is Map ? j['connection'] as Map : const {};
+
         return IpInfo(
-          ip:          (j['ip'] ?? j['query'] ?? '—') as String,
-          country:     (j['country_name'] ?? j['country'] ?? '—') as String,
-          countryCode: (j['country_code'] ?? j['countryCode'] ?? '') as String,
-          city:        (j['city'] ?? '—') as String,
-          isp:         (j['org'] ?? j['isp'] ?? '—') as String,
+          ip:          pick([j['ip'], j['query'], j['ipAddress']]),
+          country:     pick([j['country_name'], j['countryName'], j['country']]),
+          countryCode: pick([j['country_code'], j['countryCode'], j['cc']], ''),
+          city:        pick([j['city'], j['cityName']]),
+          isp:         pick([j['org'], j['isp'], j['organization_name'],
+                             conn['isp'], conn['org']]),
           dns:         dnsServer,
           isVpn:       false,
         );
@@ -3133,13 +3146,21 @@ class _LiquidGlassButtonState extends State<_LiquidGlassButton>
                     border: Border.all(
                         color: sc.withOpacity(light ? 0.72 : 0.50), width: 1.5)),
                   child: Stack(children: [
-                    // iOS 26 specular highlight — полоска света сверху
-                    Positioned(top: 10, left: 20, right: 46, child: Container(height: 1.2,
+                    // Мягкий стеклянный блик сверху. Раньше это была резкая линия
+                    // 1.2px со смещением (left:20/right:46) — она читалась как
+                    // артефакт/полоса на кнопке. Теперь симметричное пятно света,
+                    // затухающее вниз — выглядит как отражение на стекле.
+                    Positioned(top: 6, left: 26, right: 26,
+                      child: IgnorePointer(child: Container(height: 24,
                         decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(1),
-                            gradient: LinearGradient(colors: [
-                              Colors.white.withOpacity(light ? 0.95 : 0.65),
-                              Colors.transparent])))),
+                            borderRadius: BorderRadius.circular(60),
+                            gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.white.withOpacity(light ? 0.45 : 0.22),
+                                  Colors.white.withOpacity(0.0),
+                                ]))))),
                     // Icon / Spinner
                     Center(child: connecting
                         ? SizedBox(width: 36, height: 36,
