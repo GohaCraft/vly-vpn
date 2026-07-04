@@ -234,7 +234,14 @@ class AiMemory {
   // «живой туннель умер» (end-to-end от HealthMonitor) наказал именно её.
   static String? _activeNet;
   static String? _activeType;
+  static int _activeSinceMs = 0;   // когда активная рука подтверждена (для grace)
   static Timer? _saveDebounce;
+
+  // Грейс после подтверждённого коннекта: провал «живого туннеля» в первые
+  // секунды чаще network-нестабильность/руминг, чем вина стратегии. В этом окне
+  // penalizeActive не наказывает (иначе шумовые лоссы травят проверенную руку);
+  // истину всё равно установит следующая реальная проба каскада.
+  static const int _penalizeGraceMs = 12000;
 
   static int get _now => DateTime.now().millisecondsSinceEpoch;
 
@@ -253,7 +260,7 @@ class AiMemory {
     a.ms = a.ms == 0 ? v : (a.ms * 0.6 + v * 0.4).round();
     a.wins++;
     a.seenMs = _now;
-    _activeNet = net; _activeType = type;
+    _activeNet = net; _activeType = type; _activeSinceMs = _now;
     _prune(net);
     _scheduleSave();
   }
@@ -271,21 +278,83 @@ class AiMemory {
   // End-to-end сигнал: HealthMonitor увидел, что ЖИВОЙ туннель массово умер →
   // активная стратегия по факту не работает сквозь туннель, хоть TLS-проба и
   // прошла. Наказываем именно её — модель сама себя исправляет.
-  static void penalizeActive() {
+  // Чистая проверка грейса (тестируемо): наказывать можно, только если прошло
+  // достаточно времени с подтверждения активной руки.
+  static bool pastPenalizeGrace(int activeSinceMs, int nowMs) =>
+      nowMs - activeSinceMs >= _penalizeGraceMs;
+
+  // Возвращает true, если реально наказали (для тестов/диагностики).
+  static bool penalizeActive() {
     final n = _activeNet, t = _activeType;
-    if (n != null && t != null) recordFailure(n, t);
+    if (n == null || t == null) return false;
+    // Грейс: только что подтверждённую руку не хороним на первом же шуме.
+    if (!pastPenalizeGrace(_activeSinceMs, _now)) return false;
+    recordFailure(n, t);
+    return true;
+  }
+
+  // Период полураспада доказательств. Среда НЕ стационарна (цензура меняется
+  // за недели), поэтому старые wins/losses «выцветают» к нейтральному приору 0.5:
+  // задушенная месяц назад стратегия получает второй шанс, а давно не
+  // подтверждённый успех перестаёт слепо доверяться. 7 дней — эмпирический баланс.
+  static const double _halfLifeDays = 7.0;
+
+  // Надёжность с затуханием доказательств во времени (чистая, тестируемая).
+  // Decay ∈ (0,1]: и wins, и losses умножаются на него → при старении evidence
+  // reliability дрейфует к 0.5 (нейтрально/неизвестно), а не застревает навсегда.
+  static double reliabilityDecayed(int wins, int losses, double ageDays) {
+    final decay = ageDays <= 0 ? 1.0 : pow(0.5, ageDays / _halfLifeDays).toDouble();
+    final w = wins * decay;
+    final l = losses * decay;
+    return (w + 1) / (w + l + 2); // Лаплас-сглаживание ∈ (0,1)
   }
 
   // Скор руки: надёжность × скорость × свежесть. Чем выше — тем раньше в каскаде.
   static double _score(_Arm a) {
-    // Лаплас-сглаживание: одна победа без поражений ≠ абсолютная уверенность.
-    final reliability = (a.wins + 1) / (a.wins + a.losses + 2); // ∈ (0,1)
-    final speed = 600.0 / (a.ms + 300);                          // быстрее → больше
     final ageDays = (_now - a.seenMs) / 86400000.0;
+    final reliability = reliabilityDecayed(a.wins, a.losses, ageDays);
+    final speed = 600.0 / (a.ms + 300);                          // быстрее → больше
     // Свежесть затухает, но не в ноль (пол 0.4): старое-но-хорошее ещё в игре.
     final recency = ageDays <= 1 ? 1.0
         : (1.0 / (1 + 0.15 * (ageDays - 1))).clamp(0.4, 1.0);
     return reliability * speed * recency;
+  }
+
+  // Родство стратегии к ТИПУ блокировки для ХОЛОДНОГО старта (меньше = раньше).
+  // Домен-знание: какой класс обхода бьёт какой тип DPI-блокировки. Пока модель
+  // не изучила сеть — начинаем с правильного контр-приёма под наблюдаемый блок,
+  // а не со слепого статического порядка. Изученные руки по-прежнему главнее
+  // (их ставит скор), affinity влияет только на ещё не опробованные.
+  static int blockAffinity(BlockType bt, String type) {
+    final t = type;
+    switch (bt) {
+      case BlockType.tlsFingerprint:
+        // Блок по TLS-отпечатку → менять fingerprint/транспорт.
+        if (t.contains('xhttp'))   return 0;
+        if (t.contains('vision'))  return 1;
+        if (t.contains('reality')) return 2;
+        if (t.contains('fragment'))return 3;
+        return 5;
+      case BlockType.tcpReset:
+        // Инъекция RST → фрагментация ClientHello ломает сборку RST у DPI.
+        if (t.contains('fragment'))return 0;
+        if (t.contains('xhttp'))   return 1;
+        if (t.contains('reality')) return 2;
+        return 5;
+      case BlockType.dnsPoisoning:
+        // DNS лечится DoH в connect-пути; транспорт вторичен — ведём стабильный Reality.
+        if (t.contains('reality')) return 0;
+        if (t.contains('xhttp'))   return 1;
+        return 4;
+      case BlockType.portBlocked:
+        // Порт закрыт → CDN/gRPC (443) и смена SNI-фронта.
+        if (t.contains('cdn'))     return 0;
+        if (t.contains('grpc'))    return 1;
+        if (t.contains('reality')) return 2;
+        return 4;
+      default:
+        return 3; // нейтрально
+    }
   }
 
   static int? latencyFor(String net, String type) => _arms[net]?[type]?.ms;
@@ -346,7 +415,7 @@ class AiMemory {
     final a = m.putIfAbsent(type, () => _Arm(seenMs: _now));
     a.wins++;
     a.seenMs = _now;
-    _activeNet = net; _activeType = type;
+    _activeNet = net; _activeType = type; _activeSinceMs = _now;
     _scheduleSave();
   }
 
@@ -913,13 +982,17 @@ class AiBypassAgent {
     // приоритету каскада. ВАЖНО: это только ПЕРЕСТАНОВКА — ни одна стратегия из
     // каскада не удаляется, поэтому ИИ физически не может «выпилить» обход.
     final ranked = AiMemory.rankedTypes(net);
-    if (ranked.isNotEmpty) {
-      int rank(BypassStrategy s) {
-        final i = ranked.indexOf(s.type);
-        return i < 0 ? 1000 + s.priority : i;
-      }
-      limited.sort((a, b) => rank(a).compareTo(rank(b)));
+    // Порядок каскада:
+    //  • изученные стратегии — строго по СКОРУ (индекс в ranked);
+    //  • ещё не опробованные — по РОДСТВУ к типу блокировки (холодный старт
+    //    бьёт правильным контр-приёмом под наблюдаемый блок), затем по статике.
+    // Reorder делаем всегда (даже если сеть не изучена) — ради block-affinity.
+    int rank(BypassStrategy s) {
+      final i = ranked.indexOf(s.type);
+      if (i >= 0) return i;                        // изучено → по скору
+      return 1000 + AiMemory.blockAffinity(bt, s.type) * 20 + s.priority;
     }
+    limited.sort((a, b) => rank(a).compareTo(rank(b)));
     final leader = ranked.isNotEmpty ? ranked.first : null;
     _log('🤖 E-2006: Cascade: ${limited.length} стратегий'
         '${leader != null ? " (лидер: $leader ${AiMemory.latencyFor(net, leader)}ms)" : ""}');

@@ -812,8 +812,11 @@ class VpnProvider extends ChangeNotifier {
       _log('🔴 Массовое падение обходов ($downAll/$total) → немедленный failover');
       // End-to-end сигнал: активная стратегия прошла TLS-пробу, но сквозь живой
       // туннель по факту не держит связь — наказываем её, чтобы ИИ опустил её
-      // в рейтинге и в следующий раз выбрал другую.
-      AiMemory.penalizeActive();
+      // в рейтинге. В грейс-окне (шум сразу после коннекта) наказание пропустится.
+      final penalized = AiMemory.penalizeActive();
+      _log(penalized
+          ? '📉 Активная стратегия наказана (end-to-end провал)'
+          : '⏳ Провал в грейс-окне — стратегию не наказываем (вероятно, сеть)');
       stealthHandshakeFails = 3; // форсируем путь обхода
       _scheduleBypass();
     }

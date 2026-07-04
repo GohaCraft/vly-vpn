@@ -245,11 +245,19 @@ void main() {
       expect(AiMemory.rankedTypes('n2'), ['fast', 'slow']);
     });
 
-    test('penalizeActive наказывает активную (последнюю успешную) руку', () {
+    test('penalizeActive в грейс-окне НЕ наказывает (шум сразу после коннекта)', () {
       AiMemory.recordSuccess('n3', 'active_one', 200);
       expect(AiMemory.statsFor('n3', 'active_one')!['losses'], 0);
-      AiMemory.penalizeActive(); // сигнал «живой туннель умер»
-      expect(AiMemory.statsFor('n3', 'active_one')!['losses'], 1);
+      // Только что подтверждена → грейс → penalizeActive не должен наказать.
+      expect(AiMemory.penalizeActive(), isFalse);
+      expect(AiMemory.statsFor('n3', 'active_one')!['losses'], 0);
+    });
+
+    test('грейс-логика: наказываем только после окна', () {
+      // Чистая функция — детерминированно, без реального времени.
+      expect(AiMemory.pastPenalizeGrace(1000, 1000), isFalse);       // 0мс прошло
+      expect(AiMemory.pastPenalizeGrace(1000, 1000 + 5000), isFalse); // 5с < грейс
+      expect(AiMemory.pastPenalizeGrace(1000, 1000 + 20000), isTrue); // 20с > грейс
     });
 
     test('recordFailure не создаёт фантомных записей для неизвестных стратегий', () {
@@ -295,6 +303,29 @@ void main() {
       AiMemory.recordSuccess('n8', 'weak', 400);
       AiMemory.recordFailure('n8', 'weak');
       expect(AiMemory.rankedTypes('n8').first, 'winner');
+    });
+
+    test('затухание доказательств: старые провалы «лечатся» к нейтральному приору', () {
+      final freshFail = AiMemory.reliabilityDecayed(0, 10, 0);    // свежие 10 провалов
+      final oldFail   = AiMemory.reliabilityDecayed(0, 10, 21);   // те же, но 21 день
+      final ancient   = AiMemory.reliabilityDecayed(0, 100, 70);  // древние
+      expect(freshFail, lessThan(0.1));          // свежий провал = сильное недоверие
+      expect(oldFail, greaterThan(freshFail));   // со временем дрейфует вверх (к 0.5)
+      expect(ancient, closeTo(0.5, 0.05));       // древнее evidence ≈ «неизвестно»
+      // Свежий успех по-прежнему уверенно высок.
+      expect(AiMemory.reliabilityDecayed(10, 0, 0), greaterThan(0.9));
+    });
+
+    test('block-affinity: холодный старт бьёт правильным контр-приёмом', () {
+      // TLS-fingerprint блок → xHTTP раньше Reality раньше неизвестного.
+      expect(AiMemory.blockAffinity(BlockType.tlsFingerprint, 'vless_xhttp'),
+          lessThan(AiMemory.blockAffinity(BlockType.tlsFingerprint, 'vless_reality_vk')));
+      // TCP-RST → фрагментация первой.
+      expect(AiMemory.blockAffinity(BlockType.tcpReset, 'vless_fragmented'),
+          lessThan(AiMemory.blockAffinity(BlockType.tcpReset, 'vless_reality_vk')));
+      // Порт закрыт → CDN/gRPC раньше Reality.
+      expect(AiMemory.blockAffinity(BlockType.portBlocked, 'cdn_fallback'),
+          lessThan(AiMemory.blockAffinity(BlockType.portBlocked, 'vless_reality_vk')));
     });
   });
 
