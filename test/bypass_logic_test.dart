@@ -557,6 +557,39 @@ void main() {
     });
   });
 
+  group('Детектор блокировок — классификация (параллельные пробы)', () {
+    test('DNS-отравление имеет высший приоритет', () {
+      expect(BlockDetector.classify(
+          dnsOk: false, tcp: TcpProbe.ok, tlsOk: true, reachable: true),
+          BlockType.dnsPoisoning);
+    });
+    test('TCP RST → активный DPI', () {
+      expect(BlockDetector.classify(
+          dnsOk: true, tcp: TcpProbe.reset, tlsOk: false, reachable: true),
+          BlockType.tcpReset);
+    });
+    test('порт закрыт (refused)', () {
+      expect(BlockDetector.classify(
+          dnsOk: true, tcp: TcpProbe.closed, tlsOk: false, reachable: true),
+          BlockType.portBlocked);
+    });
+    test('TCP ок, но TLS рвётся → блок по fingerprint', () {
+      expect(BlockDetector.classify(
+          dnsOk: true, tcp: TcpProbe.ok, tlsOk: false, reachable: true),
+          BlockType.tlsFingerprint);
+    });
+    test('всё ок, но исходящий HTTPS недоступен → serviceBlocked', () {
+      expect(BlockDetector.classify(
+          dnsOk: true, tcp: TcpProbe.ok, tlsOk: true, reachable: false),
+          BlockType.serviceBlocked);
+    });
+    test('всё живо → блокировки нет', () {
+      expect(BlockDetector.classify(
+          dnsOk: true, tcp: TcpProbe.ok, tlsOk: true, reachable: true),
+          BlockType.none);
+    });
+  });
+
   group('Обмен темами (кодек)', () {
     test('round-trip: encode → decode восстанавливает все 5 цветов', () {
       final code = AppProvider.encodeThemeColors(

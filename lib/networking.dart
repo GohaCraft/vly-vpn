@@ -129,6 +129,25 @@ enum BlockType {
 
 class BlockDetector {
   static const _t = Duration(seconds: 5);
+  // Быстрый таймаут для ПАРАЛЛЕЛЬНОЙ детекции. Раньше шаги шли последовательно
+  // по 5с, а вызывающий код обрезал detect() на 2с → он почти всегда истекал и
+  // возвращал timeout, из-за чего реальный тип блока не определялся вовсе.
+  // Теперь пробы идут параллельно с коротким таймаутом и укладываются в окно.
+  static const _fast = Duration(milliseconds: 1400);
+
+  // Чистая классификация из результатов проб (тестируемо, без сети).
+  static BlockType classify({
+    required bool dnsOk, required TcpProbe tcp, required bool tlsOk,
+    required bool reachable,
+  }) {
+    if (!dnsOk)             return BlockType.dnsPoisoning;
+    if (tcp == TcpProbe.reset)   return BlockType.tcpReset;
+    if (tcp == TcpProbe.closed)  return BlockType.portBlocked;
+    if (tcp == TcpProbe.timeout) return BlockType.timeout;
+    if (!tlsOk)             return BlockType.tlsFingerprint;
+    if (!reachable)         return BlockType.serviceBlocked;
+    return BlockType.none;
+  }
 
   static Future<BlockType> detect(VpnConfig cfg) async {
     String host = ''; int port = 443;
@@ -139,26 +158,23 @@ class BlockDetector {
     } catch (_) { return BlockType.timeout; }
     if (host.isEmpty) return BlockType.timeout;
 
-    // Шаг 1: DNS — провайдер отравляет DNS для заблокированных IP
-    if (!await _dns(host)) return BlockType.dnsPoisoning;
-
-    // Шаг 2: TCP — RST значит активная блокировка DPI
-    final tcp = await _tcp(host, port);
-    if (tcp == _TR.reset)   return BlockType.tcpReset;
-    if (tcp == _TR.closed)  return BlockType.portBlocked;
-    if (tcp == _TR.timeout) return BlockType.timeout;
-
-    // Шаг 3: TLS handshake к VPN серверу
-    // FIX v3.0: убран вызов _httpLevel(host, port) к VPN серверу —
-    // VPN серверы не отвечают на HTTP HEAD '/' → всегда false negative.
-    // Вместо этого проверяем достижимость нейтрального домена через тот же IP-маршрут.
-    if (!await _tls(host, port)) return BlockType.tlsFingerprint;
-
-    // Шаг 4: проверяем не подменён ли трафик — сверяем доступность контрольного домена
-    // Если Google недоступен — значит провайдер режет исходящий HTTPS (serviceBlocked)
-    if (!await _reachabilityProbe()) return BlockType.serviceBlocked;
-
-    return BlockType.none;
+    // Пробы параллельно — все с _fast таймаутом, укладываемся в ~1.4с.
+    //  • DNS: отравление резолва (DoH-проба)
+    //  • TCP: RST (активный DPI) / refused (порт) / timeout
+    //  • TLS: handshake — если рвётся, вероятен блок по TLS-fingerprint
+    //  • reachability: режет ли провайдер исходящий HTTPS (serviceBlocked)
+    final r = await Future.wait([
+      _dns(host, _fast),
+      _tcp(host, port, _fast),
+      _tls(host, port, _fast),
+      _reachabilityProbe(),
+    ]);
+    return classify(
+      dnsOk:     r[0] as bool,
+      tcp:       r[1] as TcpProbe,
+      tlsOk:     r[2] as bool,
+      reachable: r[3] as bool,
+    );
   }
 
   // FIX v3.0: circuit breaker — если Google недоступен, не проверяем каждый раз
@@ -177,11 +193,11 @@ class BlockDetector {
       }
     }
     try {
-      final client = HttpClient()..connectionTimeout = _t;
+      final client = HttpClient()..connectionTimeout = _fast;
       final req    = await client.getUrl(
           Uri.parse('https://connectivitycheck.gstatic.com/generate_204'));
       req.headers.set('User-Agent', randomUserAgent());
-      final resp = await req.close().timeout(_t);
+      final resp = await req.close().timeout(_fast);
       await resp.drain<void>();
       client.close();
       _probeCircuitOpen = false; // успех — circuit закрыт
@@ -197,13 +213,13 @@ class BlockDetector {
   // FIX: используем DoH вместо системного DNS
   // InternetAddress.lookup() = OS resolver = провайдер отравляет его
   // Cloudflare DoH по прямому IP — не зависит от DNS провайдера
-  static Future<bool> _dns(String h) async {
+  static Future<bool> _dns(String h, [Duration t = _t]) async {
     // Сначала пробуем DoH через Cloudflare (прямой IP, не DNS-имя)
     try {
       final res = await http.get(
         Uri.parse('https://1.1.1.1/dns-query?name=${Uri.encodeComponent(h)}&type=A'),
         headers: {'Accept': 'application/dns-json', 'User-Agent': kStealthUA},
-      ).timeout(_t);
+      ).timeout(t);
       if (res.statusCode == 200) {
         final j = jsonDecode(res.body) as Map<String, dynamic>;
         final answers = j['Answer'] as List? ?? [];
@@ -211,37 +227,37 @@ class BlockDetector {
       }
     } catch (_) {}
     // Fallback: системный DNS если DoH недоступен
-    try { return (await InternetAddress.lookup(h).timeout(_t)).isNotEmpty; }
+    try { return (await InternetAddress.lookup(h).timeout(t)).isNotEmpty; }
     catch (_) { return false; }
   }
 
-  static Future<_TR> _tcp(String h, int p) async {
+  static Future<TcpProbe> _tcp(String h, int p, [Duration t = _t]) async {
     try {
-      final s = await Socket.connect(h, p, timeout: _t);
-      await s.close(); return _TR.ok;
+      final s = await Socket.connect(h, p, timeout: t);
+      await s.close(); return TcpProbe.ok;
     } on SocketException catch (e) {
       final m = e.message.toLowerCase();
-      if (m.contains('reset')) return _TR.reset;
-      if (m.contains('refused') || m.contains('no route')) return _TR.closed;
-      return _TR.timeout;
-    } on TimeoutException { return _TR.timeout; }
-    catch (_) { return _TR.timeout; }
+      if (m.contains('reset')) return TcpProbe.reset;
+      if (m.contains('refused') || m.contains('no route')) return TcpProbe.closed;
+      return TcpProbe.timeout;
+    } on TimeoutException { return TcpProbe.timeout; }
+    catch (_) { return TcpProbe.timeout; }
   }
 
-  static Future<bool> _tls(String h, int p) async {
+  static Future<bool> _tls(String h, int p, [Duration t = _t]) async {
     try {
       // Только TLS handshake — не отправляем HTTP
       // HEAD запрос создавал паттерн который провайдер мог детектировать
       // Для нас важно что TLS соединение устанавливается, не HTTP ответ
       final s = await SecureSocket.connect(h, p,
-          timeout: _t, onBadCertificate: (_) => true);
+          timeout: t, onBadCertificate: (_) => true);
       await s.close();
       return true;
     } catch (_) { return false; }
   }
 }
 
-enum _TR { ok, reset, closed, timeout }
+enum TcpProbe { ok, reset, closed, timeout }
 
 class BypassRulesEngine {
   List<Map<String, dynamic>> _rules = [];
