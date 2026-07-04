@@ -662,56 +662,8 @@ class StealthEngine {
     };
   }
 
-  // ── ShadowTLS v3 + Shadowsocks config ────────────────────────────────────────
-  // ShadowTLS v3: туннель поверх реального TLS сервера.
-  // DPI видит легитимный TLS handshake к vk.com — пропускает.
-  static Map<String, dynamic> buildShadowTlsConfig({
-    required String host,
-    required int    port,
-    required String password,
-    String? serverName,
-  }) {
-    final sni = serverName ?? pickLiveSniFromCache();
-    return {
-      'outbounds': [
-        {
-          'tag':      'proxy',
-          'protocol': 'shadowsocks',
-          'settings': {
-            'servers': [
-              {
-                'address':  '127.0.0.1',
-                'port':     port + 1,
-                'method':   'aes-256-gcm',
-                'password': password,
-                'uot':      true,
-              }
-            ],
-          },
-        },
-        {
-          'tag':      'shadowtls',
-          'protocol': 'shadowtls',
-          'settings': {
-            'version':    3,
-            'password':   password,
-            'servers': [
-              {
-                'address':    host,
-                'port':       port,
-                'serverName': sni,
-              }
-            ],
-          },
-        },
-        {'tag': 'direct', 'protocol': 'freedom', 'settings': {}},
-        {'tag': 'block',  'protocol': 'blackhole', 'settings': {}},
-      ],
-      'inbounds':  _buildSecureInbounds(),
-      'dns':       _buildDns(),
-      'routing':   _buildRouting(),
-    };
-  }
+  // (Удалён buildShadowTlsConfig: xray-core не запускает ShadowTLS, метод
+  //  никем не вызывался — строил заведомо нерабочий конфиг.)
 
   // ── Общие builders ────────────────────────────────────────────────────────────
   static List<Map<String, dynamic>> _buildSecureInbounds() {
@@ -798,75 +750,8 @@ class StealthEngine {
   static int    get rstCountPublic  => _rstCount;
   static String get cachedSniPublic => _cachedSni ?? '—';
 
-  // ── 10. Hysteria2 конфиг builder ──────────────────────────────────────────
-  // Hysteria2 использует QUIC (UDP) — DPI хуже справляется с UDP DPI.
-  // Salamander обфускация XOR-ит каждый QUIC пакет с паролем → fingerprint скрыт.
-  // Формат ноды: hy2://password@host:port?sni=...&obfs=salamander&obfs-password=...
-  static Map<String, dynamic> buildHysteria2Config(String nodeLink) {
-    // Парсим hy2:// URI
-    // hy2://password@host:port?sni=...&insecure=...&obfs=salamander&obfs-password=...
-    try {
-      final uri      = Uri.parse(nodeLink.replaceFirst('hy2://', 'https://'));
-      final auth     = uri.userInfo;            // password (Hysteria2 auth)
-      final host     = uri.host;
-      final port     = uri.port > 0 ? uri.port : 443;
-      final q        = uri.queryParameters;
-      final sni      = q['sni']?.isNotEmpty == true ? q['sni']! : pickLiveSniFromCache();
-      final insecure = q['insecure'] == '1' || q['insecure'] == 'true';
-      final obfs     = q['obfs'] ?? 'salamander';
-      final obfsPw   = q['obfs-password'] ?? q['obfsPassword'] ?? '';
-      final upMbps   = int.tryParse(q['up'] ?? '') ?? 50;
-      final downMbps = int.tryParse(q['down'] ?? '') ?? 200;
-
-      // Hysteria2 нативный JSON конфиг (hysteria2 клиент или sing-box)
-      final cfg = <String, dynamic>{
-        'server': '$host:$port',
-        'auth':   auth,
-        'tls': {
-          'sni':      sni,
-          'insecure': insecure,
-        },
-        'bandwidth': {
-          'up':   '${upMbps} mbps',
-          'down': '${downMbps} mbps',
-        },
-        'fastOpen': true,
-        // Salamander obfs — скрывает QUIC fingerprint от DPI
-        if (obfs == 'salamander' && obfsPw.isNotEmpty)
-          'obfs': {
-            'type':       'salamander',
-            'salamander': {'password': obfsPw},
-          },
-        // SOCKS5 прокси для приложений
-        'socks5': {'listen': '127.0.0.1:10808'},
-        'http':   {'listen': '127.0.0.1:10809'},
-        // Логирование — минимум в продакшне
-        'log': {'level': 'warn'},
-        // Quic параметры — адаптивные под российские сети
-        'quic': {
-          'initStreamReceiveWindow':     '8388608',   // 8 MB
-          'maxStreamReceiveWindow':      '8388608',
-          'initConnReceiveWindow':       '20971520',  // 20 MB
-          'maxConnReceiveWindow':        '20971520',
-          'maxIdleTimeout':              '30s',
-          'keepAlivePeriod':             '10s',
-          'disablePathMTUDiscovery':     false,
-        },
-      };
-
-      return cfg;
-    } catch (e) {
-      // Fallback: минимальный конфиг
-      return {
-        'server':    '127.0.0.1:443',
-        'auth':      '',
-        'tls':       {'insecure': false},
-        'bandwidth': {'up': '50 mbps', 'down': '200 mbps'},
-        'fastOpen':  true,
-        'socks5':    {'listen': '127.0.0.1:10808'},
-      };
-    }
-  }
+  // (Удалён buildHysteria2Config: движок xray-core не поднимает Hysteria2/QUIC,
+  //  метод никем не вызывался — строил конфиг для несуществующего ядра.)
 
   // ── 11. VLESS+Vision полный конфиг builder ────────────────────────────────
   // Vision = XTLS-rprx-vision: убирает TLS-in-TLS паттерн + добавляет рандомный padding.
