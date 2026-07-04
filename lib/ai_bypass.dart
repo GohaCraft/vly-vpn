@@ -1055,8 +1055,12 @@ class AiBypassAgent {
       switch (s.type) {
         case 'hysteria2_fallback':
         case 'hysteria2_alt_port':
-          return _patchHysteria2(blocked,
-              altPort: s.params['port_hint'] as int?);
+          // Транспорт не поддерживается движком (flutter_v2ray/xray-core не
+          // умеет Hysteria2). Даже если сервер пушит такую стратегию — строить
+          // конфиг бессмысленно: он не поднимется, а попытка будет потрачена.
+          // Пропускаем честно вместо генерации нерабочего конфига.
+          _log('⚠ Стратегия ${s.type} недоступна на этом движке — пропуск');
+          return null;
 
         case 'vless_xhttp':
         case 'vless_xhttp_alt':
@@ -1082,8 +1086,10 @@ class AiBypassAgent {
               service: s.params['service'] as String? ?? 'GrpcService');
 
         case 'shadowtls_v3':
-          return _patchShadowTls(blocked,
-              serverName: s.params['server_name'] as String? ?? 'vk.com');
+          // ShadowTLS не поддерживается движком — как и Hysteria2, пропускаем
+          // честно, а не строим конфиг, который гарантированно не подключится.
+          _log('⚠ Стратегия ${s.type} недоступна на этом движке — пропуск');
+          return null;
 
         case 'vless_fragmented':
           return _patchFragmented(blocked,
