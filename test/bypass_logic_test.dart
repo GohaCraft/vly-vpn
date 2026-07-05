@@ -349,6 +349,26 @@ void main() {
           greaterThan(NodeMemory.rankScore(90, 0, 0)));
     });
 
+    test('репутация фронтов: доступный-но-душимый уступает проверенному', () {
+      FrontReputation.resetAll();
+      // Неизученные фронты — по пингу (тот же принцип, что у нод).
+      expect(FrontReputation.score('a.ru', 30),
+          greaterThan(FrontReputation.score('b.ru', 120)));
+      // vk.com отвечает быстро (30мс), но сквозь туннель стабильно режется.
+      for (var i = 0; i < 8; i++) { FrontReputation.record('vk.com', ok: false); }
+      // sber.ru медленнее (110мс), но проносит трафик.
+      for (var i = 0; i < 8; i++) { FrontReputation.record('sber.ru', ok: true); }
+      expect(FrontReputation.score('sber.ru', 110),
+          greaterThan(FrontReputation.score('vk.com', 30)));
+    });
+
+    test('память фронтов ограничена (24/7): карта не растёт бесконечно', () {
+      FrontReputation.resetAll();
+      for (var i = 0; i < 500; i++) { FrontReputation.record('f$i.ru', ok: i.isEven); }
+      expect(FrontReputation.count, lessThanOrEqualTo(64));
+      expect(FrontReputation.statsFor('f499.ru'), isNotNull); // свежий сохранён
+    });
+
     test('адаптивный таймаут пробы: быстрым — короче, неизученным — полный', () {
       expect(AiMemory.adaptiveProbeTimeoutMs(null), 3000);   // неизучено → полный
       expect(AiMemory.adaptiveProbeTimeoutMs(0), 3000);      // нет данных → полный
@@ -711,7 +731,7 @@ void main() {
     });
     test('санитизация имени срезает HTML-инъекцию и управляющие символы', () {
       expect(VpnConfig.sanitizeNodeName('<SCRIPT>WINDOW.__H'), 'SCRIPTWINDOW.__H');
-      expect(VpnConfig.sanitizeNodeName('  Node   '), 'Node');
+      expect(VpnConfig.sanitizeNodeName('  Node\x01\x00  '), 'Node');
       // Длинное имя обрезается с многоточием.
       final long = 'A' * 80;
       final out = VpnConfig.sanitizeNodeName(long);

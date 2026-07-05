@@ -683,6 +683,7 @@ class VpnProvider extends ChangeNotifier {
     // Долговременная память ИИ: победители по классам сетей + блеклист.
     AiMemory.load();
     NodeMemory.load(); // репутация нод (reliability × ping) для авто-выбора
+    FrontReputation.load(); // репутация SNI-фронтов (reliability × скорость)
     // Анонимная диагностика (opt-in): применяем сохранённый выбор пользователя.
     Telemetry.init().then((_) => Telemetry.configure(enabled: _prof.telemetryEnabled));
     // Проверка обновлений (sideload → авто-апдейта нет). При наличии — покажем.

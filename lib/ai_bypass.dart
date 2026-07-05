@@ -643,6 +643,90 @@ class NodeMemory {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+//  FRONT REPUTATION — репутация SNI-фронтов белого списка
+//
+//  Discovery меряет ДОСТУПНОСТЬ фронта (TLS-handshake + задержка), но
+//  reachable-и-быстрый ≠ работает-как-фронт: домен может отвечать за 30мс, а
+//  сквозь туннель душиться или быть флагнут DPI по SNI. Тот же урок, что уже
+//  вытянул выбор нод и стратегий: пинг ≠ рабочий обход. Учим на РЕАЛЬНЫХ
+//  исходах сессий (сработала/провалилась whitelist-стратегия на этом SNI) и
+//  ранжируем фронты по надёжность × скорость. Словарь фронтов фиксирован
+//  (whitelist-пулы) → карта естественно ограничена; кэп на всякий случай.
+// ═══════════════════════════════════════════════════════════════════════════
+class FrontReputation {
+  static const _key = 'ai_front_rep_v1';
+  static const _staleAfter = Duration(days: 30);
+  static const _maxFronts = 64;      // кэп памяти (пул фронтов и так небольшой)
+  static final Map<String, _NodeStat> _stats = {};
+  static Timer? _saveDebounce;
+  static int get _now => DateTime.now().millisecondsSinceEpoch;
+
+  // Исход использования фронта в реальной сессии: ok=прошло сквозь туннель.
+  static void record(String sni, {required bool ok}) {
+    if (sni.isEmpty) return;
+    final s = _stats.putIfAbsent(sni, () => _NodeStat(seenMs: _now));
+    if (ok) s.ok++; else s.fail++;
+    s.seenMs = _now;
+    _prune();
+    _schedule();
+  }
+
+  static void _prune() {
+    final cutoff = _now - _staleAfter.inMilliseconds;
+    _stats.removeWhere((_, s) => s.seenMs < cutoff);
+    if (_stats.length > _maxFronts) {
+      final keep = (_stats.entries.toList()
+            ..sort((a, b) => b.value.seenMs.compareTo(a.value.seenMs)))
+          .take(_maxFronts).map((e) => e.key).toSet();
+      _stats.removeWhere((k, _) => !keep.contains(k));
+    }
+  }
+
+  // Скор фронта: надёжность-как-фронт × скорость. Реюз чистой rankScore нод —
+  // тот же принцип (reliability × ping-speed), неизученный фронт → по пингу.
+  static double score(String sni, int pingMs) {
+    final s = _stats[sni];
+    if (s == null) return NodeMemory.rankScore(pingMs, 0, 0);
+    final ageDays = (_now - s.seenMs) / 86400000.0;
+    return NodeMemory.rankScore(pingMs, s.ok, s.fail, ageDays: ageDays);
+  }
+
+  static Map<String, int>? statsFor(String sni) {
+    final s = _stats[sni];
+    return s == null ? null : {'ok': s.ok, 'fail': s.fail};
+  }
+
+  static int get count => _stats.length;
+
+  static void _schedule() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 3), save);
+  }
+
+  static Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_key);
+      if (raw == null) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      _stats.clear();
+      j.forEach((sni, v) { if (v is Map) _stats[sni] = _NodeStat.fromJson(v); });
+      _prune();
+    } catch (_) {}
+  }
+
+  static Future<void> save() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_key,
+          jsonEncode(_stats.map((h, s) => MapEntry(h, s.toJson()))));
+    } catch (_) {}
+  }
+
+  static void resetAll() => _stats.clear();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 //  MUTATION PROGRAM — серверно-обновляемый AI-каскад (без пересборки app)
 //
 //  Реализует «client integration» из blueprint §4b в форме, которая реально
@@ -928,8 +1012,12 @@ class WhitelistBypassEngine {
     frontLatencyMs
       ..clear()
       ..addEntries(probed);
+    // Ранжируем не по голой задержке, а по НАДЁЖНОСТЬ × СКОРОСТЬ: фронт,
+    // который отвечает быстро, но исторически душится сквозь туннель, уступает
+    // чуть более медленному, но проверенному. Неизученные фронты идут по пингу.
     final working = probed.where((e) => e.value >= 0).toList()
-      ..sort((a, b) => a.value.compareTo(b.value));
+      ..sort((a, b) => FrontReputation.score(b.key, b.value)
+          .compareTo(FrontReputation.score(a.key, a.value)));
     _rankedFronts  = working.map((e) => e.key).toList();
     _lastDiscovery = DateTime.now();
     log?.call('🔎 Discovery: ${_rankedFronts.length}/${candidates.length} фронтов живы'
@@ -1183,6 +1271,7 @@ class AiBypassAgent {
           // +win + задержка + фиксация как активной руки (одним вызовом).
           AiMemory.recordSuccess(net, s.type, sw.elapsedMilliseconds);
           StrategyBlacklist.markSuccess(s.type);   // сработало → снять возможный бан
+          _recordFrontOutcome(s, ok: true);        // фронт реально пронёс трафик
           AiMemory.onBlacklistChanged();
           Telemetry.strategyResult(type: s.type, ok: true, netClass: net,
               latencyMs: sw.elapsedMilliseconds);
@@ -1193,6 +1282,7 @@ class AiBypassAgent {
       }
       StrategyBlacklist.markFailed(s.type);
       AiMemory.recordFailure(net, s.type);         // модель учится и на провалах
+      _recordFrontOutcome(s, ok: false);           // и фронт этой стратегии тоже
       AiMemory.onBlacklistChanged();
       Telemetry.strategyResult(type: s.type, ok: false, netClass: net);
     }
@@ -1208,6 +1298,15 @@ class AiBypassAgent {
   }
 
   // (Победитель теперь хранится в AiMemory по классу сети — персистится.)
+
+  // Записываем исход SNI-фронта — ТОЛЬКО для whitelist-стратегий, чтобы
+  // репутация копилась именно по фронтам, а не по любому SNI. Discovery потом
+  // ранжирует фронты по этой репутации × скорость (см. discoverWorkingFronts).
+  void _recordFrontOutcome(BypassStrategy s, {required bool ok}) {
+    if (!AiMemory.isWhitelistFriendly(s.type)) return;
+    final sni = s.params['sni'];
+    if (sni is String && sni.isNotEmpty) FrontReputation.record(sni, ok: ok);
+  }
 
   // ── Построение каскада стратегий ──────────────────────────────────────────
   Future<List<BypassStrategy>> _buildCascade(
