@@ -564,6 +564,7 @@ class _NodeStat {
 class NodeMemory {
   static const _key = 'ai_node_memory_v1';
   static const _staleAfter = Duration(days: 30);
+  static const _maxNodes = 200;   // кэп памяти на 24/7 (ротация нод провайдером)
   static final Map<String, _NodeStat> _stats = {};
   static Timer? _saveDebounce;
   static int get _now => DateTime.now().millisecondsSinceEpoch;
@@ -573,7 +574,20 @@ class NodeMemory {
     final s = _stats.putIfAbsent(host, () => _NodeStat(seenMs: _now));
     if (ok) s.ok++; else s.fail++;
     s.seenMs = _now;
+    _prune(); // держим карту ограниченной и в рантайме, не только при load()
     _schedule();
+  }
+
+  // Убираем протухшее и держим кэп (оставляем самые недавно виденные ноды).
+  static void _prune() {
+    final cutoff = _now - _staleAfter.inMilliseconds;
+    _stats.removeWhere((_, s) => s.seenMs < cutoff);
+    if (_stats.length > _maxNodes) {
+      final keep = (_stats.entries.toList()
+            ..sort((a, b) => b.value.seenMs.compareTo(a.value.seenMs)))
+          .take(_maxNodes).map((e) => e.key).toSet();
+      _stats.removeWhere((k, _) => !keep.contains(k));
+    }
   }
 
   // Чистая ранжирующая функция (тестируемо): выше = лучше нода.
@@ -597,6 +611,9 @@ class NodeMemory {
     return s == null ? null : {'ok': s.ok, 'fail': s.fail};
   }
 
+  // Размер карты — для диагностики/тестов (контроль памяти в 24/7).
+  static int get count => _stats.length;
+
   static void _schedule() {
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(seconds: 3), save);
@@ -610,9 +627,7 @@ class NodeMemory {
       final j = jsonDecode(raw) as Map<String, dynamic>;
       _stats.clear();
       j.forEach((host, v) { if (v is Map) _stats[host] = _NodeStat.fromJson(v); });
-      // Чистим протухшее.
-      final cutoff = _now - _staleAfter.inMilliseconds;
-      _stats.removeWhere((_, s) => s.seenMs < cutoff);
+      _prune(); // протухшее + кэп
     } catch (_) {}
   }
 
@@ -1355,7 +1370,7 @@ class AiBypassAgent {
     for (final sni in sniList) {
       if (!_isRunning) return null;
       _log('  📋 Reality + SNI: $sni');
-      final r = await _patchReality(blocked, sni);
+      final r = _patchReality(blocked, sni);
       if (r != null) return r;
       await Future.delayed(const Duration(milliseconds: 300));
     }
@@ -1387,7 +1402,7 @@ class AiBypassAgent {
           link = newUri.toString().split('#').first;
         }
         // Параметр hopInterval для xray 26.x (UDP Hop interval)
-        final patched = '$link#hy2_hop_port=${hopPortClamped}&hop_interval=30';
+        final patched = '$link#hy2_hop_port=$hopPortClamped&hop_interval=30';
         return _makeCfg(cfg, patched, '[Hy2+Hop:$hopPortClamped]');
       }
       // VLESS/VMess fallback на Hysteria2

@@ -17,10 +17,43 @@ class SiberiaShield {
   static const _cooldownMinutes   = 4;   // 4 мин cooldown (DPI блокирует на 3)
   static const _pacingMs          = 3500; // 3.5 сек минимум между коннектами
 
+  // Прунинг памяти для 24/7: карты трекера растут с каждым новым host'ом
+  // (смена нод, per-service pacing). Периодически убираем пустые/истёкшие
+  // записи и держим жёсткий кэп, иначе за сутки без рестарта карты пухнут.
+  static const _maxTracked = 256;
+  static void _prune(DateTime now) {
+    final cutoff = now.subtract(const Duration(seconds: _windowSeconds));
+    // Пустые окна (все метки истекли) и хосты без активности — вон.
+    _connTimestamps.removeWhere((_, list) {
+      list.removeWhere((t) => t.isBefore(cutoff));
+      return list.isEmpty;
+    });
+    // Истёкшие cooldown'ы — вон.
+    _blockedUntil.removeWhere((_, until) => now.isAfter(until));
+    // Жёсткий потолок на случай всплеска (оставляем самые свежие блоки).
+    if (_blockedUntil.length > _maxTracked) {
+      final keep = (_blockedUntil.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value)))
+          .take(_maxTracked).map((e) => e.key).toSet();
+      _blockedUntil.removeWhere((k, _) => !keep.contains(k));
+    }
+    if (_connTimestamps.length > _maxTracked) {
+      final keep = (_connTimestamps.entries.toList()
+            ..sort((a, b) => b.value.last.compareTo(a.value.last)))
+          .take(_maxTracked).map((e) => e.key).toSet();
+      _connTimestamps.removeWhere((k, _) => !keep.contains(k));
+    }
+  }
+
+  static int _paceCalls = 0;
+
   // ── 1. Connection Pacing — умный паузер ────────────────────────────────────
   static Future<void> paceConnection(String host) async {
     final now  = DateTime.now();
     final ip   = host;
+
+    // Раз в 32 вызова прибираем карты (амортизированно, дёшево).
+    if ((++_paceCalls & 31) == 0) _prune(now);
 
     // Проверяем cooldown
     final blocked = _blockedUntil[ip];

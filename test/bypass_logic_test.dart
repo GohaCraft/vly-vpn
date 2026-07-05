@@ -328,6 +328,16 @@ void main() {
           lessThan(AiMemory.blockAffinity(BlockType.portBlocked, 'vless_reality_vk')));
     });
 
+    test('память нод ограничена (24/7): карта не растёт бесконечно', () {
+      NodeMemory.resetAll();
+      // Имитируем сутки ротации: 1000 разных host'ов.
+      for (var i = 0; i < 1000; i++) { NodeMemory.record('node-$i.vly', ok: i.isEven); }
+      // Кэп 200 — карта не пухнет от бесконечного числа нод.
+      expect(NodeMemory.count, lessThanOrEqualTo(200));
+      // Самые свежие сохранены (последняя записанная точно есть).
+      expect(NodeMemory.statsFor('node-999.vly'), isNotNull);
+    });
+
     test('репутация нод: надёжная медленнее бьёт быструю-но-битую', () {
       // Нода A: пинг 40мс, но 0 успехов / 8 провалов (туннель режут).
       final a = NodeMemory.rankScore(40, 0, 8);
