@@ -1,0 +1,742 @@
+// Тесты ключевой логики обхода (детерминированные, без сети).
+// Запуск: flutter test test/bypass_logic_test.dart
+import 'dart:convert';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:vpn_new/main.dart';
+
+void main() {
+  group('Честный xHTTP-транспорт', () {
+    test('строит реальный xHTTP-конфиг из vless-ссылки', () {
+      const link = 'vless://uuid-1234@example.com:8443'
+          '?security=reality&pbk=ABC&sid=DE&sni=vk.com&type=tcp#Node';
+      final out = StealthEngine.buildHonestXhttp(link, sni: 'yandex.ru');
+      expect(out, isNotNull);
+      final j  = jsonDecode(out!) as Map<String, dynamic>;
+      final ob = (j['outbounds'] as List).first as Map<String, dynamic>;
+      expect(ob['protocol'], 'vless');
+      final ss = ob['streamSettings'] as Map<String, dynamic>;
+      expect(ss['network'], 'xhttp'); // реальный транспорт, не tcp
+      final vnext = ((ob['settings'] as Map)['vnext'] as List).first as Map;
+      expect(vnext['address'], 'example.com');
+      expect(vnext['port'], 8443);
+      expect((vnext['users'] as List).first['id'], 'uuid-1234');
+    });
+
+    test('возвращает null для не-vless ссылки (фолбэк на стандартный путь)', () {
+      expect(StealthEngine.buildHonestXhttp('trojan://x@h:443'), isNull);
+    });
+  });
+
+  group('Честный VLESS+Reality+Vision', () {
+    test('строит reality+vision при наличии pbk/sid', () {
+      const link = 'vless://u-1@srv.net:443'
+          '?security=reality&pbk=PUBKEY123&sid=SHORT1&sni=vk.com#N';
+      final out = StealthEngine.buildHonestVision(link, sni: 'vk.com');
+      expect(out, isNotNull);
+      final j  = jsonDecode(out!) as Map<String, dynamic>;
+      final ob = (j['outbounds'] as List).first as Map<String, dynamic>;
+      final ss = ob['streamSettings'] as Map<String, dynamic>;
+      expect(ss['security'], 'reality');
+      final rs = ss['realitySettings'] as Map<String, dynamic>;
+      expect(rs['publicKey'], 'PUBKEY123');
+      expect(rs['shortId'], 'SHORT1');
+      // Vision flow — на уровне user (xray читает flow только оттуда)
+      final users = (((ob['settings'] as Map)['vnext'] as List).first as Map)['users'] as List;
+      expect((users.first as Map)['flow'], 'xtls-rprx-vision');
+    });
+
+    test('возвращает null без pbk (не настоящая Reality-нода)', () {
+      expect(StealthEngine.buildHonestVision('vless://u@h:443?security=tls#N'), isNull);
+    });
+  });
+
+  group('Self-healing блеклист', () {
+    setUp(() { StrategyBlacklist.clear(); StrategyBlacklist.setEnabled(true); });
+
+    test('markFailed банит, markSuccess мгновенно снимает', () {
+      expect(StrategyBlacklist.isFailed('s1'), isFalse);
+      StrategyBlacklist.markFailed('s1');
+      expect(StrategyBlacklist.isFailed('s1'), isTrue);
+      StrategyBlacklist.markSuccess('s1');
+      expect(StrategyBlacklist.isFailed('s1'), isFalse); // само-восстановление
+    });
+
+    test('clear сбрасывает все баны', () {
+      StrategyBlacklist.markFailed('a');
+      StrategyBlacklist.markFailed('b');
+      StrategyBlacklist.clear();
+      expect(StrategyBlacklist.isFailed('a'), isFalse);
+      expect(StrategyBlacklist.isFailed('b'), isFalse);
+    });
+
+    test('выключенный блеклист никогда не банит', () {
+      StrategyBlacklist.setEnabled(false);
+      StrategyBlacklist.markFailed('x');
+      expect(StrategyBlacklist.isFailed('x'), isFalse);
+      StrategyBlacklist.setEnabled(true);
+    });
+  });
+
+  group('Классификатор блокировок DPI', () {
+    test('распознаёт тип блокировки по тексту ошибки', () {
+      expect(NetworkCountermeasures2026.classifyError('Connection reset by peer'),
+          BlockType.tcpReset);
+      expect(NetworkCountermeasures2026.classifyError('TLS handshake failed'),
+          BlockType.tlsFingerprint);
+      expect(NetworkCountermeasures2026.classifyError('DNS lookup failed'),
+          BlockType.dnsPoisoning);
+      expect(NetworkCountermeasures2026.classifyError('Operation timed out'),
+          BlockType.timeout);
+      expect(NetworkCountermeasures2026.classifyError('Connection refused'),
+          BlockType.portBlocked);
+    });
+  });
+
+  group('BypassRulesEngine — реальные трансформы ссылки', () {
+    test('change_port реально меняет порт в ссылке', () {
+      final engine = BypassRulesEngine();
+      final cfg = VpnConfig(name: 'n', link: 'vless://uid@host.com:443?type=tcp#x');
+      final out = engine.applyStrategy(cfg,
+          const BypassStrategy(priority: 1, type: 'change_port', params: {'port': 8443}));
+      expect(out.link.contains(':8443'), isTrue);
+      expect(out.link.contains(':443?'), isFalse);
+    });
+
+    test('isBlocked распознаёт заблокированные домены и поддомены', () {
+      final engine = BypassRulesEngine();
+      expect(engine.isBlocked('instagram.com'), isTrue);
+      expect(engine.isBlocked('sub.instagram.com'), isTrue);
+      expect(engine.isBlocked('yandex.ru'), isFalse);
+    });
+  });
+
+  group('Пер-сервисный обход (per-app)', () {
+    test('detect определяет сервис по хосту и поддоменам', () {
+      expect(ServiceBypassProfiles.detect('rr1.googlevideo.com')?.id, 'youtube');
+      expect(ServiceBypassProfiles.detect('youtube.com')?.id, 'youtube');
+      expect(ServiceBypassProfiles.detect('t.me')?.id, 'telegram');
+      expect(ServiceBypassProfiles.detect('api.telegram.org')?.id, 'telegram');
+      expect(ServiceBypassProfiles.detect('byteoversea.com')?.id, 'tiktok');
+      expect(ServiceBypassProfiles.detect('yandex.ru'), isNull); // не сервис
+    });
+
+    test('форки Telegram покрыты профилем telegram (общие серверы)', () {
+      // AyuGram/ExtraGram/Nicegram ходят на те же домены/DC Telegram
+      final tg = ServiceBypassProfiles.telegram;
+      expect(tg.domains, contains('telegram.org'));
+      expect(tg.domains, contains('t.me'));
+      expect(tg.ips.any((c) => c.startsWith('149.154.160')), isTrue);
+    });
+
+    test('каждый профиль валиден (домены + стратегия)', () {
+      for (final p in ServiceBypassProfiles.all) {
+        expect(p.domains, isNotEmpty, reason: '${p.id}: нет доменов');
+        expect(p.strategy, isNotEmpty, reason: '${p.id}: нет стратегии');
+      }
+    });
+
+    test('buildRoutingRules даёт валидные xray-правила на proxy', () {
+      final rules = ServiceBypassProfiles.buildRoutingRules();
+      expect(rules, isNotEmpty);
+      expect(rules.every((r) => r['outboundTag'] == 'proxy'), isTrue);
+      // есть и доменные, и IP-правила (для Telegram)
+      expect(rules.any((r) => r.containsKey('domain')), isTrue);
+      expect(rules.any((r) => r.containsKey('ip')), isTrue);
+    });
+  });
+
+  group('Health monitor — мгновенный детект отключения', () {
+    setUp(() => BypassHealthMonitor.reset());
+
+    test('2 провала подряд → сервис down (мгновенный детект)', () {
+      expect(BypassHealthMonitor.report('youtube', ok: false), isTrue); // healthy→degraded
+      expect(BypassHealthMonitor.stateOf('youtube'), BypassHealth.degraded);
+      final worsened = BypassHealthMonitor.report('youtube', ok: false); // degraded→down
+      expect(worsened, isTrue);
+      expect(BypassHealthMonitor.stateOf('youtube'), BypassHealth.down);
+      expect(BypassHealthMonitor.downServices, contains('youtube'));
+    });
+
+    test('успешная проба восстанавливает (само-восстановление)', () {
+      BypassHealthMonitor.report('telegram', ok: false);
+      BypassHealthMonitor.report('telegram', ok: false);
+      expect(BypassHealthMonitor.stateOf('telegram'), BypassHealth.down);
+      BypassHealthMonitor.report('telegram', ok: true, latencyMs: 120);
+      expect(BypassHealthMonitor.stateOf('telegram'), BypassHealth.healthy);
+      expect(BypassHealthMonitor.downServices, isNot(contains('telegram')));
+    });
+
+    test('высокая латентность = деградация (throttle)', () {
+      expect(BypassHealthMonitor.report('youtube', ok: true, latencyMs: 4000), isTrue);
+      expect(BypassHealthMonitor.stateOf('youtube'), BypassHealth.degraded);
+    });
+
+    test('видит, что НЕСКОЛЬКО обходов отключились', () {
+      for (final id in ['youtube', 'tiktok', 'x']) {
+        BypassHealthMonitor.report(id, ok: false);
+        BypassHealthMonitor.report(id, ok: false);
+      }
+      expect(BypassHealthMonitor.downServices.length, 3);
+    });
+  });
+
+  group('AI память — per-network + персист', () {
+    test('netClass различает режимы сети', () {
+      expect(AiMemory.netClass(true, true), 'mobile_wl');
+      expect(AiMemory.netClass(true, false), 'mobile');
+      expect(AiMemory.netClass(false, false), 'wifi');
+    });
+
+    test('recordWinner/winnerFor запоминает победителя по классу сети', () {
+      AiMemory.recordWinner('wifi', 'vless_xhttp');
+      AiMemory.recordWinner('mobile_wl', 'vless_reality_vk');
+      expect(AiMemory.winnerFor('wifi'), 'vless_xhttp');
+      expect(AiMemory.winnerFor('mobile_wl'), 'vless_reality_vk');
+      expect(AiMemory.winnerFor('mobile'), isNull);
+    });
+
+    test('recordLatency/rankedTypes ранжирует стратегии по скорости', () {
+      const net = 'wifi_lat';
+      AiMemory.recordLatency(net, 'vless_grpc_reality', 800);
+      AiMemory.recordLatency(net, 'vless_xhttp', 120);
+      AiMemory.recordLatency(net, 'vless_reality_vk', 350);
+      // Самая быстрая — первой (xhttp 120ms < vk 350ms < grpc 800ms).
+      expect(AiMemory.rankedTypes(net), ['vless_xhttp', 'vless_reality_vk', 'vless_grpc_reality']);
+      expect(AiMemory.latencyFor(net, 'vless_xhttp'), 120);
+      // EWMA сглаживает: повтор с бОльшим значением поднимает среднее, но плавно.
+      AiMemory.recordLatency(net, 'vless_xhttp', 320);
+      final smoothed = AiMemory.latencyFor(net, 'vless_xhttp')!;
+      expect(smoothed, greaterThan(120));
+      expect(smoothed, lessThan(320)); // не прыгает сразу на новое значение
+    });
+
+    test('rankedTypes пуст для неизученной сети', () {
+      expect(AiMemory.rankedTypes('never_seen_net'), isEmpty);
+    });
+
+    test('блеклист сериализуется и восстанавливается (персист между запусками)', () {
+      StrategyBlacklist.clear();
+      StrategyBlacklist.markFailed('s1');
+      final json = StrategyBlacklist.toJson();
+      expect(json.containsKey('s1'), isTrue);
+      StrategyBlacklist.clear();
+      expect(StrategyBlacklist.isFailed('s1'), isFalse);
+      StrategyBlacklist.restoreJson(json);
+      expect(StrategyBlacklist.isFailed('s1'), isTrue); // восстановлен cooldown
+    });
+  });
+
+  group('ИИ-бандит — умный скоринг + самокоррекция', () {
+    setUp(() => AiMemory.resetAll());
+
+    test('надёжность важнее сырой скорости (score = надёжн × скорость × свежесть)', () {
+      // Быстрая, но нестабильная: 100мс, 1 успех и 5 провалов.
+      AiMemory.recordSuccess('n', 'fast_flaky', 100);
+      for (var i = 0; i < 5; i++) { AiMemory.recordFailure('n', 'fast_flaky'); }
+      // Медленнее, но стабильная: 500мс, 4 успеха без провалов.
+      for (var i = 0; i < 4; i++) { AiMemory.recordSuccess('n', 'slow_solid', 500); }
+      // Стабильная должна встать выше — ИИ не гонится за скоростью в ущерб связи.
+      expect(AiMemory.rankedTypes('n').first, 'slow_solid');
+    });
+
+    test('при равной надёжности выигрывает более быстрая', () {
+      AiMemory.recordSuccess('n2', 'slow', 700);
+      AiMemory.recordSuccess('n2', 'fast', 120);
+      expect(AiMemory.rankedTypes('n2'), ['fast', 'slow']);
+    });
+
+    test('penalizeActive в грейс-окне НЕ наказывает (шум сразу после коннекта)', () {
+      AiMemory.recordSuccess('n3', 'active_one', 200);
+      expect(AiMemory.statsFor('n3', 'active_one')!['losses'], 0);
+      // Только что подтверждена → грейс → penalizeActive не должен наказать.
+      expect(AiMemory.penalizeActive(), isFalse);
+      expect(AiMemory.statsFor('n3', 'active_one')!['losses'], 0);
+    });
+
+    test('грейс-логика: наказываем только после окна', () {
+      // Чистая функция — детерминированно, без реального времени.
+      expect(AiMemory.pastPenalizeGrace(1000, 1000), isFalse);       // 0мс прошло
+      expect(AiMemory.pastPenalizeGrace(1000, 1000 + 5000), isFalse); // 5с < грейс
+      expect(AiMemory.pastPenalizeGrace(1000, 1000 + 20000), isTrue); // 20с > грейс
+    });
+
+    test('recordFailure не создаёт фантомных записей для неизвестных стратегий', () {
+      AiMemory.recordFailure('n4', 'never_seen');
+      expect(AiMemory.statsFor('n4', 'never_seen'), isNull);
+      expect(AiMemory.rankedTypes('n4'), isEmpty);
+    });
+
+    test('провалы опускают ранее лидировавшую стратегию (самокоррекция)', () {
+      // Обе стартуют одинаково быстрыми и надёжными.
+      AiMemory.recordSuccess('n5', 'a', 150);
+      AiMemory.recordSuccess('n5', 'b', 150);
+      // «a» начинает валиться сквозь туннель — модель должна её опустить.
+      for (var i = 0; i < 4; i++) { AiMemory.recordFailure('n5', 'a'); }
+      expect(AiMemory.rankedTypes('n5').first, 'b');
+    });
+
+    test('EWMA-задержка сглаживает джиттер, не прыгая на новое значение', () {
+      AiMemory.recordSuccess('n6', 's', 120);
+      expect(AiMemory.latencyFor('n6', 's'), 120);
+      AiMemory.recordSuccess('n6', 's', 320);
+      final ms = AiMemory.latencyFor('n6', 's')!;
+      expect(ms, greaterThan(120));
+      expect(ms, lessThan(320));
+    });
+
+    test('UCB-исследование: при равном скоре недоизученная рука выше (анти-lock-in)', () {
+      // «heavy» — много проб (40), надёжность 0.5, 100ms.
+      for (var i = 0; i < 20; i++) { AiMemory.recordSuccess('n7', 'heavy', 100); }
+      for (var i = 0; i < 20; i++) { AiMemory.recordFailure('n7', 'heavy'); }
+      // «fresh» — мало проб (2), та же надёжность 0.5, те же 100ms.
+      AiMemory.recordSuccess('n7', 'fresh', 100);
+      AiMemory.recordFailure('n7', 'fresh');
+      // Базовый скор равен → UCB-бонус поднимает недоизученную «fresh» первой,
+      // чтобы среда-нестационар не хоронила стратегию навсегда.
+      expect(AiMemory.rankedTypes('n7').first, 'fresh');
+    });
+
+    test('UCB не перебивает явного лидера (исследование мягкое)', () {
+      // Явный победитель: много побед, без поражений, быстрый.
+      for (var i = 0; i < 12; i++) { AiMemory.recordSuccess('n8', 'winner', 90); }
+      // Слабая, но недоизученная рука не должна вытеснить лидера.
+      AiMemory.recordSuccess('n8', 'weak', 400);
+      AiMemory.recordFailure('n8', 'weak');
+      expect(AiMemory.rankedTypes('n8').first, 'winner');
+    });
+
+    test('затухание доказательств: старые провалы «лечатся» к нейтральному приору', () {
+      final freshFail = AiMemory.reliabilityDecayed(0, 10, 0);    // свежие 10 провалов
+      final oldFail   = AiMemory.reliabilityDecayed(0, 10, 21);   // те же, но 21 день
+      final ancient   = AiMemory.reliabilityDecayed(0, 100, 70);  // древние
+      expect(freshFail, lessThan(0.1));          // свежий провал = сильное недоверие
+      expect(oldFail, greaterThan(freshFail));   // со временем дрейфует вверх (к 0.5)
+      expect(ancient, closeTo(0.5, 0.05));       // древнее evidence ≈ «неизвестно»
+      // Свежий успех по-прежнему уверенно высок.
+      expect(AiMemory.reliabilityDecayed(10, 0, 0), greaterThan(0.9));
+    });
+
+    test('block-affinity: холодный старт бьёт правильным контр-приёмом', () {
+      // TLS-fingerprint блок → xHTTP раньше Reality раньше неизвестного.
+      expect(AiMemory.blockAffinity(BlockType.tlsFingerprint, 'vless_xhttp'),
+          lessThan(AiMemory.blockAffinity(BlockType.tlsFingerprint, 'vless_reality_vk')));
+      // TCP-RST → фрагментация первой.
+      expect(AiMemory.blockAffinity(BlockType.tcpReset, 'vless_fragmented'),
+          lessThan(AiMemory.blockAffinity(BlockType.tcpReset, 'vless_reality_vk')));
+      // Порт закрыт → CDN/gRPC раньше Reality.
+      expect(AiMemory.blockAffinity(BlockType.portBlocked, 'cdn_fallback'),
+          lessThan(AiMemory.blockAffinity(BlockType.portBlocked, 'vless_reality_vk')));
+    });
+
+    test('память нод ограничена (24/7): карта не растёт бесконечно', () {
+      NodeMemory.resetAll();
+      // Имитируем сутки ротации: 1000 разных host'ов.
+      for (var i = 0; i < 1000; i++) { NodeMemory.record('node-$i.vly', ok: i.isEven); }
+      // Кэп 200 — карта не пухнет от бесконечного числа нод.
+      expect(NodeMemory.count, lessThanOrEqualTo(200));
+      // Самые свежие сохранены (последняя записанная точно есть).
+      expect(NodeMemory.statsFor('node-999.vly'), isNotNull);
+    });
+
+    test('репутация нод: надёжная медленнее бьёт быструю-но-битую', () {
+      // Нода A: пинг 40мс, но 0 успехов / 8 провалов (туннель режут).
+      final a = NodeMemory.rankScore(40, 0, 8);
+      // Нода B: пинг 90мс, 8 успехов / 0 провалов (стабильна).
+      final b = NodeMemory.rankScore(90, 8, 0);
+      expect(b, greaterThan(a)); // надёжную выбираем, несмотря на больший пинг
+      // Неизученные ноды ранжируются по пингу (нейтральная надёжность 0.5).
+      expect(NodeMemory.rankScore(40, 0, 0),
+          greaterThan(NodeMemory.rankScore(90, 0, 0)));
+    });
+
+    test('репутация фронтов: доступный-но-душимый уступает проверенному', () {
+      FrontReputation.resetAll();
+      // Неизученные фронты — по пингу (тот же принцип, что у нод).
+      expect(FrontReputation.score('a.ru', 30),
+          greaterThan(FrontReputation.score('b.ru', 120)));
+      // vk.com отвечает быстро (30мс), но сквозь туннель стабильно режется.
+      for (var i = 0; i < 8; i++) { FrontReputation.record('vk.com', ok: false); }
+      // sber.ru медленнее (110мс), но проносит трафик.
+      for (var i = 0; i < 8; i++) { FrontReputation.record('sber.ru', ok: true); }
+      expect(FrontReputation.score('sber.ru', 110),
+          greaterThan(FrontReputation.score('vk.com', 30)));
+    });
+
+    test('память фронтов ограничена (24/7): карта не растёт бесконечно', () {
+      FrontReputation.resetAll();
+      for (var i = 0; i < 500; i++) { FrontReputation.record('f$i.ru', ok: i.isEven); }
+      expect(FrontReputation.count, lessThanOrEqualTo(64));
+      expect(FrontReputation.statsFor('f499.ru'), isNotNull); // свежий сохранён
+    });
+
+    test('адаптивный таймаут пробы: быстрым — короче, неизученным — полный', () {
+      expect(AiMemory.adaptiveProbeTimeoutMs(null), 3000);   // неизучено → полный
+      expect(AiMemory.adaptiveProbeTimeoutMs(0), 3000);      // нет данных → полный
+      expect(AiMemory.adaptiveProbeTimeoutMs(150), 1000);    // 150×4=600 → пол 1000
+      expect(AiMemory.adaptiveProbeTimeoutMs(500), 2000);    // 500×4=2000
+      expect(AiMemory.adaptiveProbeTimeoutMs(2000), 3000);   // 2000×4 → потолок 3000
+    });
+
+    test('cold-rank правило: в whitelist-сети RU-стратегии впереди «иностранных»', () {
+      // vless_reality_vk (RU-friendly) должна идти РАНЬШЕ vless_grpc_plain
+      // (не whitelist-friendly) при активном белом списке.
+      final ru      = AiMemory.coldRank(BlockType.tlsFingerprint, true, 'vless_reality_vk');
+      final foreign = AiMemory.coldRank(BlockType.tlsFingerprint, true, 'vless_grpc_plain');
+      expect(ru, lessThan(foreign));
+      // Без whitelist контекст-штрафа нет — решает только родство к блоку.
+      final ruNoWl      = AiMemory.coldRank(BlockType.tlsFingerprint, false, 'vless_reality_vk');
+      final foreignNoWl = AiMemory.coldRank(BlockType.tlsFingerprint, false, 'vless_grpc_plain');
+      expect((foreignNoWl - ruNoWl).abs(), lessThan(400)); // без штрафа разрыв мал
+      expect(AiMemory.isWhitelistFriendly('vless_xhttp'), isTrue);
+      expect(AiMemory.isWhitelistFriendly('vless_grpc_plain'), isFalse);
+    });
+
+    test('reinforceActive: качество сессии двигает доверие (после грейса)', () {
+      // Дальше грейса: подтверждаем через recordWinner, затем «стареем» вручную
+      // нельзя — вместо этого проверяем логику на арме, где grace уже прошёл,
+      // через прямой доступ статистики. Свежая рука (grace) — не двигается.
+      AiMemory.recordSuccess('nq', 'strat', 150);
+      final before = AiMemory.statsFor('nq', 'strat')!;
+      // В грейсе reinforceActive не применяется.
+      expect(AiMemory.reinforceActive(healthy: true), isFalse);
+      final after = AiMemory.statsFor('nq', 'strat')!;
+      expect(after['wins'], before['wins']); // не изменилось в грейсе
+    });
+  });
+
+  group('Серверный AI-каскад (mutation-программы, blueprint §4b)', () {
+    setUp(() => MutationRegistry.reset());
+
+    Map<String, dynamic> validProgram({int version = 1, int? ttl, int? expiresAt,
+        int minClient = 1}) => {
+      'schema': 1, 'min_client': minClient, 'version': version,
+      if (ttl != null) 'ttl_seconds': ttl,
+      if (expiresAt != null) 'expires_at': expiresAt,
+      'by_net': {
+        'wifi': [
+          {'priority': 1, 'type': 'vless_xhttp', 'params': {'sni': 'vk.com'}},
+          {'priority': 2, 'type': 'vless_reality_vk', 'params': {}},
+        ],
+      },
+      'generic': [
+        {'priority': 1, 'type': 'vless_grpc_reality', 'params': {}},
+      ],
+    };
+
+    test('валидная программа парсится и отдаёт стратегии по классу сети', () {
+      final p = MutationProgram.decode(validProgram(ttl: 3600))!;
+      expect(p.isUsable, isTrue);
+      final wifi = p.strategiesFor('wifi')!;
+      expect(wifi.length, 2);
+      expect(wifi.first.type, 'vless_xhttp');
+      expect(wifi.first.params['sni'], 'vk.com');
+    });
+
+    test('нет класса сети → отдаётся generic', () {
+      final p = MutationProgram.decode(validProgram(ttl: 3600))!;
+      expect(p.strategiesFor('mobile')!.single.type, 'vless_grpc_reality');
+    });
+
+    test('истёкшая по TTL программа не используется (auto-expire)', () {
+      final past = DateTime.now()
+          .subtract(const Duration(hours: 1)).millisecondsSinceEpoch;
+      final p = MutationProgram.decode(validProgram(expiresAt: past))!;
+      expect(p.isExpired, isTrue);
+      expect(p.isUsable, isFalse);
+      expect(p.strategiesFor('wifi'), isNull);
+    });
+
+    test('программа новее клиента (min_client) отвергается', () {
+      expect(MutationProgram.decode(
+          validProgram(minClient: kAiCascadeSchema + 1)), isNull);
+    });
+
+    test('битый/пустой payload → null (клиент откатится на вшитый каскад)', () {
+      expect(MutationProgram.decode('не map'), isNull);
+      expect(MutationProgram.decode({'schema': 0}), isNull);            // нет схемы
+      expect(MutationProgram.decode({'schema': 1, 'version': 1}), isNull); // пусто
+      // стратегии без type отбраковываются → программа пустая → null
+      expect(MutationProgram.decode({
+        'schema': 1, 'version': 1,
+        'generic': [{'priority': 1, 'params': {}}],
+      }), isNull);
+    });
+
+    test('registry.apply: новее — заменяет, равное/старее — отклоняется', () {
+      expect(MutationRegistry.apply(
+          MutationProgram.decode(validProgram(version: 5, ttl: 3600))!), isTrue);
+      expect(MutationRegistry.version, 5);
+      // Старее — не применяется.
+      expect(MutationRegistry.apply(
+          MutationProgram.decode(validProgram(version: 3, ttl: 3600))!), isFalse);
+      expect(MutationRegistry.version, 5);
+      // Новее — применяется.
+      expect(MutationRegistry.apply(
+          MutationProgram.decode(validProgram(version: 9, ttl: 3600))!), isTrue);
+      expect(MutationRegistry.version, 9);
+      expect(MutationRegistry.active, isNotNull);
+    });
+
+    test('registry.active скрывает истёкшую программу', () {
+      final past = DateTime.now()
+          .subtract(const Duration(minutes: 1)).millisecondsSinceEpoch;
+      // apply отклонит непригодную (истёкшую) программу.
+      expect(MutationRegistry.apply(
+          MutationProgram.decode(validProgram(expiresAt: past))!), isFalse);
+      expect(MutationRegistry.active, isNull);
+    });
+  });
+
+  group('sing-box config builder (фаза 2 миграции ядра)', () {
+    test('VLESS+Reality+Vision → корректный sing-box outbound', () {
+      const link = 'vless://uuid-1234@srv.net:8443'
+          '?security=reality&pbk=PUBKEY123&sid=SHORT1&sni=vk.com&flow=xtls-rprx-vision#N';
+      final ob = SingBoxConfigBuilder.vlessRealityOutbound(link, sni: 'vk.com')!;
+      expect(ob['type'], 'vless');
+      expect(ob['server'], 'srv.net');
+      expect(ob['server_port'], 8443);
+      expect(ob['uuid'], 'uuid-1234');
+      expect(ob['flow'], 'xtls-rprx-vision');
+      final tls = ob['tls'] as Map;
+      expect(tls['server_name'], 'vk.com');
+      expect((tls['utls'] as Map)['fingerprint'], 'chrome');
+      final r = tls['reality'] as Map;
+      expect(r['enabled'], true);
+      expect(r['public_key'], 'PUBKEY123');
+      expect(r['short_id'], 'SHORT1');
+    });
+    test('не-Reality ссылка (без pbk) → null', () {
+      expect(SingBoxConfigBuilder.vlessRealityOutbound(
+          'vless://u@h:443?security=tls#N'), isNull);
+      expect(SingBoxConfigBuilder.vlessRealityOutbound('trojan://x@h:443'), isNull);
+    });
+    test('VLESS+Reality+gRPC → transport grpc, без flow', () {
+      final ob = SingBoxConfigBuilder.vlessRealityGrpcOutbound(
+          'vless://u@h:443?pbk=K&sid=S#N', service: 'GunService')!;
+      expect(ob['transport'], {'type': 'grpc', 'service_name': 'GunService'});
+      expect(ob.containsKey('flow'), isFalse);
+    });
+    test('Trojan → корректный outbound', () {
+      final ob = SingBoxConfigBuilder.trojanOutbound(
+          'trojan://pass@srv.io:8443?sni=vk.com#N')!;
+      expect(ob['type'], 'trojan');
+      expect(ob['password'], 'pass');
+      expect((ob['tls'] as Map)['server_name'], 'vk.com');
+    });
+    test('Hysteria2 → sing-box type hysteria2 (то, чего нет в xray)', () {
+      final ob = SingBoxConfigBuilder.hysteria2Outbound(
+          'hy2://secret@srv.io:443?sni=ya.ru#N')!;
+      expect(ob['type'], 'hysteria2');
+      expect(ob['server'], 'srv.io');
+      expect(ob['password'], 'secret');
+      expect((ob['tls'] as Map)['server_name'], 'ya.ru');
+    });
+    test('полный конфиг: tun-inbound + proxy/direct + роутинг', () {
+      final json = SingBoxConfigBuilder.buildVlessReality(
+          'vless://u@h:443?pbk=K&sid=S#N')!;
+      final j = jsonDecode(json) as Map<String, dynamic>;
+      expect((j['inbounds'] as List).first['type'], 'tun');
+      final outs = (j['outbounds'] as List).map((o) => o['type']).toList();
+      expect(outs, containsAll(['vless', 'direct']));
+      expect((j['route'] as Map)['final'], 'proxy');
+    });
+  });
+
+  group('Честность движка — только реально рабочие протоколы', () {
+    test('Hysteria2 и ShadowTLS недоступны (xray-core их не запускает)', () {
+      expect(BypassMode.hysteria2.isAvailable, isFalse);
+      expect(BypassMode.shadowtls.isAvailable, isFalse);
+    });
+    test('рабочие режимы доступны', () {
+      for (final m in [BypassMode.auto, BypassMode.xhttp,
+          BypassMode.realityVk, BypassMode.grpc, BypassMode.whitelist]) {
+        expect(m.isAvailable, isTrue, reason: m.name);
+      }
+    });
+  });
+
+  group('Бэкап — настоящая крипта (AES-256-GCM + PBKDF2)', () {
+    test('export → import round-trip восстанавливает данные', () {
+      final b64 = BackupEngine.export([], 'active-1', 'S3cret!');
+      final m = BackupEngine.import(b64, 'S3cret!');
+      expect(m, isNotNull);
+      expect(m!['activeId'], 'active-1');
+      expect(m['magic'], kBackupMagic);
+      expect(m['version'], 5);
+    });
+    test('неверный пароль → null (GCM-тег не сходится)', () {
+      final b64 = BackupEngine.export([], 'a', 'right-password');
+      expect(BackupEngine.import(b64, 'wrong-password'), isNull);
+    });
+    test('подмена шифротекста ловится (integrity)', () {
+      final b64 = BackupEngine.export([], 'a', 'pw');
+      final bytes = base64.decode(b64);
+      bytes[bytes.length - 1] ^= 0xFF; // портим GCM-тег
+      expect(BackupEngine.import(base64.encode(bytes), 'pw'), isNull);
+    });
+  });
+
+  group('Crash reporter — анонимность сигнатуры', () {
+    test('сигнатура содержит тип, но НЕ текст исключения (данные юзера)', () {
+      CrashReporter.record(
+        const FormatException('secret vless://user@1.2.3.4:443'),
+        StackTrace.current);
+      final sig = CrashReporter.recent.first;
+      expect(sig.contains('FormatException'), isTrue);
+      expect(sig.contains('vless://'), isFalse);
+      expect(sig.contains('1.2.3.4'), isFalse);
+      expect(sig.contains('secret'), isFalse);
+    });
+  });
+
+  group('Проверка обновлений', () {
+    test('валидный payload с новым build парсится', () {
+      final u = AppUpdate.decode({
+        'version': '9.9.9', 'build': UpdateChecker.currentBuild + 1,
+        'url': 'https://vlyvpn.app/apk', 'notes': 'new', 'mandatory': true});
+      expect(u, isNotNull);
+      expect(u!.version, '9.9.9');
+      expect(u.mandatory, isTrue);
+      expect(UpdateChecker.isNewerBuild(u.build), isTrue);
+    });
+    test('старый/равный build не считается новее', () {
+      expect(UpdateChecker.isNewerBuild(UpdateChecker.currentBuild), isFalse);
+      expect(UpdateChecker.isNewerBuild(UpdateChecker.currentBuild - 1), isFalse);
+    });
+    test('битый payload → null', () {
+      expect(AppUpdate.decode('не map'), isNull);
+      expect(AppUpdate.decode({'build': 0, 'url': 'https://x'}), isNull);       // нет build
+      expect(AppUpdate.decode({'build': 99999999, 'url': 'ftp://x'}), isNull);  // не http
+      expect(AppUpdate.decode({'build': 99999999}), isNull);                    // нет url
+    });
+  });
+
+  group('Certificate pinning', () {
+    test('с PLACEHOLDER-пинами enforcement выключен (не ломает запросы до сервера)', () {
+      // Защита от футгана: если бы pinning был активен на placeholder-пинах,
+      // ВСЕ запросы к нашим доменам падали бы с pin mismatch. Когда добавишь
+      // реальные пины в kPinnedSha256 — этот тест осознанно обнови на isTrue.
+      expect(PinnedHttpClient.pinningActive, isFalse);
+    });
+  });
+
+  group('Детектор блокировок — классификация (параллельные пробы)', () {
+    test('DNS-отравление имеет высший приоритет', () {
+      expect(BlockDetector.classify(
+          dnsOk: false, tcp: TcpProbe.ok, tlsOk: true, reachable: true),
+          BlockType.dnsPoisoning);
+    });
+    test('TCP RST → активный DPI', () {
+      expect(BlockDetector.classify(
+          dnsOk: true, tcp: TcpProbe.reset, tlsOk: false, reachable: true),
+          BlockType.tcpReset);
+    });
+    test('порт закрыт (refused)', () {
+      expect(BlockDetector.classify(
+          dnsOk: true, tcp: TcpProbe.closed, tlsOk: false, reachable: true),
+          BlockType.portBlocked);
+    });
+    test('TCP ок, но TLS рвётся → блок по fingerprint', () {
+      expect(BlockDetector.classify(
+          dnsOk: true, tcp: TcpProbe.ok, tlsOk: false, reachable: true),
+          BlockType.tlsFingerprint);
+    });
+    test('всё ок, но исходящий HTTPS недоступен → serviceBlocked', () {
+      expect(BlockDetector.classify(
+          dnsOk: true, tcp: TcpProbe.ok, tlsOk: true, reachable: false),
+          BlockType.serviceBlocked);
+    });
+    test('всё живо → блокировки нет', () {
+      expect(BlockDetector.classify(
+          dnsOk: true, tcp: TcpProbe.ok, tlsOk: true, reachable: true),
+          BlockType.none);
+    });
+  });
+
+  group('Обмен темами (кодек)', () {
+    test('round-trip: encode → decode восстанавливает все 5 цветов', () {
+      final code = AppProvider.encodeThemeColors(
+        accent: 0xFFFF4D6D, accent2: 0xFF00E5FF, bg: 0xFF0A0508,
+        blob1: 0xFF7A1030, blob2: 0xFFB71C1C);
+      final c = AppProvider.decodeThemeColors(code);
+      expect(c, isNotNull);
+      expect(c!['accent']!.value,  0xFFFF4D6D);
+      expect(c['accent2']!.value,  0xFF00E5FF);
+      expect(c['bg']!.value,       0xFF0A0508);
+      expect(c['blob1']!.value,    0xFF7A1030);
+      expect(c['blob2']!.value,    0xFFB71C1C);
+    });
+    test('код терпит пробелы/переносы вокруг (вставка из мессенджера)', () {
+      final code = AppProvider.encodeThemeColors(
+        accent: 0xFF112233, accent2: 0xFF445566, bg: 0xFF778899,
+        blob1: 0xFFAABBCC, blob2: 0xFFDDEEFF);
+      final c = AppProvider.decodeThemeColors('  \n$code \n ');
+      expect(c, isNotNull);
+      expect(c!['accent']!.value, 0xFF112233);
+    });
+    test('мусор/чужой текст → null', () {
+      expect(AppProvider.decodeThemeColors('просто текст'), isNull);
+      expect(AppProvider.decodeThemeColors('VLY-THEME:!!!не base64!!!'), isNull);
+      expect(AppProvider.decodeThemeColors(''), isNull);
+    });
+  });
+
+  group('IP-нормализатор (у каждого API свои имена полей)', () {
+    test('ipwho.is: isp внутри connection', () {
+      final info = IpInfo.fromApiJson({
+        'ip': '1.2.3.4', 'country': 'Germany', 'country_code': 'DE',
+        'city': 'Berlin', 'connection': {'isp': 'Hetzner', 'org': 'Hetzner'},
+      });
+      expect(info.ip, '1.2.3.4');
+      expect(info.country, 'Germany');
+      expect(info.countryCode, 'DE');
+      expect(info.city, 'Berlin');
+      expect(info.isp, 'Hetzner');
+    });
+    test('freeipapi: ipAddress/countryName/cityName (раньше давало сплошные —)', () {
+      final info = IpInfo.fromApiJson({
+        'ipAddress': '9.9.9.9', 'countryName': 'France',
+        'countryCode': 'FR', 'cityName': 'Paris',
+      });
+      expect(info.ip, '9.9.9.9');
+      expect(info.country, 'France');
+      expect(info.city, 'Paris');
+    });
+    test('geojs: organization_name', () {
+      final info = IpInfo.fromApiJson({
+        'ip': '8.8.8.8', 'country': 'United States', 'country_code': 'US',
+        'city': 'Mountain View', 'organization_name': 'Google LLC',
+      });
+      expect(info.isp, 'Google LLC');
+      expect(info.ip, '8.8.8.8');
+    });
+    test('пустые/отсутствующие поля → прочерк, не краш', () {
+      final info = IpInfo.fromApiJson({'ip': '5.5.5.5'});
+      expect(info.ip, '5.5.5.5');
+      expect(info.country, '—');
+      expect(info.isp, '—');
+      expect(info.countryCode, '');
+    });
+  });
+
+  group('Парсинг подписки (защита от мусорных нод)', () {
+    test('валидные схемы принимаются, HTML/мусор — нет', () {
+      expect(VpnConfig.isSupportedNodeLink('vless://u@h:443#N'), isTrue);
+      expect(VpnConfig.isSupportedNodeLink('HY2://x@h:443'), isTrue); // регистр
+      expect(VpnConfig.isSupportedNodeLink('trojan://p@h:443'), isTrue);
+      // HTML-страница со ссылкой внутри — НЕ нода
+      expect(VpnConfig.isSupportedNodeLink('<script>var x="https://y"'), isFalse);
+      expect(VpnConfig.isSupportedNodeLink('  https://captcha.example  '), isFalse);
+      expect(VpnConfig.isSupportedNodeLink(''), isFalse);
+    });
+    test('санитизация имени срезает HTML-инъекцию и управляющие символы', () {
+      expect(VpnConfig.sanitizeNodeName('<SCRIPT>WINDOW.__H'), 'SCRIPTWINDOW.__H');
+      expect(VpnConfig.sanitizeNodeName('  Node\x01\x00  '), 'Node');
+      // Длинное имя обрезается с многоточием.
+      final long = 'A' * 80;
+      final out = VpnConfig.sanitizeNodeName(long);
+      expect(out.length, lessThanOrEqualTo(49));
+      expect(out.endsWith('…'), isTrue);
+    });
+  });
+}

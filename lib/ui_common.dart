@@ -13,8 +13,8 @@ class _Blob { double x, y, vx, vy, r; Color color; _Blob(this.x,this.y,this.vx,t
 //  Слабые телефоны работают плавно, сильные — красиво
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ── AppProvider singleton ref для AuraBlobBg ─────────────────────────────────
-// AuraBlobBg не имеет доступа к Provider — используем глобальную ссылку
+// ── AppProvider singleton ref для VlyBlobBg ─────────────────────────────────
+// VlyBlobBg не имеет доступа к Provider — используем глобальную ссылку
 class _AppProviderRef {
   static AppProvider? instance;
   static void register(AppProvider app) { instance = app; }
@@ -40,7 +40,7 @@ class _MediaBackgroundState extends State<_MediaBackground> {
   void initState() {
     super.initState();
     if (widget.type == 'gif') _loadGif();
-    // video: rendered natively via TextureView in AuraVpnService
+    // video: rendered natively via TextureView in VlyVpnService
     // We simply show a static poster frame for video type
   }
 
@@ -230,16 +230,16 @@ class _HexColorPickerState extends State<_HexColorPicker> {
             child: Container(height: 44, decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.white24)),
-              child: const Center(child: Text('Отмена',
-                  style: TextStyle(color: Colors.white54, fontSize: 13)))))),
+              child: Center(child: Text(S.t('cancel'),
+                  style: const TextStyle(color: Colors.white54, fontSize: 13)))))),
           const SizedBox(width: 10),
           Expanded(child: GestureDetector(
             onTap: () { widget.onPicked(_current); Navigator.pop(context); },
             child: Container(height: 44, decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 gradient: LinearGradient(colors: [c, c.withOpacity(0.7)])),
-              child: const Center(child: Text('Применить',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)))))),
+              child: Center(child: Text(S.t('apply'),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)))))),
         ]),
       ]));
   }
@@ -393,15 +393,15 @@ void startFpsMonitor() {
   SchedulerBinding.instance.addPersistentFrameCallback(FpsMonitor.onFrame);
 }
 
-class AuraBlobBg extends StatefulWidget {
+class VlyBlobBg extends StatefulWidget {
   final Widget child;
   final bool connected;
   final bool isLight;
-  const AuraBlobBg({super.key, required this.child, this.connected = false, this.isLight = false});
-  @override State<AuraBlobBg> createState() => _AuraBlobBgState();
+  const VlyBlobBg({super.key, required this.child, this.connected = false, this.isLight = false});
+  @override State<VlyBlobBg> createState() => _VlyBlobBgState();
 }
 
-class _AuraBlobBgState extends State<AuraBlobBg> with SingleTickerProviderStateMixin {
+class _VlyBlobBgState extends State<VlyBlobBg> with SingleTickerProviderStateMixin {
   late Ticker _ticker;
   late final List<_Blob> _blobs;
   bool _lowPerf = false;
@@ -457,9 +457,12 @@ class _AuraBlobBgState extends State<AuraBlobBg> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    final app     = _AppProviderRef.instance;
-    final _skinId = app?.skinId ?? AuraSkinId.crimson;
-    final activeSkin = AuraSkin.byId(_skinId);
+    // FIX тем: слушаем AppProvider (listen:true) — иначе при смене темы фон не
+    // пересобирался (HomeScreen в IndexedStack — const, не ребилдился на AppProvider).
+    final app     = Provider.of<AppProvider>(context);
+    // app.skin корректно отдаёт кастомную тему (раньше VlySkin.byId(custom)
+    // возвращал Midnight — фон не соответствовал выбранной теме).
+    final activeSkin = app.skin;
     final skinBg  = activeSkin.bgDark;
     final skinMid = activeSkin.bgGradientMid;
     final bg = widget.isLight
@@ -468,8 +471,17 @@ class _AuraBlobBgState extends State<AuraBlobBg> with SingleTickerProviderStateM
             ? Color.lerp(skinBg, Colors.black, 0.12)!
             : skinBg);
 
-    final hasMedia = app != null && app.hasCustomMedia;
-    final mediaOpacity = app?.customMediaType == 'video' ? 0.45 : 0.40;
+    // FIX тем: перекрашиваем анимированные блобы под АКТИВНУЮ тему. Раньше брался
+    // фиксированный _darkBlobs → фон не менял цвет при смене темы (главная «кривизна»).
+    final palette = widget.isLight ? _lightBlobs : activeSkin.blobs;
+    if (palette.isNotEmpty) {
+      for (int i = 0; i < _blobs.length; i++) {
+        _blobs[i].color = palette[i % palette.length];
+      }
+    }
+
+    final hasMedia = app.hasCustomMedia;
+    final mediaOpacity = app.customMediaType == 'video' ? 0.45 : 0.40;
 
     return Stack(children: [
       Container(color: bg),
@@ -557,9 +569,14 @@ class _BlobPainter extends CustomPainter {
         ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r)));
     }
   }
-  @override bool shouldRepaint(_BlobPainter o) =>
-      o.connected != connected || o.isLight != isLight ||
-      o.blobs.length != blobs.length; // перерисовывать только при реальных изменениях
+  // FIX бага смены темы: раньше сравнивались только connected/isLight/length,
+  // но НЕ цвета блобов — при смене тёмной темы на тёмную (Океан→Сакура) холст
+  // блобов не перерисовывался, оставляя старые цвета поверх нового фона =
+  // «смешивание». Это painter, управляемый тикером-анимацией, поэтому корректно
+  // перерисовывать всегда: и позиции блобов (анимация), и их цвета (смена темы)
+  // обновляются мгновенно. FPS-гейт (_lowPerf) уже останавливает тикер на
+  // слабых устройствах, так что лишних перерисовок нет.
+  @override bool shouldRepaint(_BlobPainter o) => true;
 }
 
 // iOS 26 Liquid Glass material — specular highlights, refraction, blur
@@ -646,7 +663,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  AURA SCAFFOLD  —  Универсальная обёртка для ВСЕХ экранов
+//  VLY SCAFFOLD  —  Универсальная обёртка для ВСЕХ экранов
 //
 //  Решает сразу все проблемы с insets на любом устройстве:
 //  - Челки (Dynamic Island, punch-hole)
@@ -659,13 +676,13 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
 //  MainShell имеет свой SafeArea(bottom: false) + BottomNav со своим padding.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class AuraScaffold extends StatelessWidget {
+class VlyScaffold extends StatelessWidget {
   final String title;
   final Widget body;
   final Widget? trailing;
   final bool extendBehindAppBar;
 
-  const AuraScaffold({
+  const VlyScaffold({
     super.key,
     required this.title,
     required this.body,
@@ -678,7 +695,7 @@ class AuraScaffold extends StatelessWidget {
     final light = Theme.of(context).brightness == Brightness.light;
     final mq    = MediaQuery.of(context);
 
-    return AuraBlobBg(isLight: light, child: Scaffold(
+    return VlyBlobBg(isLight: light, child: Scaffold(
       backgroundColor: Colors.transparent,
       // Scaffold сам применяет padding.top к AppBar — не дублируем
       extendBodyBehindAppBar: extendBehindAppBar,
@@ -715,6 +732,9 @@ class AuraScaffold extends StatelessWidget {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  CrashReporter.install();       // ловим необработанные ошибки (основа наблюдаемости)
+  await CrashReporter.load();
+  await AppInfo.load();          // реальная версия/билд из pubspec (единый источник)
   await S.init();
   await _autoConnect.load();
   startFpsMonitor(); // FPS мониторинг — авто-деградация на слабых устройствах
@@ -722,15 +742,15 @@ void main() async {
     ChangeNotifierProvider(create: (_) => AppProvider()),
     ChangeNotifierProvider(create: (_) => VpnProvider()),
     ChangeNotifierProvider.value(value: _autoConnect),
-  ], child: const AuraApp()));
+  ], child: const VlyApp()));
 }
 
-class AuraApp extends StatelessWidget {
-  const AuraApp({super.key});
+class VlyApp extends StatelessWidget {
+  const VlyApp({super.key});
   @override
   Widget build(BuildContext context) {
     final app = Provider.of<AppProvider>(context);
-    // Регистрируем singleton для AuraBlobBg (не имеет доступа к Provider)
+    // Регистрируем singleton для VlyBlobBg (не имеет доступа к Provider)
     _AppProviderRef.register(app);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -755,6 +775,23 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _tab = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOnboard());
+  }
+
+  // Первый запуск: если конфигов ещё нет — показываем онбординг один раз.
+  Future<void> _maybeOnboard() async {
+    final p = await SharedPreferences.getInstance();
+    if ((p.getBool('onboarded_v1') ?? false) || !mounted) return;
+    final vpn = Provider.of<VpnProvider>(context, listen: false);
+    if (vpn.configs.isNotEmpty) { await p.setBool('onboarded_v1', true); return; }
+    if (!mounted) return;
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => const OnboardingScreen(), fullscreenDialog: true));
+  }
+
   // Публичный метод для переключения таба из дочерних виджетов
   void switchTab(int i) => setState(() => _tab = i);
 
@@ -765,14 +802,14 @@ class _MainShellState extends State<MainShell> {
       backgroundColor: Colors.transparent,
       // SafeArea НЕ нужен здесь — каждый дочерний Scaffold сам управляет insets:
       // - GlassAppBar добавляет padding.top вручную (учитывает челку/Dynamic Island)
-      // - _AuraBottomNav добавляет padding.bottom (навигационная полоска)
+      // - _VlyBottomNav добавляет padding.bottom (навигационная полоска)
       // - Добавление SafeArea сюда вызовет двойной отступ сверху
       body: IndexedStack(index: _tab, children: const [
         HomeScreen(),
         ServersScreen(),
         SettingsScreen(),
       ]),
-      bottomNavigationBar: _AuraBottomNav(
+      bottomNavigationBar: _VlyBottomNav(
         current: _tab,
         onTap: (i) => setState(() => _tab = i),
         light: light,
@@ -781,16 +818,88 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
+// ── Онбординг первого запуска ──────────────────────────────────────────────────
+// Основа: объясняет, что нужен конфиг, и ведёт в существующий поток добавления.
+// (Встроенных серверов пока нет — бэкенд позже; здесь честно направляем юзера.)
+class OnboardingScreen extends StatelessWidget {
+  const OnboardingScreen({super.key});
+
+  static Future<void> _markSeen() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool('onboarded_v1', true);
+  }
+
+  Widget _step(IconData icon, String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Row(children: [
+      Container(width: 40, height: 40,
+        decoration: BoxDecoration(shape: BoxShape.circle,
+          color: _accent.withOpacity(0.12),
+          border: Border.all(color: _accent.withOpacity(0.3))),
+        child: Icon(icon, color: _accent, size: 20)),
+      const SizedBox(width: 14),
+      Expanded(child: Text(text, style: TextStyle(
+          fontSize: 13.5, height: 1.35, color: Colors.white.withOpacity(0.85)))),
+    ]));
+
+  @override
+  Widget build(BuildContext context) {
+    final vpn = Provider.of<VpnProvider>(context, listen: false);
+    return VlyBlobBg(child: Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SafeArea(child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+        child: Column(children: [
+          const Spacer(flex: 2),
+          Image.asset('assets/images/vly_icon.png', width: 92, height: 92,
+              fit: BoxFit.contain),
+          const SizedBox(height: 18),
+          ShaderMask(
+            shaderCallback: (b) => const LinearGradient(colors: [
+              Color(0xFFFF2D55), Color(0xFFFF6B35), Color(0xFFFFAA60)]).createShader(b),
+            child: const Text('VLY', style: TextStyle(fontSize: 30,
+                fontWeight: FontWeight.w900, letterSpacing: 6, color: Colors.white))),
+          const SizedBox(height: 8),
+          Text(S.t('onb_tagline'), textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.55))),
+          const Spacer(),
+          _step(Icons.vpn_key_rounded, S.t('onb_step1')),
+          _step(Icons.bolt_rounded,    S.t('onb_step2')),
+          _step(Icons.lock_rounded,    S.t('onb_step3')),
+          const Spacer(flex: 2),
+          GestureDetector(
+            onTap: () { _markSeen(); Navigator.pop(context); _showAddMenu(context, vpn); },
+            child: Container(
+              width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(colors: [_accent, _accent.withOpacity(0.7)]),
+                boxShadow: [BoxShadow(color: _accent.withOpacity(0.3), blurRadius: 16)]),
+              child: Text(S.t('onb_add_config'), textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 15,
+                    fontWeight: FontWeight.w800)))),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () { _markSeen(); Navigator.pop(context); },
+            child: Text(S.t('onb_later'),
+              style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 13))),
+        ]),
+      )),
+    ));
+  }
+}
+
 // ── Bottom Navigation ─────────────────────────────────────────────────────────
 
-class _AuraBottomNav extends StatelessWidget {
+class _VlyBottomNav extends StatelessWidget {
   final int current; final ValueChanged<int> onTap; final bool light;
-  const _AuraBottomNav({required this.current, required this.onTap, required this.light});
+  const _VlyBottomNav({required this.current, required this.onTap, required this.light});
 
+  // Третий элемент — ключ локализации (метка резолвится в build через S.t).
   static const _items = [
-    (Icons.vpn_key_rounded,       Icons.vpn_key_outlined,       'VPN'),
-    (Icons.dns_rounded,           Icons.dns_outlined,            'Серверы'),
-    (Icons.settings_rounded,      Icons.settings_outlined,       'Настройки'),
+    (Icons.vpn_key_rounded,       Icons.vpn_key_outlined,       'nav_vpn'),
+    (Icons.dns_rounded,           Icons.dns_outlined,            'servers_title'),
+    (Icons.settings_rounded,      Icons.settings_outlined,       'settings'),
   ];
 
   @override
@@ -828,7 +937,7 @@ class _AuraBottomNav extends StatelessWidget {
                   size: 20,
                   color: sel ? _accent : (light ? Colors.black38 : Colors.white30))),
               const SizedBox(height: 2),
-              Text(item.$3, style: TextStyle(
+              Text(S.t(item.$3), style: TextStyle(
                 fontSize: 9,
                 color: sel ? _accent : (light ? Colors.black38 : Colors.white30),
                 fontWeight: sel ? FontWeight.w700 : FontWeight.normal,

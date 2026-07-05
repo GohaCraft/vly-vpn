@@ -2,27 +2,38 @@
 part of 'main.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  AI BYPASS ENGINE v5.0 — Апрель 2026
-//  Актуальные методы (проверено на МТС/Билайн/МегаФон):
-//  ✅ VLESS + Reality + xHTTP        — лучший (ТСПУ не детектирует)
-//  ✅ VLESS + Reality + gRPC          — хорошо
-//  ✅ Hysteria2 + UDP Hop              — отличный (UDP, ТСПУ хуже анализирует)
-//  ✅ ShadowTLS v3 + Shadowsocks      — работает
-//  ✅ VLESS + Reality (VK/Yandex SNI) — для белых списков мобильного
-//  ❌ VLESS + WebSocket               — детектируется с ноября 2025
-//  ❌ VLESS + TCP plain TLS           — заблокирован с февраля 2026
-//  ❌ OpenVPN/WireGuard               — детектируется на первом байте
+//  AI BYPASS ENGINE v6.0 — актуализировано 28.06.2026
+//  Источники: ntc.rkn.quest, net4people, XTLS/Xray-core discussions, habr.
 //
-//  ТСПУ работает в 4 слоя:
+//  СТАТУС МЕТОДОВ (июнь 2026):
+//  ✅ VLESS + Reality + xHTTP   — ЛУЧШИЙ. Reality detection stable-low.
+//  ✅ VLESS + Reality + gRPC     — хорошо.
+//  ✅ VLESS + Reality + RAW(tcp) + Vision — надёжно.
+//  ⚠️ Hysteria2 (QUIC)          — ДЕГРАДИРУЕТ: ~40% детекта (КНР, май 2026),
+//                                  QUIC-fingerprint отличим от Chrome.
+//                                  НЕ совместим с Reality (нужен LE/selfsigned).
+//  ❌ VLESS + WebSocket          — HTTP Upgrade детектируется давно и надёжно.
+//  ❌ ShadowTLS                  — НЕ поддерживается xray-core (только sing-box).
+//  ❌ OpenVPN / WireGuard plain  — детект на первом байте.
+//
+//  🔑 ВАЖНО (ограничение Reality): Reality работает ТОЛЬКО с транспортами
+//     RAW(tcp) / xHTTP / gRPC. С WebSocket и Hysteria2 — несовместим.
+//
+//  🔑 ДЫРА FINGERPRINT (post-quantum): ~57% Chrome ClientHello несут key share
+//     X25519MLKEM768 (+1088 байт). Его ОТСУТСТВИЕ при UA=Chrome — прямой
+//     fingerprint-mismatch, срабатывает ДО первого байта HTTP. Нужен свежий
+//     xray-core с PQ-fingerprint (mlkem768 / mldsa65 в Reality). См. constants.
+//
+//  DPI работает в 4 слоя:
 //  1. Сигнатурный (первые 16-32 байта) — убивает SS/OpenVPN/WG
-//  2. JA3/JA4 TLS fingerprint          — убивает плохой VLESS
+//  2. JA3/JA4 + PQ key share            — убивает плохой/устаревший VLESS
 //  3. IP/ASN несоответствие (SNI vs IP) — проверяет реальность
 //  4. Поведенческий ML (энтропия, паттерны пакетов)
 //
-//  МТС белый список апрель 2026 (~120 доменов):
-//  vk.com, yandex.ru, sber.ru, gosuslugi.ru, alfabank.ru, vtb.ru,
-//  ozon.ru, wildberries.ru, rzd.ru, aeroflot.ru, rbc.ru, ria.ru,
-//  mail.ru, ok.ru, 2gis.ru, mts.ru, gazprombank.ru, raiffeisen.ru
+//  Белые списки (мобильный, июнь 2026): пропускают трафик ТОЛЬКО на whitelisted
+//  IP (Яндекс/VK/Госуслуги/банки). Cloudflare НЕ в списке → CDN-фронтинг
+//  работает лишь на Wi-Fi. Для мобильного нужен сервер на whitelisted-ASN.
+//  SNI обязан быть из российского whitelist, иначе не проходит даже handshake.
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Режим байпаса ──────────────────────────────────────────────────────────
@@ -51,7 +62,7 @@ extension BypassModeInfo on BypassMode {
   String get description {
     switch (this) {
       case BypassMode.auto:      return 'Автоматически выбирает лучший метод. Пробует каскад из 10+ стратегий.';
-      case BypassMode.hysteria2: return 'UDP протокол — ТСПУ плохо анализирует UDP. Лучший выбор при белых списках.';
+      case BypassMode.hysteria2: return 'UDP протокол — DPI плохо анализирует UDP. Лучший выбор при белых списках.';
       case BypassMode.xhttp:    return 'Новый транспорт Xray 2026. Выглядит как обычный HTTP upload — не детектируется.';
       case BypassMode.realityVk: return 'SNI из белого списка МТС. Трафик выглядит как обращение к VK/Яндекс.';
       case BypassMode.grpc:      return 'gRPC транспорт. Хуже xHTTP но стабильнее при нестабильном соединении.';
@@ -70,52 +81,847 @@ extension BypassModeInfo on BypassMode {
       case BypassMode.whitelist: return '📋';
     }
   }
-  String get status {
+  // Векторная иконка (Material) — используется в UI вместо эмодзи.
+  IconData get icon {
     switch (this) {
-      case BypassMode.auto:      return '✅ Рекомендуется — апрель 2026';
-      case BypassMode.hysteria2: return '✅ Актуально — лучший выбор';
-      case BypassMode.xhttp:     return '✅ Актуально — новый 2026';
-      case BypassMode.realityVk: return '✅ Актуально — белый список';
-      case BypassMode.grpc:      return '✅ Актуально — стабильный';
-      case BypassMode.shadowtls: return '✅ Актуально — сложно детектировать';
-      case BypassMode.whitelist: return '⚠️ Только при активных белых списках';
+      case BypassMode.auto:      return Icons.auto_awesome;
+      case BypassMode.hysteria2: return Icons.bolt_rounded;
+      case BypassMode.xhttp:     return Icons.public_rounded;
+      case BypassMode.realityVk: return Icons.shield_rounded;
+      case BypassMode.grpc:      return Icons.settings_input_antenna_rounded;
+      case BypassMode.shadowtls: return Icons.lock_rounded;
+      case BypassMode.whitelist: return Icons.checklist_rounded;
     }
   }
-  bool get isRecommended => this == BypassMode.auto || this == BypassMode.hysteria2 || this == BypassMode.xhttp;
+  String get status {
+    switch (this) {
+      case BypassMode.auto:      return 'Рекомендуется — июнь 2026';
+      case BypassMode.hysteria2: return 'Требует ядро sing-box — недоступно';
+      case BypassMode.xhttp:     return 'Лучший — Reality-совместим';
+      case BypassMode.realityVk: return 'Лучший — Reality detection stable-low';
+      case BypassMode.grpc:      return 'Актуально — Reality + gRPC';
+      case BypassMode.shadowtls: return 'Требует ядро sing-box — недоступно';
+      case BypassMode.whitelist: return 'Белые списки: нужен whitelisted-IP сервер';
+    }
+  }
+  // Цвет статуса — заменяет эмодзи-индикатор (✅/🚧/⚠️) на чистый цвет.
+  Color get statusColor => isAvailable
+      ? (isRecommended ? const Color(0xFF00C853) : const Color(0xFF64B5F6))
+      : const Color(0xFFFFA726);
+  // Reality-методы (xHTTP/Reality) — приоритет: detection stable-low.
+  bool get isRecommended => this == BypassMode.auto || this == BypassMode.xhttp || this == BypassMode.realityVk;
+
+  // ЧЕСТНОСТЬ ДВИЖКА: реально ли метод запускается ТЕКУЩИМ ядром (xray-core
+  // через flutter_v2ray). Hysteria2 (QUIC) и ShadowTLS xray-core НЕ
+  // поддерживает — движок не соберёт рабочий туннель. Такие режимы скрыты из
+  // выбора и авто-каскада, чтобы не обещать то, чего нет и не тратить попытки
+  // на заведомо нерабочий конфиг. Появятся после переезда ядра на sing-box.
+  bool get isAvailable =>
+      this != BypassMode.hysteria2 && this != BypassMode.shadowtls;
 }
 
-// ── Blacklist стратегий (память) ───────────────────────────────────────────
-class StrategyBlacklist {
-  static final _failed = <String>{};
-  static bool   _enabled = true;
+// ── Self-healing blacklist стратегий ───────────────────────────────────────
+// КЛЮЧЕВАЯ защита от саморазрушения ИИ: провалившаяся стратегия НЕ убивается
+// навсегда (иначе ИИ постепенно перебанит всё и обход умрёт). Вместо этого она
+// уходит в cooldown с экспоненциальным backoff и АВТОМАТИЧЕСКИ возвращается в
+// строй, когда cooldown истёк. Сеть/блокировки меняются — то, что не работало
+// 10 минут назад, может заработать сейчас. markSuccess() мгновенно снимает бан.
+class _BanEntry {
+  final DateTime until;
+  final int fails;
+  const _BanEntry(this.until, this.fails);
+  Map<String, dynamic> toJson() => {'u': until.millisecondsSinceEpoch, 'f': fails};
+  static _BanEntry fromJson(Map j) => _BanEntry(
+      DateTime.fromMillisecondsSinceEpoch((j['u'] as num).toInt()),
+      (j['f'] as num).toInt());
+}
 
-  static bool isFailed(String type) => _enabled && _failed.contains(type);
-  static void markFailed(String type) { if (_enabled) _failed.add(type); }
-  static void clear() { _failed.clear(); }
-  static List<String> get allBlocked => _failed.toList();
+class StrategyBlacklist {
+  static final Map<String, _BanEntry> _banned = {};
+  static bool _enabled = true;
+  static const _baseCooldown = Duration(minutes: 8);
+  static const _maxCooldown  = Duration(hours: 2);
+
+  static bool isFailed(String type) {
+    if (!_enabled) return false;
+    final e = _banned[type];
+    if (e == null) return false;
+    if (DateTime.now().isAfter(e.until)) { _banned.remove(type); return false; } // cooldown истёк
+    return true;
+  }
+
+  static void markFailed(String type) {
+    if (!_enabled) return;
+    final fails = (_banned[type]?.fails ?? 0) + 1;
+    // Экспоненциальный backoff: 8м → 16м → 32м → 1ч4м → ... до потолка 2ч.
+    var d = _baseCooldown * (1 << (fails - 1).clamp(0, 4));
+    if (d > _maxCooldown) d = _maxCooldown;
+    _banned[type] = _BanEntry(DateTime.now().add(d), fails);
+  }
+
+  // Стратегия сработала — снимаем бан немедленно (само-восстановление).
+  static void markSuccess(String type) => _banned.remove(type);
+
+  static void clear() => _banned.clear();
+
+  // Активно забаненные (с непросроченным cooldown) — для диагностики/UI.
+  static List<String> get allBlocked =>
+      _banned.keys.where((t) => isFailed(t)).toList();
+
   static bool get isEnabled => _enabled;
   static void setEnabled(bool v) { _enabled = v; }
+
+  // Сериализация для персиста между запусками (см. AiMemory).
+  static Map<String, dynamic> toJson() =>
+      _banned.map((k, v) => MapEntry(k, v.toJson()));
+  static void restoreJson(Map<String, dynamic> j) {
+    _banned.clear();
+    j.forEach((k, v) { if (v is Map) _banned[k] = _BanEntry.fromJson(v); });
+    _banned.removeWhere((_, v) => DateTime.now().isAfter(v.until)); // чистим просроченные
+  }
+}
+
+// «Рука» бандита: накопленная статистика одной стратегии на одном классе сети.
+class _Arm {
+  int ms;      // сглаженная (EWMA) задержка успешной пробы, мс
+  int wins;    // сколько раз реально сработала (проба/туннель прошли)
+  int losses;  // сколько раз провалилась (проба не прошла / туннель умер)
+  int seenMs;  // epoch последнего обновления — для затухания устаревших знаний
+  _Arm({this.ms = 0, this.wins = 0, this.losses = 0, required this.seenMs});
+
+  Map<String, dynamic> toJson() => {'m': ms, 'w': wins, 'l': losses, 's': seenMs};
+  static _Arm fromJson(Map j) => _Arm(
+        ms:     (j['m'] as num?)?.toInt() ?? 0,
+        wins:   (j['w'] as num?)?.toInt() ?? 0,
+        losses: (j['l'] as num?)?.toInt() ?? 0,
+        seenMs: (j['s'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+      );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  AI MEMORY — долговременная память ИИ (сохраняется между запусками)
+//
+//  Модель: контекстный многорукий бандит. Для каждого КЛАССА СЕТИ
+//  (mobile_wl / mobile / wifi) храним статистику по каждой стратегии: скорость
+//  (EWMA-задержка), надёжность (wins/losses) и свежесть (когда последний раз
+//  подтверждена). Порядок каскада = сортировка по СКОРУ = надёжность × скорость
+//  × свежесть. ИИ учится не «что работало», а «что работает БЫСТРО и СТАБИЛЬНО
+//  ИМЕННО ЗДЕСЬ, и подтверждалось НЕДАВНО».
+//
+//  🔒 ГЛАВНЫЙ ИНВАРИАНТ БЕЗОПАСНОСТИ («ИИ не должна расхерачить весь проект»):
+//     память может ТОЛЬКО ПЕРЕУПОРЯДОЧИТЬ каскад, но НИКОГДА не удаляет из него
+//     стратегии. Полный статический каскад всегда на месте; даже стратегия с
+//     нулевым скором остаётся кандидатом и будет опробована, если верхние не
+//     прошли. Плюс паник-флор в _runAutoMode: если всё в cooldown — чистим и
+//     пробуем заново. Пользователь физически не может остаться без обхода.
+//
+//  Самокоррекция: провал пробы или смерть живого туннеля (сигнал от
+//  HealthMonitor через penalizeActive) добавляет loss → скор падает →
+//  стратегия опускается. Это лечит «отравление» модели быстрой, но по факту
+//  нерабочей стратегией (проба TLS прошла, а сквозь туннель — нет).
+//
+//  Границы: устаревшие (>21 дня) записи чистятся при загрузке, на класс сети
+//  хранится не больше _maxArmsPerNet стратегий (кэп памяти). load() устойчив к
+//  битому JSON (try/catch + мягкий парсинг полей). Всё в SharedPreferences,
+//  запись дебаунсится.
+// ═══════════════════════════════════════════════════════════════════════════
+class AiMemory {
+  static const _key = 'ai_memory_v1';
+  static const _maxArmsPerNet = 24;                 // кэп памяти на класс сети
+  static const _staleAfter = Duration(days: 21);    // забываем совсем старое
+  static final Map<String, Map<String, _Arm>> _arms = {};
+  // Последняя ПОДТВЕРЖДЁННАЯ стратегия — «активная рука». Нужна, чтобы сигнал
+  // «живой туннель умер» (end-to-end от HealthMonitor) наказал именно её.
+  static String? _activeNet;
+  static String? _activeType;
+  static int _activeSinceMs = 0;   // когда активная рука подтверждена (для grace)
+  static Timer? _saveDebounce;
+
+  // Грейс после подтверждённого коннекта: провал «живого туннеля» в первые
+  // секунды чаще network-нестабильность/руминг, чем вина стратегии. В этом окне
+  // penalizeActive не наказывает (иначе шумовые лоссы травят проверенную руку);
+  // истину всё равно установит следующая реальная проба каскада.
+  static const int _penalizeGraceMs = 12000;
+
+  static int get _now => DateTime.now().millisecondsSinceEpoch;
+
+  // Класс сети — грубый «отпечаток» без спец-разрешений (SSID недоступен без
+  // location). mobile+whitelist / mobile / wifi покрывают разные режимы обхода.
+  static String netClass(bool mobile, bool whitelist) =>
+      mobile ? (whitelist ? 'mobile_wl' : 'mobile') : 'wifi';
+
+  // ── Обучение ───────────────────────────────────────────────────────────────
+  // Стратегия сработала: обновляем задержку (EWMA 60/40), +win, метка свежести.
+  // Фиксируем её как активную руку для end-to-end обратной связи.
+  static void recordSuccess(String net, String type, int ms) {
+    final v = ms.clamp(0, 60000);
+    final m = _arms.putIfAbsent(net, () => {});
+    final a = m.putIfAbsent(type, () => _Arm(seenMs: _now));
+    a.ms = a.ms == 0 ? v : (a.ms * 0.6 + v * 0.4).round();
+    a.wins++;
+    a.seenMs = _now;
+    _activeNet = net; _activeType = type; _activeSinceMs = _now;
+    _prune(net);
+    _scheduleSave();
+  }
+
+  // Стратегия провалилась: +loss. Наказываем ТОЛЬКО уже известную руку —
+  // не создаём записи на провалах (иначе память замусорится проигравшими).
+  static void recordFailure(String net, String type) {
+    final a = _arms[net]?[type];
+    if (a == null) return;
+    a.losses++;
+    a.seenMs = _now;
+    _scheduleSave();
+  }
+
+  // End-to-end сигнал: HealthMonitor увидел, что ЖИВОЙ туннель массово умер →
+  // активная стратегия по факту не работает сквозь туннель, хоть TLS-проба и
+  // прошла. Наказываем именно её — модель сама себя исправляет.
+  // Чистая проверка грейса (тестируемо): наказывать можно, только если прошло
+  // достаточно времени с подтверждения активной руки.
+  static bool pastPenalizeGrace(int activeSinceMs, int nowMs) =>
+      nowMs - activeSinceMs >= _penalizeGraceMs;
+
+  // Возвращает true, если реально наказали (для тестов/диагностики).
+  static bool penalizeActive() {
+    final n = _activeNet, t = _activeType;
+    if (n == null || t == null) return false;
+    // Грейс: только что подтверждённую руку не хороним на первом же шуме.
+    if (!pastPenalizeGrace(_activeSinceMs, _now)) return false;
+    recordFailure(n, t);
+    return true;
+  }
+
+  // Обратная связь по КАЧЕСТВУ живой сессии (не только connect-проба). Устойчиво
+  // здоровая активная рука получает доп. подтверждение (+win) — «реально держит»,
+  // а не просто прошла пробу; устойчиво деградировавшая (throttle, но не смерть)
+  // получает мягкий минус (+loss). Так модель различает «подключилось и стабильно»
+  // и «подключилось, но душат». Уважает грейс. Возвращает true, если применилось.
+  static bool reinforceActive({required bool healthy}) {
+    final n = _activeNet, t = _activeType;
+    if (n == null || t == null) return false;
+    if (!pastPenalizeGrace(_activeSinceMs, _now)) return false;
+    final a = _arms[n]?[t];
+    if (a == null) return false;
+    if (healthy) { a.wins++; } else { a.losses++; }
+    a.seenMs = _now;
+    _scheduleSave();
+    return true;
+  }
+
+  // Период полураспада доказательств. Среда НЕ стационарна (цензура меняется
+  // за недели), поэтому старые wins/losses «выцветают» к нейтральному приору 0.5:
+  // задушенная месяц назад стратегия получает второй шанс, а давно не
+  // подтверждённый успех перестаёт слепо доверяться. 7 дней — эмпирический баланс.
+  static const double _halfLifeDays = 7.0;
+
+  // Надёжность с затуханием доказательств во времени (чистая, тестируемая).
+  // Decay ∈ (0,1]: и wins, и losses умножаются на него → при старении evidence
+  // reliability дрейфует к 0.5 (нейтрально/неизвестно), а не застревает навсегда.
+  static double reliabilityDecayed(int wins, int losses, double ageDays) {
+    final decay = ageDays <= 0 ? 1.0 : pow(0.5, ageDays / _halfLifeDays).toDouble();
+    final w = wins * decay;
+    final l = losses * decay;
+    return (w + 1) / (w + l + 2); // Лаплас-сглаживание ∈ (0,1)
+  }
+
+  // Скор руки: надёжность × скорость × свежесть. Чем выше — тем раньше в каскаде.
+  static double _score(_Arm a) {
+    final ageDays = (_now - a.seenMs) / 86400000.0;
+    final reliability = reliabilityDecayed(a.wins, a.losses, ageDays);
+    final speed = 600.0 / (a.ms + 300);                          // быстрее → больше
+    // Свежесть затухает, но не в ноль (пол 0.4): старое-но-хорошее ещё в игре.
+    final recency = ageDays <= 1 ? 1.0
+        : (1.0 / (1 + 0.15 * (ageDays - 1))).clamp(0.4, 1.0);
+    return reliability * speed * recency;
+  }
+
+  // Родство стратегии к ТИПУ блокировки для ХОЛОДНОГО старта (меньше = раньше).
+  // Домен-знание: какой класс обхода бьёт какой тип DPI-блокировки. Пока модель
+  // не изучила сеть — начинаем с правильного контр-приёма под наблюдаемый блок,
+  // а не со слепого статического порядка. Изученные руки по-прежнему главнее
+  // (их ставит скор), affinity влияет только на ещё не опробованные.
+  static int blockAffinity(BlockType bt, String type) {
+    final t = type;
+    switch (bt) {
+      case BlockType.tlsFingerprint:
+        // Блок по TLS-отпечатку → менять fingerprint/транспорт.
+        if (t.contains('xhttp'))   return 0;
+        if (t.contains('vision'))  return 1;
+        if (t.contains('reality')) return 2;
+        if (t.contains('fragment'))return 3;
+        return 5;
+      case BlockType.tcpReset:
+        // Инъекция RST → фрагментация ClientHello ломает сборку RST у DPI.
+        if (t.contains('fragment'))return 0;
+        if (t.contains('xhttp'))   return 1;
+        if (t.contains('reality')) return 2;
+        return 5;
+      case BlockType.dnsPoisoning:
+        // DNS лечится DoH в connect-пути; транспорт вторичен — ведём стабильный Reality.
+        if (t.contains('reality')) return 0;
+        if (t.contains('xhttp'))   return 1;
+        return 4;
+      case BlockType.portBlocked:
+        // Порт закрыт → CDN/gRPC (443) и смена SNI-фронта.
+        if (t.contains('cdn'))     return 0;
+        if (t.contains('grpc'))    return 1;
+        if (t.contains('reality')) return 2;
+        return 4;
+      default:
+        return 3; // нейтрально
+    }
+  }
+
+  // Признак «RU-дружественной» стратегии: работает через whitelisted SNI-фронт
+  // (Reality/xHTTP/Vision/whitelist-fronting по RU-домену). В whitelist-сети
+  // только такие и проходят.
+  static bool isWhitelistFriendly(String type) =>
+      type.contains('reality') || type.contains('xhttp') ||
+      type.contains('vision')  || type.contains('whitelist');
+
+  // ПРАВИЛО холодного старта: комбинирует родство к типу блока и контекст сети.
+  // Меньше = раньше в каскаде (для ещё не изученных стратегий).
+  //  1) В whitelist-сети «иностранные»/plain стратегии обречены (пропускает
+  //     только whitelisted SNI) → отправляем их глубоко вниз.
+  //  2) Внутри группы — по родству к наблюдаемому типу блокировки.
+  static int coldRank(BlockType bt, bool whitelistActive, String type) {
+    var r = blockAffinity(bt, type) * 20;
+    if (whitelistActive && !isWhitelistFriendly(type)) {
+      r += 400; // не-RU стратегия в белом списке — почти бесполезна, вниз
+    }
+    return r;
+  }
+
+  static int? latencyFor(String net, String type) => _arms[net]?[type]?.ms;
+
+  // Адаптивный таймаут пробы: известную быструю стратегию не ждём полные 3с —
+  // если за 4× её исторической задержки не подключилась, она сейчас не работает,
+  // быстрее переходим к следующей. Неизученную ждём полный бюджет. [1000..3000]мс.
+  static int adaptiveProbeTimeoutMs(int? learnedMs) {
+    if (learnedMs == null || learnedMs <= 0) return 3000;
+    return (learnedMs * 4).clamp(1000, 3000);
+  }
+
+  // Диагностика/тесты: сырая статистика руки (или null, если не изучена).
+  static Map<String, int>? statsFor(String net, String type) {
+    final a = _arms[net]?[type];
+    return a == null ? null : {'wins': a.wins, 'losses': a.losses, 'ms': a.ms};
+  }
+
+  // UCB-исследование: среда НЕ стационарна (цензура меняется), поэтому чистый
+  // жадный выбор застревает — рука, которой не повезло на старте, хоронится
+  // навсегда. Мягкий бонус недоизученным рукам заставляет их иногда пере-
+  // пробовать. Вес мал (не перебивает явного лидера, только near-ties).
+  static const double _exploreC = 0.08;
+  static double _ucbScore(_Arm a, double lnTotal) {
+    final trials = a.wins + a.losses;
+    final explore = trials > 0 ? _exploreC * sqrt(lnTotal / trials) : _exploreC;
+    return _score(a) + explore;
+  }
+
+  // Стратегии этой сети по убыванию скора (лучшие — первыми). Пусто для
+  // неизученной сети → каскад идёт в статическом порядке.
+  static List<String> rankedTypes(String net) {
+    final m = _arms[net];
+    if (m == null || m.isEmpty) return const [];
+    final total = m.values.fold<int>(0, (s, a) => s + a.wins + a.losses);
+    final lnTotal = total > 1 ? log(total.toDouble()) : 0.0;
+    final e = m.entries.toList()
+      ..sort((a, b) => _ucbScore(b.value, lnTotal).compareTo(_ucbScore(a.value, lnTotal)));
+    return e.map((x) => x.key).toList();
+  }
+
+  static String? winnerFor(String net) {
+    final r = rankedTypes(net);
+    return r.isEmpty ? null : r.first;
+  }
+
+  // Убираем протухшие руки и держим кэп памяти (оставляем top-N по скору).
+  static void _prune(String net) {
+    final m = _arms[net];
+    if (m == null) return;
+    final cutoff = _now - _staleAfter.inMilliseconds;
+    m.removeWhere((_, a) => a.seenMs < cutoff);
+    if (m.length > _maxArmsPerNet) {
+      final keep = (m.entries.toList()
+            ..sort((a, b) => _score(b.value).compareTo(_score(a.value))))
+          .take(_maxArmsPerNet)
+          .map((e) => e.key)
+          .toSet();
+      m.removeWhere((k, _) => !keep.contains(k));
+    }
+  }
+
+  // ── Совместимость со старым API (UI/тесты) ──────────────────────────────────
+  static void recordWinner(String net, String type) {
+    final m = _arms.putIfAbsent(net, () => {});
+    final a = m.putIfAbsent(type, () => _Arm(seenMs: _now));
+    a.wins++;
+    a.seenMs = _now;
+    _activeNet = net; _activeType = type; _activeSinceMs = _now;
+    _scheduleSave();
+  }
+
+  static void recordLatency(String net, String type, int ms) =>
+      recordSuccess(net, type, ms);
+
+  static void onBlacklistChanged() => _scheduleSave();
+
+  static void _scheduleSave() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 2), save);
+  }
+
+  // ── Персист ─────────────────────────────────────────────────────────────────
+  static Future<void> load() async {
+    try {
+      final p   = await SharedPreferences.getInstance();
+      final raw = p.getString(_key);
+      if (raw == null) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      _arms.clear();
+      final arms = (j['arms'] as Map?)?.cast<String, dynamic>();
+      if (arms != null) {
+        arms.forEach((net, m) {
+          if (m is Map) {
+            final inner = <String, _Arm>{};
+            m.forEach((type, a) {
+              if (a is Map) inner[type.toString()] = _Arm.fromJson(a);
+            });
+            if (inner.isNotEmpty) _arms[net] = inner;
+          }
+        });
+      } else {
+        _migrateLegacy(j); // мягкая миграция со старой схемы winners/latency
+      }
+      for (final net in _arms.keys.toList()) { _prune(net); }
+      final bl = (j['blacklist'] as Map?)?.cast<String, dynamic>() ?? {};
+      StrategyBlacklist.restoreJson(bl);
+    } catch (_) {}
+  }
+
+  // Переносим знания старого формата, чтобы у пользователей не обнулялось обучение.
+  static void _migrateLegacy(Map<String, dynamic> j) {
+    final lat = (j['latency'] as Map?)?.cast<String, dynamic>() ?? {};
+    lat.forEach((net, m) {
+      if (m is Map) {
+        final inner = _arms.putIfAbsent(net, () => {});
+        m.forEach((type, v) {
+          inner[type.toString()] =
+              _Arm(ms: (v as num).toInt(), wins: 1, seenMs: _now);
+        });
+      }
+    });
+    final win = (j['winners'] as Map?)?.cast<String, dynamic>() ?? {};
+    win.forEach((net, type) {
+      final inner = _arms.putIfAbsent(net, () => {});
+      final t = type.toString();
+      (inner[t] ??= _Arm(seenMs: _now)).wins += 1;
+    });
+  }
+
+  static Future<void> save() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_key, jsonEncode({
+        'arms': _arms.map((net, m) =>
+            MapEntry(net, m.map((t, a) => MapEntry(t, a.toJson())))),
+        'blacklist': StrategyBlacklist.toJson(),
+      }));
+    } catch (_) {}
+  }
+
+  // Для тестов/диагностики: полный сброс памяти.
+  static void resetAll() {
+    _arms.clear();
+    _activeNet = null;
+    _activeType = null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NODE MEMORY — репутация НОД (не только стратегий).
+//
+//  Авто-выбор ноды раньше шёл ЧИСТО по пингу: нода с пингом 40мс, чей VPN-
+//  handshake стабильно режется DPI, выбиралась вперёд надёжной ноды на 60мс
+//  медленнее. Пинг ≠ рабочий туннель. Теперь ранжируем ноды по
+//  reliability × ping-speed: сколько раз реально подключились/держали против
+//  сколько раз провал. Учится между запусками, лечится затуханием (нода могла
+//  разблокироваться). Ключ — host ноды (стабилен между сессиями).
+// ═══════════════════════════════════════════════════════════════════════════
+class _NodeStat {
+  int ok, fail, seenMs;
+  _NodeStat({this.ok = 0, this.fail = 0, required this.seenMs});
+  Map<String, dynamic> toJson() => {'o': ok, 'f': fail, 's': seenMs};
+  static _NodeStat fromJson(Map j) => _NodeStat(
+      ok: (j['o'] as num?)?.toInt() ?? 0,
+      fail: (j['f'] as num?)?.toInt() ?? 0,
+      seenMs: (j['s'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch);
+}
+
+class NodeMemory {
+  static const _key = 'ai_node_memory_v1';
+  static const _staleAfter = Duration(days: 30);
+  static const _maxNodes = 200;   // кэп памяти на 24/7 (ротация нод провайдером)
+  static final Map<String, _NodeStat> _stats = {};
+  static Timer? _saveDebounce;
+  static int get _now => DateTime.now().millisecondsSinceEpoch;
+
+  static void record(String host, {required bool ok}) {
+    if (host.isEmpty) return;
+    final s = _stats.putIfAbsent(host, () => _NodeStat(seenMs: _now));
+    if (ok) s.ok++; else s.fail++;
+    s.seenMs = _now;
+    _prune(); // держим карту ограниченной и в рантайме, не только при load()
+    _schedule();
+  }
+
+  // Убираем протухшее и держим кэп (оставляем самые недавно виденные ноды).
+  static void _prune() {
+    final cutoff = _now - _staleAfter.inMilliseconds;
+    _stats.removeWhere((_, s) => s.seenMs < cutoff);
+    if (_stats.length > _maxNodes) {
+      final keep = (_stats.entries.toList()
+            ..sort((a, b) => b.value.seenMs.compareTo(a.value.seenMs)))
+          .take(_maxNodes).map((e) => e.key).toSet();
+      _stats.removeWhere((k, _) => !keep.contains(k));
+    }
+  }
+
+  // Чистая ранжирующая функция (тестируемо): выше = лучше нода.
+  // reliability (Лаплас, с затуханием старого evidence к нейтрали) × ping-speed.
+  static double rankScore(int pingMs, int ok, int fail, {double ageDays = 0}) {
+    final reliability = AiMemory.reliabilityDecayed(ok, fail, ageDays);
+    final pingSpeed = 1000.0 / (pingMs.clamp(1, 9999) + 100);
+    return reliability * pingSpeed;
+  }
+
+  // Скор конкретной ноды по её host и текущему пингу.
+  static double score(String host, int pingMs) {
+    final s = _stats[host];
+    if (s == null) return rankScore(pingMs, 0, 0);
+    final ageDays = (_now - s.seenMs) / 86400000.0;
+    return rankScore(pingMs, s.ok, s.fail, ageDays: ageDays);
+  }
+
+  static Map<String, int>? statsFor(String host) {
+    final s = _stats[host];
+    return s == null ? null : {'ok': s.ok, 'fail': s.fail};
+  }
+
+  // Размер карты — для диагностики/тестов (контроль памяти в 24/7).
+  static int get count => _stats.length;
+
+  static void _schedule() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 3), save);
+  }
+
+  static Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_key);
+      if (raw == null) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      _stats.clear();
+      j.forEach((host, v) { if (v is Map) _stats[host] = _NodeStat.fromJson(v); });
+      _prune(); // протухшее + кэп
+    } catch (_) {}
+  }
+
+  static Future<void> save() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_key,
+          jsonEncode(_stats.map((h, s) => MapEntry(h, s.toJson()))));
+    } catch (_) {}
+  }
+
+  static void resetAll() => _stats.clear();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  FRONT REPUTATION — репутация SNI-фронтов белого списка
+//
+//  Discovery меряет ДОСТУПНОСТЬ фронта (TLS-handshake + задержка), но
+//  reachable-и-быстрый ≠ работает-как-фронт: домен может отвечать за 30мс, а
+//  сквозь туннель душиться или быть флагнут DPI по SNI. Тот же урок, что уже
+//  вытянул выбор нод и стратегий: пинг ≠ рабочий обход. Учим на РЕАЛЬНЫХ
+//  исходах сессий (сработала/провалилась whitelist-стратегия на этом SNI) и
+//  ранжируем фронты по надёжность × скорость. Словарь фронтов фиксирован
+//  (whitelist-пулы) → карта естественно ограничена; кэп на всякий случай.
+// ═══════════════════════════════════════════════════════════════════════════
+class FrontReputation {
+  static const _key = 'ai_front_rep_v1';
+  static const _staleAfter = Duration(days: 30);
+  static const _maxFronts = 64;      // кэп памяти (пул фронтов и так небольшой)
+  static final Map<String, _NodeStat> _stats = {};
+  static Timer? _saveDebounce;
+  static int get _now => DateTime.now().millisecondsSinceEpoch;
+
+  // Исход использования фронта в реальной сессии: ok=прошло сквозь туннель.
+  static void record(String sni, {required bool ok}) {
+    if (sni.isEmpty) return;
+    final s = _stats.putIfAbsent(sni, () => _NodeStat(seenMs: _now));
+    if (ok) s.ok++; else s.fail++;
+    s.seenMs = _now;
+    _prune();
+    _schedule();
+  }
+
+  static void _prune() {
+    final cutoff = _now - _staleAfter.inMilliseconds;
+    _stats.removeWhere((_, s) => s.seenMs < cutoff);
+    if (_stats.length > _maxFronts) {
+      final keep = (_stats.entries.toList()
+            ..sort((a, b) => b.value.seenMs.compareTo(a.value.seenMs)))
+          .take(_maxFronts).map((e) => e.key).toSet();
+      _stats.removeWhere((k, _) => !keep.contains(k));
+    }
+  }
+
+  // Скор фронта: надёжность-как-фронт × скорость. Реюз чистой rankScore нод —
+  // тот же принцип (reliability × ping-speed), неизученный фронт → по пингу.
+  static double score(String sni, int pingMs) {
+    final s = _stats[sni];
+    if (s == null) return NodeMemory.rankScore(pingMs, 0, 0);
+    final ageDays = (_now - s.seenMs) / 86400000.0;
+    return NodeMemory.rankScore(pingMs, s.ok, s.fail, ageDays: ageDays);
+  }
+
+  static Map<String, int>? statsFor(String sni) {
+    final s = _stats[sni];
+    return s == null ? null : {'ok': s.ok, 'fail': s.fail};
+  }
+
+  static int get count => _stats.length;
+
+  static void _schedule() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(seconds: 3), save);
+  }
+
+  static Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final raw = p.getString(_key);
+      if (raw == null) return;
+      final j = jsonDecode(raw) as Map<String, dynamic>;
+      _stats.clear();
+      j.forEach((sni, v) { if (v is Map) _stats[sni] = _NodeStat.fromJson(v); });
+      _prune();
+    } catch (_) {}
+  }
+
+  static Future<void> save() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_key,
+          jsonEncode(_stats.map((h, s) => MapEntry(h, s.toJson()))));
+    } catch (_) {}
+  }
+
+  static void resetAll() => _stats.clear();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MUTATION PROGRAM — серверно-обновляемый AI-каскад (без пересборки app)
+//
+//  Реализует «client integration» из blueprint §4b в форме, которая реально
+//  работает с xray-core: сервер (движок открытия стратегий) публикует
+//  mutation-программу — упорядоченный набор стратегий обхода по классу сети —
+//  а клиент подхватывает её на лету через тот же безопасный паттерн, что уже
+//  используется для bypass_rules (валидация + версионный гейт + кэш), ПЛЮС две
+//  вещи, которых там не было: TTL (протухшие программы авто-истекают) и
+//  schema/min_client-гейт (программа новее клиента отвергается).
+//
+//  🔒 ИНВАРИАНТ БЕЗОПАСНОСТИ: программа НЕ заменяет вшитый каскад целиком —
+//     серверные стратегии идут ПЕРВЫМИ, а статический каскад остаётся «полом»
+//     под ними (см. _buildCascade). Любая проблема (нет программы / истекла /
+//     несовместима / битый JSON) → decode вернёт null → работает вшитый каскад.
+//     Сервер физически не может оставить клиент без обхода.
+// ═══════════════════════════════════════════════════════════════════════════
+class MutationProgram {
+  final int schemaVersion;      // версия схемы программы
+  final int minClientSchema;    // требуемая версия интерпретатора клиента
+  final int programVersion;     // монотонная — заменяем только на более новую
+  final DateTime? expiresAt;    // TTL: после — программа не используется
+  final Map<String, List<BypassStrategy>> byNet; // net_class -> стратегии
+  final List<BypassStrategy> generic;            // если нет совпадения по сети
+
+  const MutationProgram({
+    required this.schemaVersion,
+    required this.minClientSchema,
+    required this.programVersion,
+    required this.expiresAt,
+    required this.byNet,
+    required this.generic,
+  });
+
+  bool get isExpired    => expiresAt != null && DateTime.now().isAfter(expiresAt!);
+  bool get isCompatible => minClientSchema <= kAiCascadeSchema;
+  bool get isUsable     => isCompatible && !isExpired &&
+      (generic.isNotEmpty || byNet.isNotEmpty);
+
+  // Стратегии для класса сети (или generic). null — программа непригодна.
+  List<BypassStrategy>? strategiesFor(String net) {
+    if (!isUsable) return null;
+    final s = byNet[net];
+    if (s != null && s.isNotEmpty) return s;
+    return generic.isNotEmpty ? generic : null;
+  }
+
+  // Строгий парсер: ЛЮБОЕ несоответствие → null (клиент откатится на вшитый
+  // каскад — инвариант безопасности сохранён). Никогда не бросает.
+  static MutationProgram? decode(dynamic raw) {
+    try {
+      if (raw is! Map) return null;
+      final schema = (raw['schema'] as num?)?.toInt() ?? 0;
+      if (schema <= 0) return null;
+      final minClient = (raw['min_client'] as num?)?.toInt() ?? schema;
+      if (minClient > kAiCascadeSchema) return null; // клиент слишком старый
+      final ver = (raw['version'] as num?)?.toInt() ?? 0;
+
+      DateTime? exp;
+      final expMs = (raw['expires_at'] as num?)?.toInt();
+      final ttl   = (raw['ttl_seconds'] as num?)?.toInt();
+      if (expMs != null) {
+        exp = DateTime.fromMillisecondsSinceEpoch(expMs);
+      } else if (ttl != null && ttl > 0) {
+        exp = DateTime.now().add(Duration(seconds: ttl));
+      }
+
+      List<BypassStrategy> parseList(dynamic l) {
+        if (l is! List) return const [];
+        final out = <BypassStrategy>[];
+        for (final e in l) {
+          if (e is! Map) continue;
+          final type = e['type'];
+          if (type is! String || type.isEmpty) continue;
+          out.add(BypassStrategy.fromJson(Map<String, dynamic>.from(e)));
+        }
+        return out;
+      }
+
+      final byNet = <String, List<BypassStrategy>>{};
+      final nets = raw['by_net'];
+      if (nets is Map) {
+        nets.forEach((k, v) {
+          final list = parseList(v);
+          if (list.isNotEmpty) byNet[k.toString()] = list;
+        });
+      }
+      final generic = parseList(raw['generic']);
+      if (byNet.isEmpty && generic.isEmpty) return null; // пустая = бесполезна
+
+      return MutationProgram(
+        schemaVersion: schema, minClientSchema: minClient,
+        programVersion: ver, expiresAt: exp, byNet: byNet, generic: generic);
+    } catch (_) { return null; }
+  }
+
+  Map<String, dynamic> _stratJson(BypassStrategy s) =>
+      {'priority': s.priority, 'type': s.type, 'params': s.params};
+
+  Map<String, dynamic> toCache() => {
+    'schema': schemaVersion, 'min_client': minClientSchema, 'version': programVersion,
+    if (expiresAt != null) 'expires_at': expiresAt!.millisecondsSinceEpoch,
+    'by_net': byNet.map((k, v) => MapEntry(k, v.map(_stratJson).toList())),
+    'generic': generic.map(_stratJson).toList(),
+  };
+}
+
+// Реестр активной mutation-программы: загрузка/кэш/синк + версионный гейт.
+class MutationRegistry {
+  static const _key = 'ai_mutations_v1';
+  static MutationProgram? _active;
+  static int _version = 0;
+
+  static int get version => _version;
+
+  // Активная программа — только если пригодна (совместима и не истекла).
+  static MutationProgram? get active =>
+      (_active != null && _active!.isUsable) ? _active : null;
+
+  // Применяем свежую программу только если она новее текущей и пригодна.
+  static bool apply(MutationProgram p) {
+    if (!p.isUsable) return false;
+    if (p.programVersion <= _version) return false;
+    _active = p;
+    _version = p.programVersion;
+    return true;
+  }
+
+  static void reset() { _active = null; _version = 0; }
+
+  static Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_key);
+      if (raw == null) return;
+      final p = MutationProgram.decode(jsonDecode(raw));
+      if (p != null && p.isUsable) { _active = p; _version = p.programVersion; }
+    } catch (_) {}
+  }
+
+  static Future<void> _save() async {
+    try {
+      final p = _active;
+      if (p == null) return;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_key, jsonEncode(p.toCache()));
+    } catch (_) {}
+  }
+
+  // Тянем свежую программу с control-plane. Канал аутентифицирован TLS-pinning
+  // (PinnedHttpClient); при любой ошибке молча остаёмся на текущей/вшитой.
+  static Future<bool> syncFromServer(void Function(String) log) async {
+    try {
+      final res = await PinnedHttpClient.get(kAiMutationsUrl,
+          timeout: const Duration(seconds: 8));
+      if (res.statusCode != 200) return false;
+      final p = MutationProgram.decode(jsonDecode(res.body));
+      if (p == null) { log('⚠ AI-mutations: payload отклонён валидацией'); return false; }
+      if (apply(p)) {
+        await _save();
+        log('🧬 AI-mutations v$_version применены (schema ${p.schemaVersion})');
+        return true;
+      }
+      return false;
+    } catch (e) { log('⚠ AI-mutations sync: $e'); return false; }
+  }
 }
 
 // ── Детектор белых списков ──────────────────────────────────────────────────
 class WhitelistBypassEngine {
-  // Тест: пробуем достучаться до зарубежного IP напрямую
-  // Если не получается но RU-домены работают — белый список активен
+  // Детект режима белого списка. Усилено 28.06.2026: вместо одиночной пробы
+  // (1.1.1.1 — мог дать ложняк при флуктуации одного IP) пробуем НЕСКОЛЬКО
+  // не-whitelisted зарубежных endpoint'ов параллельно. Whitelist = НИ ОДИН
+  // зарубежный недоступен, НО российский whitelist-домен жив (иначе это просто
+  // отсутствие сети, а не белый список).
+  static const _foreignProbes = [
+    ['1.1.1.1', 443], ['8.8.8.8', 443], ['9.9.9.9', 443], ['208.67.222.222', 443],
+  ];
   static Future<bool> isWhitelistActive() async {
-    try {
-      // Пробуем Cloudflare DNS (1.1.1.1) — он не в белом списке
-      final s = await Socket.connect('1.1.1.1', 443,
-          timeout: const Duration(seconds: 2));
-      s.destroy();
-      return false; // Если прошло — белых списков нет
-    } catch (_) {
-      // Не прошло — проверяем что VK работает (чтобы отличить от полного отключения)
+    int reachable = 0;
+    await Future.wait(_foreignProbes.map((e) async {
       try {
-        final addrs = await InternetAddress.lookup('vk.com');
-        return addrs.isNotEmpty; // VK работает, зарубежный нет = белый список
-      } catch (_) {
-        return false; // Вообще нет интернета
-      }
+        final s = await Socket.connect(e[0] as String, e[1] as int,
+            timeout: const Duration(milliseconds: 1500));
+        s.destroy();
+        reachable++;
+      } catch (_) {}
+    }));
+    if (reachable > 0) return false; // хоть один зарубежный доступен → не whitelist
+    // Все зарубежные мертвы — отличаем whitelist от полного отсутствия сети.
+    try {
+      final addrs = await InternetAddress.lookup('vk.com')
+          .timeout(const Duration(seconds: 2));
+      return addrs.isNotEmpty;
+    } catch (_) {
+      return false; // сети нет вообще
     }
   }
 
@@ -157,7 +963,7 @@ class WhitelistBypassEngine {
 
   // SNI для WiFi (обычные блокировки, не белые списки)
   static const kWifiSniList = [
-    // Крупные CDN которые пропускает ТСПУ
+    // Крупные CDN которые пропускает DPI
     'www.microsoft.com', 'login.microsoftonline.com', 'dl.google.com', 'update.googleapis.com',
     'gateway.icloud.com', 'itunes.apple.com', 'cdn.cloudflare.com',
     'ajax.googleapis.com', 'fonts.googleapis.com',
@@ -165,12 +971,89 @@ class WhitelistBypassEngine {
     'vk.com', 'yandex.ru', 'mail.ru',
   ];
 
-  // Получить рабочий SNI в зависимости от типа сети
+  // ═══ ИЗМЕРЯЕМЫЙ АВТО-DISCOVERY ФРОНТОВ ════════════════════════════════════
+  // Раньше getBestSni() возвращал СЛУЧАЙНЫЙ SNI (millisecond % len) — наугад,
+  // без проверки, работает ли он сейчас. Это «как у всех». Здесь — измерение:
+  // параллельно проверяем реальную доступность каждого whitelist-фронта в ТЕКУЩЕЙ
+  // сети, ранжируем по задержке, кэшируем на TTL и переоткрываем заново когда
+  // фронты прикрывают. Это фундамент адаптивного обхода белых списков.
+  static final Map<String, int> frontLatencyMs = {};   // sni -> ms (-1 = мёртв)
+  static List<String>           _rankedFronts  = [];
+  static DateTime?              _lastDiscovery;
+  static const _discoveryTtl = Duration(minutes: 4);    // фронты прикрывают быстро
+
+  static bool   get isDiscoveryFresh => _lastDiscovery != null &&
+      DateTime.now().difference(_lastDiscovery!) < _discoveryTtl;
+  static List<String> get rankedFronts => List.unmodifiable(_rankedFronts);
+
+  // Пробинг пула: реальный TLS-handshake к каждому фронту, замер задержки.
+  // Возвращает живые фронты, отсортированные по скорости (быстрые — первыми).
+  static Future<List<String>> discoverWorkingFronts({
+    bool mobile = true, int max = 12, void Function(String)? log,
+  }) async {
+    final candidates = (mobile ? kMobileSniWhitelist : kWifiSniList)
+        .toSet().take(max).toList();
+    final probed = <MapEntry<String, int>>[];
+    await Future.wait(candidates.map((sni) async {
+      final sw = Stopwatch()..start();
+      try {
+        final s = await SecureSocket.connect(
+          sni, 443,
+          timeout: const Duration(milliseconds: 1800),
+          onBadCertificate: (_) => true,    // важен сам handshake, не сертификат
+        );
+        sw.stop();
+        await s.close();
+        probed.add(MapEntry(sni, sw.elapsedMilliseconds));
+      } catch (_) {
+        probed.add(MapEntry(sni, -1));      // фронт недоступен/прикрыт в этой сети
+      }
+    }));
+    frontLatencyMs
+      ..clear()
+      ..addEntries(probed);
+    // Ранжируем не по голой задержке, а по НАДЁЖНОСТЬ × СКОРОСТЬ: фронт,
+    // который отвечает быстро, но исторически душится сквозь туннель, уступает
+    // чуть более медленному, но проверенному. Неизученные фронты идут по пингу.
+    final working = probed.where((e) => e.value >= 0).toList()
+      ..sort((a, b) => FrontReputation.score(b.key, b.value)
+          .compareTo(FrontReputation.score(a.key, a.value)));
+    _rankedFronts  = working.map((e) => e.key).toList();
+    _lastDiscovery = DateTime.now();
+    log?.call('🔎 Discovery: ${_rankedFronts.length}/${candidates.length} фронтов живы'
+        '${_rankedFronts.isNotEmpty ? " · быстрейший: ${_rankedFronts.first} (${working.first.value}ms)" : ""}');
+    return _rankedFronts;
+  }
+
+  // Фоновое переоткрытие — дёргается из stealth-background и при обрыве.
+  static Future<void> autoRediscover({void Function(String)? log}) async {
+    final mobile = await isMobileNetwork()
+        .timeout(const Duration(seconds: 1), onTimeout: () => true);
+    await discoverWorkingFronts(mobile: mobile, log: log)
+        .timeout(const Duration(seconds: 4), onTimeout: () => _rankedFronts);
+  }
+
+  // Лучший ИЗМЕРЕННЫЙ фронт. Если кэш протух — пробуем discovery (с потолком по
+  // времени, чтобы не тормозить коннект), иначе мгновенно отдаём из кэша/фолбэк.
   static Future<String> getBestSni() async {
-    final isMobile = await isMobileNetwork();
+    final isMobile = await isMobileNetwork()
+        .timeout(const Duration(seconds: 1), onTimeout: () => true);
+    if (!isDiscoveryFresh || _rankedFronts.isEmpty) {
+      try {
+        await discoverWorkingFronts(mobile: isMobile)
+            .timeout(const Duration(seconds: 3));
+      } catch (_) {}
+    }
+    if (_rankedFronts.isNotEmpty) return _rankedFronts.first;
+    // Фолбэк: статический список, если discovery не успел/не дал результата
     final list = isMobile ? kMobileSniWhitelist : kWifiSniList;
-    final idx = DateTime.now().millisecondsSinceEpoch % list.length;
-    return list[idx];
+    return list[DateTime.now().millisecondsSinceEpoch % list.length];
+  }
+
+  // Топ-N измеренных фронтов для ротации в каскаде (быстрые — приоритетнее).
+  static List<String> topFronts(int n) {
+    if (_rankedFronts.isNotEmpty) return _rankedFronts.take(n).toList();
+    return kMobileSniWhitelist.take(n).toList();
   }
 
   // Эндпоинты для whitelist стратегии
@@ -192,17 +1075,18 @@ class WhitelistBypassEngine {
   }
 }
 
-// ── TLS Fingerprint (Chrome 134 актуальный) ────────────────────────────────
+// ── TLS Fingerprint (Chrome — единая версия kChromeFull) ─────────────────────
 class TlsFingerprint {
-  // JA4 fingerprint Chrome 134.0 — март 2026
-  // Если ТСПУ видит этот fingerprint — считает трафик легитимным Chrome
+  // JA4 fingerprint Chrome (uTLS 'chrome' профиль xray-core).
+  // Если DPI видит этот fingerprint — считает трафик легитимным Chrome.
+  // Имена констант исторические (kChrome134*), значение привязано к kChromeFull.
   static const kChrome134Fingerprint = 'chrome';
 
-  // Chrome 134 User-Agent для TLS Hello
+  // Chrome User-Agent для TLS Hello — версия из единого источника (28.06.2026)
   static const kChrome134UA =
     'Mozilla/5.0 (Linux; Android 14; Pixel 8) '
     'AppleWebKit/537.36 (KHTML, like Gecko) '
-    'Chrome/134.0.6998.135 Mobile Safari/537.36';
+    'Chrome/$kChromeFull Mobile Safari/537.36';
 
   // GREASE значения (случайные "мусорные" расширения Chrome)
   static List<int> getGreaseValues() {
@@ -214,10 +1098,10 @@ class TlsFingerprint {
   }
 }
 
-// ── TSPU Detector ──────────────────────────────────────────────────────────
-class TspuBypassWindowDetector {
-  // Определяет временные окна когда ТСПУ перегружен (меньше блокирует)
-  // По наблюдениям: 03:00-06:00 МСК — минимальная нагрузка на ТСПУ
+// ── DPI Detector ──────────────────────────────────────────────────────────
+class RetryWindowDetector {
+  // Определяет временные окна когда DPI перегружен (меньше блокирует)
+  // По наблюдениям: 03:00-06:00 МСК — минимальная нагрузка на DPI
   static bool isLowLoadWindow() {
     final hour = DateTime.now().toUtc().add(const Duration(hours: 3)).hour;
     return hour >= 3 && hour <= 6;
@@ -248,21 +1132,8 @@ class AiBypassAgent {
 
   void stop() { _isRunning = false; }
 
-  // Случайный CDN-подобный путь — ТСПУ думает что это обращение к CDN, не VPN
-  static String _randomCdnPath() {
-    final ts = DateTime.now();
-    final paths = [
-      '/cdn-cgi/trace',
-      '/api/v${ts.second % 5 + 1}/stream',
-      '/upload/chunk/${ts.millisecond}',
-      '/static/media/bundle.${ts.minute.toRadixString(16)}.js',
-      '/api/graphql/ws',
-      '/live/hls/stream${ts.second % 4}.m3u8',
-      '/push/notify/${ts.millisecond.toRadixString(16)}',
-      '/ws/v2/connect',
-    ];
-    return paths[ts.millisecondsSinceEpoch % paths.length];
-  }
+  // (Удалён _randomCdnPath: мёртвый — путь для ws/CDN-транспорта задаётся в
+  //  конкретных стратегиях, случайный генератор нигде не вызывался.)
 
 
 
@@ -280,7 +1151,9 @@ class AiBypassAgent {
   }
 
   Future<VpnConfig?> _findInternal(VpnConfig blocked) async {
-    if (bypassMode != BypassMode.auto) {
+    // Режим, который текущее ядро не умеет (Hysteria2/ShadowTLS), не пытаемся
+    // применять «напрямую» — это гарантированный провал. Падаем на авто-каскад.
+    if (bypassMode != BypassMode.auto && bypassMode.isAvailable) {
       return _applyDirectMode(blocked, bypassMode);
     }
     return _runAutoMode(blocked);
@@ -327,6 +1200,7 @@ class AiBypassAgent {
         .timeout(const Duration(seconds: 2), onTimeout: () => false);
     final isMobile = await WhitelistBypassEngine.isMobileNetwork()
         .timeout(const Duration(seconds: 1), onTimeout: () => false);
+    final net = AiMemory.netClass(isMobile, whitelistActive);
 
     if (whitelistActive) {
       _log('🟡 E-2005: Белые списки активны (${isMobile ? "мобильный" : "WiFi"})');
@@ -335,7 +1209,38 @@ class AiBypassAgent {
     const kMaxAttempts = 12;
     final cascade = await _buildCascade(bt, whitelistActive, isMobile);
     final limited = cascade.take(kMaxAttempts).toList();
-    _log('🤖 E-2006: Cascade: ${limited.length} стратегий');
+
+    // Обучение: упорядочиваем каскад по СКОРУ (надёжность × скорость × свежесть)
+    // для этого класса сети — знания персистятся между запусками. Лучшая
+    // проверенная стратегия идёт первой; неизученные — за ними, по статическому
+    // приоритету каскада. ВАЖНО: это только ПЕРЕСТАНОВКА — ни одна стратегия из
+    // каскада не удаляется, поэтому ИИ физически не может «выпилить» обход.
+    final ranked = AiMemory.rankedTypes(net);
+    // Порядок каскада:
+    //  • изученные стратегии — строго по СКОРУ (индекс в ranked);
+    //  • ещё не опробованные — по РОДСТВУ к типу блокировки (холодный старт
+    //    бьёт правильным контр-приёмом под наблюдаемый блок), затем по статике.
+    // Reorder делаем всегда (даже если сеть не изучена) — ради block-affinity.
+    int rank(BypassStrategy s) {
+      final i = ranked.indexOf(s.type);
+      if (i >= 0) return i;                        // изучено → по скору
+      // холодная стратегия → правило (тип блока + контекст whitelist), затем статика
+      return 1000 + AiMemory.coldRank(bt, whitelistActive, s.type) + s.priority;
+    }
+    limited.sort((a, b) => rank(a).compareTo(rank(b)));
+    final leader = ranked.isNotEmpty ? ranked.first : null;
+    _log('🤖 E-2006: Cascade: ${limited.length} стратегий'
+        '${leader != null ? " (лидер: $leader ${AiMemory.latencyFor(net, leader)}ms)" : ""}');
+
+    // ПАНИК-ФЛОР: если ВСЕ кандидаты сейчас в cooldown — значит ИИ временно
+    // забанил всё. Не оставляем пользователя без обхода: чистим блеклист и
+    // пробуем заново. Это страховка «ИИ не должна расхерачить все системы».
+    if (limited.isNotEmpty && limited.every((s) => StrategyBlacklist.isFailed(s.type))) {
+      _log('🛟 Все стратегии в cooldown — паник-режим: сбрасываю блеклист');
+      StrategyBlacklist.clear();
+    }
+
+    VpnConfig? firstBuilt;   // best-effort на случай, если ни один не пройдёт пробу
 
     for (int i = 0; i < limited.length; i++) {
       if (!_isRunning) return null;
@@ -346,18 +1251,61 @@ class AiBypassAgent {
       _log('🤖 #${i+1}/${limited.length} · ${s.type}');
 
       // Задержка между попытками (имитирует браузер, не триггерит ML)
-      if (i > 0) await Future.delayed(TspuBypassWindowDetector.getRetryDelay(i));
+      if (i > 0) await Future.delayed(RetryWindowDetector.getRetryDelay(i));
 
       final result = await _applyStrategy(blocked, s);
       if (result != null) {
-        _log('✅ E-2007: Найден обход: ${s.type}');
-        return result;
+        firstBuilt ??= result;
+        // ВЕРИФИКАЦИЯ: реально ли подключается этот вариант. Раньше каскад
+        // принимал первый ПОСТРОЕННЫЙ конфиг без проверки связи — обход был
+        // «наугад». Теперь пробуем реальный TLS-коннект к ноде и принимаем
+        // только то, что измеримо работает.
+        final sw = Stopwatch()..start();
+        // Адаптивный таймаут: быстрым проверенным стратегиям не даём висеть 3с.
+        final probeTimeout = Duration(milliseconds:
+            AiMemory.adaptiveProbeTimeoutMs(AiMemory.latencyFor(net, s.type)));
+        final ok = await BypassProber.probe(result)
+            .timeout(probeTimeout, onTimeout: () => false);
+        sw.stop();
+        if (ok) {
+          // +win + задержка + фиксация как активной руки (одним вызовом).
+          AiMemory.recordSuccess(net, s.type, sw.elapsedMilliseconds);
+          StrategyBlacklist.markSuccess(s.type);   // сработало → снять возможный бан
+          _recordFrontOutcome(s, ok: true);        // фронт реально пронёс трафик
+          AiMemory.onBlacklistChanged();
+          Telemetry.strategyResult(type: s.type, ok: true, netClass: net,
+              latencyMs: sw.elapsedMilliseconds);
+          _log('✅ E-2007: Обход проверен (${sw.elapsedMilliseconds}ms): ${s.type}');
+          return result;
+        }
+        _log('· ${s.type}: конфиг построен, проба связи не прошла');
       }
       StrategyBlacklist.markFailed(s.type);
+      AiMemory.recordFailure(net, s.type);         // модель учится и на провалах
+      _recordFrontOutcome(s, ok: false);           // и фронт этой стратегии тоже
+      AiMemory.onBlacklistChanged();
+      Telemetry.strategyResult(type: s.type, ok: false, netClass: net);
     }
 
+    // Ни один кандидат не прошёл пробу. Не теряем шанс: отдаём первый
+    // построенный конфиг как best-effort (старое поведение, сеть безопасности).
+    if (firstBuilt != null) {
+      _log('⚠ E-2008: ни один вариант не прошёл пробу — best-effort');
+      return firstBuilt;
+    }
     _log('✗ E-2008: Все методы не прошли — смена ноды');
     return null;
+  }
+
+  // (Победитель теперь хранится в AiMemory по классу сети — персистится.)
+
+  // Записываем исход SNI-фронта — ТОЛЬКО для whitelist-стратегий, чтобы
+  // репутация копилась именно по фронтам, а не по любому SNI. Discovery потом
+  // ранжирует фронты по этой репутации × скорость (см. discoverWorkingFronts).
+  void _recordFrontOutcome(BypassStrategy s, {required bool ok}) {
+    if (!AiMemory.isWhitelistFriendly(s.type)) return;
+    final sni = s.params['sni'];
+    if (sni is String && sni.isNotEmpty) FrontReputation.record(sni, ok: ok);
   }
 
   // ── Построение каскада стратегий ──────────────────────────────────────────
@@ -371,68 +1319,72 @@ class AiBypassAgent {
         : WhitelistBypassEngine.kWifiSniList;
     String nextSni(int offset) => sniList[(DateTime.now().millisecondsSinceEpoch + offset) % sniList.length];
 
-    return [
-      // ═══ Приоритет 1: Hysteria2 — лучший апрель 2026 ═══
-      BypassStrategy(priority: 1, type: 'hysteria2_fallback',
-          params: {'udp_hop': true, 'brutal': false}),
-
-      // ═══ Приоритет 2: VLESS + xHTTP — новый транспорт ═══
-      BypassStrategy(priority: 2, type: 'vless_xhttp',
+    // Порядок актуализирован 28.06.2026: ведём Reality/xHTTP (detection
+    // stable-low), Hysteria2 понижен — его QUIC-fingerprint деградирует (~40%).
+    final staticCascade = [
+      // ═══ 1: VLESS + Reality + xHTTP — ЛУЧШИЙ метод июня 2026 ═══
+      BypassStrategy(priority: 1, type: 'vless_xhttp',
           params: {'path': '/api/v${DateTime.now().minute % 9 + 1}/stream', 'mode': 'packet-up',
                    'sni': sni, 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ Приоритет 3: XTLS Vision (максимальная маскировка) ═══
-      BypassStrategy(priority: 3, type: 'vless_xtls_vision',
-          params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
-      
-      // ═══ Приоритет 4: Reality + VK SNI ═══
-      BypassStrategy(priority: 4, type: 'vless_reality_vk',
+      // ═══ 2: VLESS + Reality + RAW + XTLS-Vision ═══
+      BypassStrategy(priority: 2, type: 'vless_xtls_vision',
           params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
+      // ═══ 3: Reality + VK SNI ═══
+      BypassStrategy(priority: 3, type: 'vless_reality_vk',
+          params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ЗАДАЧА 7: IPv6 Reality — ТСПУ хуже анализирует IPv6
-      // Добавляем IPv6 вариант Reality в каскад
-      BypassStrategy(priority: 4, type: 'vless_reality_ipv6',
-          params: {'sni': 'vk.com', 'fingerprint': TlsFingerprint.kChrome134Fingerprint,
-                   'network': 'ipv6'}),
-      // ═══ Приоритет 4: Reality + Yandex SNI ═══
+      // ═══ 4: Reality + Yandex SNI ═══
       BypassStrategy(priority: 4, type: 'vless_reality_yandex',
           params: {'sni': 'yandex.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ Приоритет 5: Reality + gRPC ═══
+      // ═══ 5: Reality + gRPC ═══
       BypassStrategy(priority: 5, type: 'vless_grpc_reality',
           params: {'service': 'GrpcService', 'sni': sni,
                    'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ Приоритет 6: ShadowTLS v3 ═══
-      BypassStrategy(priority: 6, type: 'shadowtls_v3',
-          params: {'server_name': nextSni(100), 'version': 3}),
-
-      // ═══ Приоритет 7: xHTTP другой путь ═══
-      BypassStrategy(priority: 7, type: 'vless_xhttp_alt',
+      // ═══ 6: xHTTP другой путь ═══
+      BypassStrategy(priority: 6, type: 'vless_xhttp_alt',
           params: {'path': '/upload/chunk/${DateTime.now().second}', 'mode': 'stream',
                    'sni': nextSni(200)}),
 
-      // ═══ Приоритет 8: Reality + другой Tier-0 SNI ═══
-      BypassStrategy(priority: 8, type: 'vless_reality_sber',
+      // ═══ 7: Reality + Sber SNI ═══
+      BypassStrategy(priority: 7, type: 'vless_reality_sber',
           params: {'sni': 'sber.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ Приоритет 9: Фрагментация (обходит поведенческий анализ) ═══
-      BypassStrategy(priority: 9, type: 'vless_fragmented',
+      // ═══ 8: Фрагментация ClientHello (обход поведенческого анализа) ═══
+      BypassStrategy(priority: 8, type: 'vless_fragmented',
           params: {'min': 1, 'max': 5, 'interval': '20-100ms', 'sni': sni}),
 
-      // ═══ Приоритет 10: Reality + MTS SNI (оператор в белом списке!) ═══
-      BypassStrategy(priority: 10, type: 'vless_reality_mts',
+      // ═══ 9: Reality + MTS SNI (оператор в белом списке) ═══
+      BypassStrategy(priority: 9, type: 'vless_reality_mts',
           params: {'sni': 'mts.ru', 'fingerprint': TlsFingerprint.kChrome134Fingerprint}),
 
-      // ═══ Приоритет 11: Hysteria2 другой порт ═══
-      BypassStrategy(priority: 11, type: 'hysteria2_alt_port',
-          params: {'port_hint': 8443, 'udp_hop': true}),
-
-      // ═══ Приоритет 12: gRPC без Reality (fallback) ═══
-      BypassStrategy(priority: 12, type: 'vless_grpc_plain',
+      // ═══ 10: gRPC без Reality (fallback) ═══
+      BypassStrategy(priority: 10, type: 'vless_grpc_plain',
           params: {'service': 'TunService', 'sni': nextSni(300)}),
+
+      // ЧЕСТНОСТЬ ДВИЖКА: Hysteria2 (QUIC) и ShadowTLS УБРАНЫ из каскада —
+      // xray-core их не запускает, конфиг заведомо нерабочий, попытки тратятся
+      // впустую. Вернутся после переезда ядра на sing-box. Также убран
+      // vless_reality_ipv6 (нет обработчика/нельзя форсировать IPv6).
     ];
+
+    // Серверная mutation-программа (blueprint §4b): её стратегии идут ПЕРВЫМИ,
+    // а вшитый каскад остаётся «полом» под ними (дедуп по type). Так сервер
+    // может пушить новые стратегии обхода без пересборки app, но НЕ способен
+    // оставить клиент без обхода — при любой проблеме active == null и работает
+    // только вшитый каскад. Неизвестные _applyStrategy типы просто пропускаются.
+    final net = AiMemory.netClass(isMobile, whitelistActive);
+    final remote = MutationRegistry.active?.strategiesFor(net);
+    if (remote != null && remote.isNotEmpty) {
+      final seen = remote.map((s) => s.type).toSet();
+      _log('🧬 Каскад: серверная mutation-программа v${MutationRegistry.version} '
+          '(${remote.length}) + вшитый пол');
+      return [...remote, ...staticCascade.where((s) => !seen.contains(s.type))];
+    }
+    return staticCascade;
   }
 
   // ── Применение стратегии ──────────────────────────────────────────────────
@@ -441,8 +1393,12 @@ class AiBypassAgent {
       switch (s.type) {
         case 'hysteria2_fallback':
         case 'hysteria2_alt_port':
-          return _patchHysteria2(blocked,
-              altPort: s.params['port_hint'] as int?);
+          // Транспорт не поддерживается движком (flutter_v2ray/xray-core не
+          // умеет Hysteria2). Даже если сервер пушит такую стратегию — строить
+          // конфиг бессмысленно: он не поднимется, а попытка будет потрачена.
+          // Пропускаем честно вместо генерации нерабочего конфига.
+          _log('⚠ Стратегия ${s.type} недоступна на этом движке — пропуск');
+          return null;
 
         case 'vless_xhttp':
         case 'vless_xhttp_alt':
@@ -452,7 +1408,7 @@ class AiBypassAgent {
               sni: s.params['sni'] as String? ?? 'vk.com');
 
         case 'vless_xtls_vision':
-          return _patchReality(blocked,
+          return _patchVision(blocked,
               s.params['sni'] as String? ?? 'vk.com');
         case 'vless_reality_vk':
         case 'vless_reality_yandex':
@@ -468,14 +1424,19 @@ class AiBypassAgent {
               service: s.params['service'] as String? ?? 'GrpcService');
 
         case 'shadowtls_v3':
-          return _patchShadowTls(blocked,
-              serverName: s.params['server_name'] as String? ?? 'vk.com');
+          // ShadowTLS не поддерживается движком — как и Hysteria2, пропускаем
+          // честно, а не строим конфиг, который гарантированно не подключится.
+          _log('⚠ Стратегия ${s.type} недоступна на этом движке — пропуск');
+          return null;
 
         case 'vless_fragmented':
           return _patchFragmented(blocked,
               sni: s.params['sni'] as String? ?? 'vk.com');
 
         default:
+          // Стратегия без обработчика — раньше молча проваливалась (null) и
+          // засоряла blacklist. Теперь это видно в логах для отладки каскада.
+          _log('⚠ Нет обработчика стратегии: ${s.type} — пропуск');
           return null;
       }
     } catch (e) {
@@ -486,7 +1447,7 @@ class AiBypassAgent {
 
 
   // ЗАДАЧА 8: Поведенческая маскировка трафика
-  // Имитирует браузерный паттерн — ТСПУ ML не находит VPN сигнатуру
+  // Имитирует браузерный паттерн — DPI ML не находит VPN сигнатуру
   static Future<void> applyTrafficMasking() async {
     // Случайная задержка 20-150мс между установкой соединения
     // Браузер тоже делает небольшие паузы при загрузке страниц
@@ -508,7 +1469,7 @@ class AiBypassAgent {
     for (final sni in sniList) {
       if (!_isRunning) return null;
       _log('  📋 Reality + SNI: $sni');
-      final r = await _patchReality(blocked, sni);
+      final r = _patchReality(blocked, sni);
       if (r != null) return r;
       await Future.delayed(const Duration(milliseconds: 300));
     }
@@ -525,7 +1486,7 @@ class AiBypassAgent {
       final uri = Uri.parse(cfg.link);
       if (uri.scheme.startsWith('hy2') || uri.scheme.startsWith('hysteria')) {
         // ЗАДАЧА 5: UDP Hop — меняем порт для обхода блокировки по порту
-        // ТСПУ блокирует конкретный UDP порт — hop перепрыгивает на новый
+        // DPI блокирует конкретный UDP порт — hop перепрыгивает на новый
         final basePort = uri.port > 0 ? uri.port : 443;
         
         // Hop порты: +1, +2, -1 от базового (имитирует легитимный UDP)
@@ -540,7 +1501,7 @@ class AiBypassAgent {
           link = newUri.toString().split('#').first;
         }
         // Параметр hopInterval для xray 26.x (UDP Hop interval)
-        final patched = '$link#hy2_hop_port=${hopPortClamped}&hop_interval=30';
+        final patched = '$link#hy2_hop_port=$hopPortClamped&hop_interval=30';
         return _makeCfg(cfg, patched, '[Hy2+Hop:$hopPortClamped]');
       }
       // VLESS/VMess fallback на Hysteria2
@@ -588,6 +1549,22 @@ class AiBypassAgent {
     }
   }
 
+  // VLESS + Reality + XTLS-Vision — отдельный маркер для честного builder.
+  // _connectWith по #vision_sni= строит конфиг через buildVlessVisionConfig
+  // (гарантированно корректные realitySettings + flow), если в ноде есть pbk/sid.
+  VpnConfig? _patchVision(VpnConfig cfg, String sni) {
+    try {
+      final cleanLink = cfg.link
+          .split('#whitelist_df=').first
+          .split('#vision_sni=').first
+          .split('#xhttp_sni=').first
+          .split('#fragment=').first;
+      final patched = '$cleanLink#vision_sni=${Uri.encodeComponent(sni)}'
+          '&fp=${TlsFingerprint.kChrome134Fingerprint}';
+      return _makeCfg(cfg, patched, '[Vision:$sni]');
+    } catch (_) { return null; }
+  }
+
   // VLESS + Reality + SNI из белого списка
   VpnConfig? _patchReality(VpnConfig cfg, String sni) {
     try {
@@ -613,34 +1590,17 @@ class AiBypassAgent {
     } catch (_) { return null; }
   }
 
-  // ShadowTLS v3
+  // ShadowTLS v3 — ЧЕСТНОЕ ПОВЕДЕНИЕ.
+  // ВАЖНО: flutter_v2ray работает на xray-core, у которого НЕТ нативного
+  // shadowtls-outbound (это фича sing-box / shadowsocks-rust). Поэтому на этом
+  // стеке настоящий ShadowTLS-туннель построить нельзя — он бы не запустился.
+  // Реалистичный эквивалент «настоящий TLS к легитимному домену» — это Reality
+  // c whitelist-SNI. Делегируем туда, не притворяясь отдельным транспортом.
+  // ShadowTLS убран из авто-каскада (_buildCascade); этот метод оставлен для
+  // ручного режима BypassMode.shadowtls, чтобы подключение всё равно прошло.
   VpnConfig? _patchShadowTls(VpnConfig cfg, {String serverName = 'vk.com'}) {
-    try {
-      // ЗАДАЧА 6: ShadowTLS v3 полная реализация
-      // ShadowTLS v3 использует реальный TLS handshake с легитимным сервером
-      // ТСПУ видит настоящий TLS к vk.com/yandex.ru — пропускает
-      // После handshake трафик идёт через туннель
-      
-      final link = cfg.link.split('#').first;
-      
-      // Выбираем TLS сервер из белого списка — физически близкий к VPN серверу
-      final tlsServers = [
-        serverName,
-        'vk.com',          // Tier 0 — никогда не блокируется
-        'yandex.ru',       // Tier 0
-        'www.microsoft.com', // Международный Tier 0
-        'sber.ru',         // Банк — не блокируется
-      ];
-      final tls = tlsServers[DateTime.now().millisecondsSinceEpoch % tlsServers.length];
-      
-      // ShadowTLS v3 параметры
-      final patched = '$link'
-          '#shadowtls_v3=${Uri.encodeComponent(tls)}'
-          '&stls_strict=true'   // Строгий режим v3 — обязательная аутентификация
-          '&stls_alpn=h2';      // ALPN как у Chrome
-      
-      return _makeCfg(cfg, patched, '[ShadowTLS3:$tls]');
-    } catch (_) { return null; }
+    _log('ℹ ShadowTLS недоступен на xray-core → Reality c SNI: $serverName');
+    return _patchReality(cfg, serverName);
   }
 
   // Fragmented TLS (1-5 байт фрагменты — обходит поведенческий анализ)

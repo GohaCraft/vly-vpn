@@ -3,7 +3,7 @@
 //  Подключает: NotificationHelper + DisconnectReceiver + TileService
 // ================================================================
 
-package com.example.vpn_new
+package app.vlyvpn
 
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
@@ -12,13 +12,13 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
-    private val commandsChannel = "aura_vpn/commands"
+    private val commandsChannel = "vly_vpn/commands"
 
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
 
         // Сохраняем engine для DisconnectReceiver и VpnTileService
-        AuraVpnApp.engine = engine
+        VlyApp.engine = engine
 
         // Уведомления
         NotificationHelper.setup(this, engine)
@@ -35,7 +35,7 @@ class MainActivity : FlutterActivity() {
             }
 
         // Системный шаринг + файловый импорт
-        MethodChannel(engine.dartExecutor.binaryMessenger, "aura_vpn/share")
+        MethodChannel(engine.dartExecutor.binaryMessenger, "vly_vpn/share")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "share" -> {
@@ -67,12 +67,48 @@ class MainActivity : FlutterActivity() {
                             result.error("UNAVAILABLE", "Файловый менеджер недоступен", null)
                         }
                     }
+                    "openUrl" -> {
+                        // Открыть URL в браузере (страница загрузки обновления)
+                        val url = call.argument<String>("url") ?: ""
+                        if (url.isEmpty()) { result.error("NO_URL", "empty", null) }
+                        else try {
+                            startActivity(android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(url))
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("OPEN_ERROR", e.message, null)
+                        }
+                    }
+                    "openVpnSettings" -> {
+                        // Открыть системный экран VPN (Always-on VPN + Lockdown).
+                        // Настоящий kill switch на Android — это системная блокировка
+                        // соединений без VPN; приложение не может её включить за
+                        // пользователя, но может привести его сюда одной кнопкой.
+                        try {
+                            startActivity(android.content.Intent(
+                                    android.provider.Settings.ACTION_VPN_SETTINGS)
+                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                            result.success(true)
+                        } catch (e: Exception) {
+                            // На части прошивок экрана нет — откатываемся на общие настройки.
+                            try {
+                                startActivity(android.content.Intent(
+                                        android.provider.Settings.ACTION_SETTINGS)
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                                result.success(false)
+                            } catch (e2: Exception) {
+                                result.error("OPEN_ERROR", e2.message, null)
+                            }
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
 
         // Обновление тайла при изменении статуса VPN
-        MethodChannel(engine.dartExecutor.binaryMessenger, "aura_vpn/tile")
+        MethodChannel(engine.dartExecutor.binaryMessenger, "vly_vpn/tile")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "update" -> {
@@ -80,7 +116,7 @@ class MainActivity : FlutterActivity() {
                             VpnTileService.isVpnActive =
                                 call.argument<Boolean>("active") ?: false
                             VpnTileService.serverName  =
-                                call.argument<String>("server")  ?: "Aura VPN"
+                                call.argument<String>("server")  ?: "Vly"
                         }
                         result.success(null)
                     }
@@ -90,7 +126,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
-        AuraVpnApp.engine = null
+        VlyApp.engine = null
         super.onDestroy()
     }
 

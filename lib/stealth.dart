@@ -8,7 +8,7 @@ class StealthEngine {
   // Кэш живого SNI — не проверяем TLS каждое подключение
   static String? _cachedSni;
   static DateTime? _sniCacheTime;
-  // TTL 3 минуты — РКН блокировки появляются быстро, 5 мин слишком долго
+  // TTL 3 минуты — провайдер блокировки появляются быстро, 5 мин слишком долго
   static const _sniCacheTtl = Duration(minutes: 3);
 
   // ── 1. TLS Фрагментация — "Ghost Handshake" ────────────────────────────────
@@ -41,14 +41,14 @@ class StealthEngine {
 
     if (!hasFragmentTarget) return base;
 
-    // Профили фрагментации — 22.03.2026: ТСПУ AI анализирует статистику пакетов
+    // Профили фрагментации — 22.03.2026: DPI AI анализирует статистику пакетов
     // Ключ: НЕ фиксированные паттерны, вариативность похожа на реальный браузер
     // Источник: ntc.party + net4people/bbs анализ март 2026
     final fragProfiles = [
-      {'length': '25-55',  'interval': '7-17'},    // Chrome 136 профиль
-      {'length': '35-90',  'interval': '12-25'},   // Firefox 134 профиль
-      {'length': '18-42',  'interval': '5-14'},    // Safari 18/iOS профиль
-      {'length': '50-120', 'interval': '15-30'},   // Edge 134/Windows профиль
+      {'length': '25-55',  'interval': '7-17'},    // Chrome 138 профиль
+      {'length': '35-90',  'interval': '12-25'},   // Firefox 140 профиль
+      {'length': '18-42',  'interval': '5-14'},    // Safari 18.5/iOS профиль
+      {'length': '50-120', 'interval': '15-30'},   // Edge 138/Windows профиль
       {'length': '15-35',  'interval': '3-10'},    // Мобильный Chrome (плохая сеть)
     ];
     final prof = fragProfiles[_rng.nextInt(fragProfiles.length)];
@@ -76,7 +76,7 @@ class StealthEngine {
 
   // ── 2. Reality SNI Ротация ─────────────────────────────────────────────────
   // Каждый раз берём следующий SNI из пула высокоавторитетных доменов.
-  // РКН видит трафик к dl.google.com — не блокирует.
+  // провайдер видит трафик к dl.google.com — не блокирует.
   static String nextSni() {
     final sni = kRealitySniPool[sniIndex % kRealitySniPool.length];
     sniIndex++;
@@ -158,7 +158,7 @@ class StealthEngine {
   }
 
   // ── 3. Packet Jitter — обман AI/ML анализа (обновлено март 2026) ───────────
-  // ML-DPI ТСПУ 2026 обучен на поведенческих признаках: inter-arrival time,
+  // ML-DPI DPI 2026 обучен на поведенческих признаках: inter-arrival time,
   // burst размер, соотношение up/down. Имитируем WebRTC/video call паттерн.
   static Future<void> applyJitter() async {
     // DNS lookup imitation: 20-60ms (типично для DoH через 1.1.1.1)
@@ -265,32 +265,23 @@ class StealthEngine {
   }
 
   // ── 7. Рандомный User-Agent для warm-up ───────────────────────────────────
-  // Март 2026 — актуальные версии Chrome 136/Safari 18/Edge 134
-  // РКН и DPI блокируют запросы от Dart/2.x по умолчанию
-  static const _userAgents = [
-    // Android Chrome 136 — самый частый в РФ (40%+ трафика)
-    'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 13; Redmi Note 12 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.111 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 14; POCO X6 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.165 Mobile Safari/537.36',
-    // Windows Chrome 136
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Safari/537.36',
-    // iOS Safari 18
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1',
-    // Edge 134
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
-  ];
+  // Источник версий — единый пул kModernUserAgents (constants.dart, обновл. 28.06.2026).
+  // провайдер и DPI блокируют запросы от Dart/2.x по умолчанию.
+  // ВАЖНО: UA должен быть консистентен с uTLS fingerprint ниже, иначе ML-детектор
+  // DPI (слой 4) ловит рассинхрон «браузер в UA ≠ браузер в TLS handshake».
+  static const _userAgents = kModernUserAgents;
   static String _randomUserAgent() => _userAgents[_rng.nextInt(_userAgents.length)];
 
-  // uTLS fingerprints — актуализированы 22.03.2026
-  // ML-модель ТСПУ анализирует поведенческие паттерны TLS handshake
-  // 'random' = случайный из набора xray-core — максимально усложняет классификацию
+  // uTLS fingerprints — актуализированы 28.06.2026 (Chrome 138 / Edge 138 / Safari 18.5).
+  // ML-модель DPI анализирует поведенческие паттерны TLS handshake.
+  // 'random' = случайный из набора xray-core — максимально усложняет классификацию.
+  // Профили подобраны под доли пула kModernUserAgents (Android Chrome — приоритет).
   static const List<String> _uTlsProfiles = [
-    'chrome',    // Chrome 136 — 62% рынка Android, самый надёжный
-    'edge',      // Edge 134 — Windows Update IP в whitelist ТСПУ
-    'safari',    // Safari 18.3 iOS — iPhone трафик
+    'chrome',    // Chrome 138 — ~45% пула, самый надёжный
+    'edge',      // Edge 138 — Windows Update IP в whitelist DPI
+    'safari',    // Safari 18.5 iOS — iPhone трафик
     'ios',       // iOS native TLS stack — нативный мобильный
-    'firefox',   // Firefox 134 — desktop, другой ALPN паттерн
+    'firefox',   // Firefox 140 — desktop, другой ALPN паттерн
     'android',   // Android TLS — базовый мобильный паттерн
     'random',    // Случайный xray fingerprint — anti-ML behavioral analysis
   ];
@@ -332,16 +323,10 @@ class StealthEngine {
           ss[key] = tlsSettings;
           ob['streamSettings'] = ss;
 
-          // XTLS-Vision flow: КРИТИЧНО для обхода ML-детектора ТСПУ (март 2026)
-          // Vision убирает двойное TLS-шифрование + добавляет padding случайного размера
-          // Применяем только для VLESS+Reality — самая эффективная комбинация
-          // НЕ применяем для VMess/Trojan — они используют другой механизм шифрования
-          if (proto == 'vless' && sec == 'reality') {
-            final currentFlow = ob['flow'] as String? ?? '';
-            if (currentFlow.isEmpty) {
-              ob['flow'] = 'xtls-rprx-vision';
-            }
-          }
+          // XTLS-Vision flow для VLESS+Reality применяется НИЖЕ, на уровне
+          // vnext[].users[].flow (xray читает flow только оттуда). Раньше здесь
+          // была инъекция ob['flow'] на уровне outbound — xray её игнорирует,
+          // т.е. это был мёртвый код. Корректная инъекция — в sockopt-цикле ниже.
         }
       }
 
@@ -371,7 +356,7 @@ class StealthEngine {
       }
 
       // 4. Smart routing — российские сайты напрямую, заблокированные через VPN
-      // Используем актуальный список РКН-блокировок из BypassRulesEngine
+      // Используем актуальный список провайдер-блокировок из BypassRulesEngine
       // Это заменяет только IPv6 blackhole — маршрутизацию ставим целиком
       final routing = j['routing'] as Map<String, dynamic>? ?? {};
       final rules   = (routing['rules'] as List?)?.cast<dynamic>() ?? <dynamic>[];
@@ -421,7 +406,7 @@ class StealthEngine {
         ob['streamSettings'] = ss;
 
         // 6b. VLESS Vision flow control — антидетект TLS-in-TLS (март 2026)
-        // AI-DPI ТСПУ ищет вложенные TLS паттерны (packet length distribution).
+        // AI-DPI DPI ищет вложенные TLS паттерны (packet length distribution).
         // Vision применяет dynamic padding — пакеты выглядят как реальный HTTPS.
         // Применяем ТОЛЬКО для VLESS+Reality без явного flow
         if (proto == 'vless') {
@@ -449,8 +434,8 @@ class StealthEngine {
         }
       }
 
-      // 7. Policy — anti-TCP-freeze (новый метод ТСПУ март 2026)
-      // ТСПУ замораживает TCP когда server→client > ~15-20KB на "подозрительных" IP
+      // 7. Policy — anti-TCP-freeze (новый метод DPI март 2026)
+      // DPI замораживает TCP когда server→client > ~15-20KB на "подозрительных" IP
       // bufferSize 512KB + connIdle 300s форсирует правильный keepalive
       try {
         final policy = Map<String, dynamic>.from(j['policy'] as Map? ?? {});
@@ -537,9 +522,69 @@ class StealthEngine {
   }
 
   
+  // ── Мост: vless-ссылка → честный xHTTP конфиг ──────────────────────────────
+  // Раньше стратегия 'xhttp' лишь подменяла SNI, а транспорт оставался прежним
+  // (parseFromURL строил исходный type=tcp). Теперь строим РЕАЛЬНЫЙ xHTTP outbound
+  // из параметров ноды. Возвращает JSON-строку конфига или null при неудаче —
+  // вызывающий код тогда падает обратно на стандартный путь parseFromURL.
+  static String? buildHonestXhttp(String vlessLink, {String? sni}) {
+    if (!vlessLink.startsWith('vless://')) return null;
+    try {
+      final uri  = Uri.parse(vlessLink);
+      final uuid = uri.userInfo;
+      final host = uri.host;
+      final port = uri.port > 0 ? uri.port : 443;
+      if (uuid.isEmpty || host.isEmpty) return null;
+      final q       = uri.queryParameters;
+      final liveSni = (sni != null && sni.isNotEmpty)
+          ? sni
+          : (q['sni']?.isNotEmpty == true ? q['sni'] : null);
+      final cfg = buildXhttpConfig(
+        host: host, port: port, uuid: uuid,
+        sni:  liveSni,
+        fp:   q['fp'],
+      );
+      return jsonEncode(cfg);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── Мост: vless-ссылка → честный VLESS+Reality+Vision конфиг ────────────────
+  // Стратегия vless_xtls_vision раньше шла как обычный Reality через маркер
+  // #whitelist_df=. Теперь, если в ссылке есть pbk+sid, строим гарантированно
+  // корректный конфиг из чистого шаблона (realitySettings + flow на user-уровне)
+  // через buildVlessVisionConfig — не зависим от парсинга reality в parseFromURL.
+  // null → нет pbk/sid (не настоящая Reality-нода) → фолбэк на стандартный путь.
+  static String? buildHonestVision(String vlessLink, {String? sni}) {
+    if (!vlessLink.startsWith('vless://')) return null;
+    try {
+      final uri  = Uri.parse(vlessLink);
+      final uuid = uri.userInfo;
+      final host = uri.host;
+      final port = uri.port > 0 ? uri.port : 443;
+      final q    = uri.queryParameters;
+      final pbk  = q['pbk'] ?? q['publicKey'] ?? '';
+      final sid  = q['sid'] ?? q['shortId']   ?? '';
+      // Vision требует Reality: без publicKey/shortId смысла строить нет
+      if (uuid.isEmpty || host.isEmpty || pbk.isEmpty) return null;
+      final liveSni = (sni != null && sni.isNotEmpty)
+          ? sni
+          : (q['sni']?.isNotEmpty == true ? q['sni'] : null);
+      final cfg = buildVlessVisionConfig(
+        host: host, port: port, uuid: uuid,
+        pbk: pbk, sid: sid,
+        sni: liveSni, fp: q['fp'],
+      );
+      return jsonEncode(cfg);
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── xHTTP Config Builder (НОВЫЙ транспорт 2026) ─────────────────────────────
   // xHTTP — лучший TCP-транспорт апрель 2026. Выглядит как HTTP multipart upload.
-  // ТСПУ не детектирует: нет характерных паттернов TLS VPN, только обычный HTTP.
+  // DPI не детектирует: нет характерных паттернов TLS VPN, только обычный HTTP.
   // Работает там где Reality+TCP уже не проходит.
   static Map<String, dynamic> buildXhttpConfig({
     required String host,
@@ -617,56 +662,8 @@ class StealthEngine {
     };
   }
 
-  // ── ShadowTLS v3 + Shadowsocks config ────────────────────────────────────────
-  // ShadowTLS v3: туннель поверх реального TLS сервера.
-  // ТСПУ видит легитимный TLS handshake к vk.com — пропускает.
-  static Map<String, dynamic> buildShadowTlsConfig({
-    required String host,
-    required int    port,
-    required String password,
-    String? serverName,
-  }) {
-    final sni = serverName ?? pickLiveSniFromCache();
-    return {
-      'outbounds': [
-        {
-          'tag':      'proxy',
-          'protocol': 'shadowsocks',
-          'settings': {
-            'servers': [
-              {
-                'address':  '127.0.0.1',
-                'port':     port + 1,
-                'method':   'aes-256-gcm',
-                'password': password,
-                'uot':      true,
-              }
-            ],
-          },
-        },
-        {
-          'tag':      'shadowtls',
-          'protocol': 'shadowtls',
-          'settings': {
-            'version':    3,
-            'password':   password,
-            'servers': [
-              {
-                'address':    host,
-                'port':       port,
-                'serverName': sni,
-              }
-            ],
-          },
-        },
-        {'tag': 'direct', 'protocol': 'freedom', 'settings': {}},
-        {'tag': 'block',  'protocol': 'blackhole', 'settings': {}},
-      ],
-      'inbounds':  _buildSecureInbounds(),
-      'dns':       _buildDns(),
-      'routing':   _buildRouting(),
-    };
-  }
+  // (Удалён buildShadowTlsConfig: xray-core не запускает ShadowTLS, метод
+  //  никем не вызывался — строил заведомо нерабочий конфиг.)
 
   // ── Общие builders ────────────────────────────────────────────────────────────
   static List<Map<String, dynamic>> _buildSecureInbounds() {
@@ -699,7 +696,7 @@ class StealthEngine {
 
   static Map<String, dynamic> _buildDns() => {
     'servers': [
-      // DoH через Cloudflare — обходит DNS отравление РКН
+      // DoH через Cloudflare — обходит DNS отравление провайдер
       {'address': 'https://1.1.1.1/dns-query', 'skipFallback': true,
        'domains': ['geosite:geolocation-!cn']},
       {'address': 'https://8.8.8.8/dns-query', 'skipFallback': true},
@@ -753,79 +750,12 @@ class StealthEngine {
   static int    get rstCountPublic  => _rstCount;
   static String get cachedSniPublic => _cachedSni ?? '—';
 
-  // ── 10. Hysteria2 конфиг builder ──────────────────────────────────────────
-  // Hysteria2 использует QUIC (UDP) — ТСПУ хуже справляется с UDP DPI.
-  // Salamander обфускация XOR-ит каждый QUIC пакет с паролем → fingerprint скрыт.
-  // Формат ноды: hy2://password@host:port?sni=...&obfs=salamander&obfs-password=...
-  static Map<String, dynamic> buildHysteria2Config(String nodeLink) {
-    // Парсим hy2:// URI
-    // hy2://password@host:port?sni=...&insecure=...&obfs=salamander&obfs-password=...
-    try {
-      final uri      = Uri.parse(nodeLink.replaceFirst('hy2://', 'https://'));
-      final auth     = uri.userInfo;            // password (Hysteria2 auth)
-      final host     = uri.host;
-      final port     = uri.port > 0 ? uri.port : 443;
-      final q        = uri.queryParameters;
-      final sni      = q['sni']?.isNotEmpty == true ? q['sni']! : pickLiveSniFromCache();
-      final insecure = q['insecure'] == '1' || q['insecure'] == 'true';
-      final obfs     = q['obfs'] ?? 'salamander';
-      final obfsPw   = q['obfs-password'] ?? q['obfsPassword'] ?? '';
-      final upMbps   = int.tryParse(q['up'] ?? '') ?? 50;
-      final downMbps = int.tryParse(q['down'] ?? '') ?? 200;
-
-      // Hysteria2 нативный JSON конфиг (hysteria2 клиент или sing-box)
-      final cfg = <String, dynamic>{
-        'server': '$host:$port',
-        'auth':   auth,
-        'tls': {
-          'sni':      sni,
-          'insecure': insecure,
-        },
-        'bandwidth': {
-          'up':   '${upMbps} mbps',
-          'down': '${downMbps} mbps',
-        },
-        'fastOpen': true,
-        // Salamander obfs — скрывает QUIC fingerprint от DPI
-        if (obfs == 'salamander' && obfsPw.isNotEmpty)
-          'obfs': {
-            'type':       'salamander',
-            'salamander': {'password': obfsPw},
-          },
-        // SOCKS5 прокси для приложений
-        'socks5': {'listen': '127.0.0.1:10808'},
-        'http':   {'listen': '127.0.0.1:10809'},
-        // Логирование — минимум в продакшне
-        'log': {'level': 'warn'},
-        // Quic параметры — адаптивные под российские сети
-        'quic': {
-          'initStreamReceiveWindow':     '8388608',   // 8 MB
-          'maxStreamReceiveWindow':      '8388608',
-          'initConnReceiveWindow':       '20971520',  // 20 MB
-          'maxConnReceiveWindow':        '20971520',
-          'maxIdleTimeout':              '30s',
-          'keepAlivePeriod':             '10s',
-          'disablePathMTUDiscovery':     false,
-        },
-      };
-
-      return cfg;
-    } catch (e) {
-      // Fallback: минимальный конфиг
-      return {
-        'server':    '127.0.0.1:443',
-        'auth':      '',
-        'tls':       {'insecure': false},
-        'bandwidth': {'up': '50 mbps', 'down': '200 mbps'},
-        'fastOpen':  true,
-        'socks5':    {'listen': '127.0.0.1:10808'},
-      };
-    }
-  }
+  // (Удалён buildHysteria2Config: движок xray-core не поднимает Hysteria2/QUIC,
+  //  метод никем не вызывался — строил конфиг для несуществующего ядра.)
 
   // ── 11. VLESS+Vision полный конфиг builder ────────────────────────────────
   // Vision = XTLS-rprx-vision: убирает TLS-in-TLS паттерн + добавляет рандомный padding.
-  // Без Vision ТСПУ ML видит "двойное TLS" → помечает как VPN.
+  // Без Vision DPI ML видит "двойное TLS" → помечает как VPN.
   // С Vision пакеты неотличимы от реального HTTPS браузера (март 2026 анализ).
   //
   // IMPORTANT: Vision требует flow=xtls-rprx-vision на обеих сторонах (клиент + сервер).
@@ -905,7 +835,7 @@ class StealthEngine {
       ],
       'dns': {
         'servers': [
-          // DoH — обходит DNS отравление РКН
+          // DoH — обходит DNS отравление провайдер
           {'address': 'https://1.1.1.1/dns-query', 'skipFallback': true,
            'domains': ['geosite:geolocation-!cn']},
           {'address': 'https://8.8.8.8/dns-query', 'skipFallback': true},
@@ -928,7 +858,7 @@ class StealthEngine {
           {'type': 'field', 'network': 'tcp,udp', 'outboundTag': 'proxy'},
         ],
       },
-      // Anti-TCP-freeze политика (ТСПУ март 2026)
+      // Anti-TCP-freeze политика (DPI март 2026)
       'policy': {
         'levels': {
           '0': {
@@ -942,128 +872,4 @@ class StealthEngine {
       },
     };
   }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-//  ZAPRET BRIDGE — интеграция с локальным Zapret DPI-bypass
-//  Zapret работает на сетевом уровне (nfqueue/windivert) — дополняет VPN.
-//  Использовать как fallback когда ТСПУ активно блокирует TLS handshake.
-//  GitHub: github.com/bol-van/zapret
-// ═══════════════════════════════════════════════════════════════════════════════
-class ZapretBridge {
-  static final _rng = Random();
-
-  // Проверяем доступность Zapret на локальном порту
-  // Zapret запускается отдельным процессом (windivert/nfqueue), нам нужен его SOCKS5/HTTP порт
-  static Future<bool> isAvailable() async {
-    final port = (kZapretConfig['httpPort'] as int? ?? 1080);
-    try {
-      final sock = await Socket.connect(
-        '127.0.0.1', port,
-        timeout: const Duration(milliseconds: 500),
-      );
-      await sock.close();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  // Возвращает прокси URL если Zapret доступен
-  static Future<String?> getProxyUrl() async {
-    if (!(kZapretConfig['enabled'] as bool? ?? false)) return null;
-    if (!await isAvailable()) return null;
-    final port = (kZapretConfig['httpPort'] as int? ?? 1080);
-    return 'http://127.0.0.1:$port';
-  }
-
-  // Патчим Xray конфиг чтобы трафик шёл через Zapret как промежуточный прокси.
-  // Схема: App → Xray SOCKS(10808) → Zapret(1080) → [DPI bypass] → VPN сервер
-  // Zapret применяет fake-SNI / disorder / TTL-trick на уровне пакетов.
-  static Map<String, dynamic> patchConfigForZapret(
-      Map<String, dynamic> config, {
-      String strategy = 'fake_sni',
-    }) {
-    if (!(kZapretConfig['enabled'] as bool? ?? false)) return config;
-
-    final port    = (kZapretConfig['httpPort'] as int? ?? 1080);
-    final fakeSni = kZapretConfig['fakeSniFallback'] as String? ?? 'www.yandex.ru';
-
-    // Добавляем Zapret как dialerProxy для VPN outbound
-    final outbounds = List<dynamic>.from(config['outbounds'] as List? ?? []);
-    for (final ob in outbounds) {
-      if (ob is! Map) continue;
-      final proto = ob['protocol'] as String? ?? '';
-      if (!['vless', 'vmess', 'trojan'].contains(proto)) continue;
-
-      final ss = Map<String, dynamic>.from(ob['streamSettings'] as Map? ?? {});
-      final so = Map<String, dynamic>.from(ss['sockopt'] as Map? ?? {});
-
-      // Направляем через Zapret SOCKS5 прокси
-      so['dialerProxy'] = 'zapret-out';
-      ss['sockopt'] = so;
-      ob['streamSettings'] = ss;
-    }
-
-    // Guard: не добавлять zapret-out дважды
-    if (!outbounds.any((ob) => ob is Map && ob['tag'] == 'zapret-out')) {
-      outbounds.add({
-        'tag':      'zapret-out',
-        'protocol': 'socks',
-        'settings': {
-          'servers': [
-            {
-              'address': '127.0.0.1',
-              'port':    port,
-            }
-          ],
-        },
-        'streamSettings': {
-          'network': 'tcp',
-          'sockopt': {
-            'tcpNoDelay': true,
-          },
-        },
-      });
-    }
-
-    config['outbounds'] = outbounds;
-
-    // Логируем активацию стратегии
-    config['_zapretStrategy'] = strategy;
-    config['_zapretFakeSni']  = fakeSni;
-
-    return config;
-  }
-
-  // Рекомендует стратегию на основе типа блокировки
-  static String recommendStrategy(BlockType blockType) {
-    switch (blockType) {
-      case BlockType.tlsFingerprint:
-        // ТСПУ видит TLS fingerprint → подменяем SNI + disorder
-        return 'fake_sni';
-      case BlockType.tcpReset:
-        // Активный RST → disorder пакеты + TTL trick
-        return 'disorder';
-      case BlockType.timeout:
-        // Тихая блокировка → split + TTL trick
-        return 'ttl_trick';
-      default:
-        return 'fake_sni';
-    }
-  }
-}
-
-
-// ── Compatibility stubs ─────────────────────────────────────────────────────
-// These prevent undefined identifier errors from older code references
-
-// Zapret strategy list (also defined in constants.dart)
-// ignore: constant_identifier_names  
-const List<String> _kZapretCompatStrategies = ['fake_sni', 'disorder', 'split', 'ttl_trick'];
-
-// Rotate zapret strategy helper
-String _rotateZapretStrategy(String current) {
-  final idx = _kZapretCompatStrategies.indexOf(current);
-  return _kZapretCompatStrategies[(idx + 1) % _kZapretCompatStrategies.length];
 }

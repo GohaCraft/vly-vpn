@@ -1,6 +1,6 @@
 // ================================================================
 //  NotificationHelper.kt  v2.0
-//  Aura VPN — постоянное уведомление + Quick Settings тайл
+//  Vly — постоянное уведомление + Quick Settings тайл
 //
 //  Установка:
 //  1. Этот файл → рядом с MainActivity.kt
@@ -9,7 +9,7 @@
 //  4. AndroidManifest.xml → добавить сервис тайла (см. ниже)
 // ================================================================
 
-package com.example.vpn_new
+package app.vlyvpn
 
 import android.app.*
 import android.content.Context
@@ -22,9 +22,9 @@ import io.flutter.plugin.common.MethodChannel
 object NotificationHelper {
 
     // ── Каналы ───────────────────────────────────────────────────
-    private const val CH_STATUS   = "aura_vpn_status"     // постоянное уведомление VPN
-    private const val CH_EVENTS   = "aura_vpn_events"     // события (подключён / отключён)
-    private const val METHOD_CH   = "aura_vpn/notifications"
+    private const val CH_STATUS   = "vly_vpn_status"     // постоянное уведомление VPN
+    private const val CH_EVENTS   = "vly_vpn_events"     // события (подключён / отключён)
+    private const val METHOD_CH   = "vly_vpn/notifications"
 
     // ID уведомлений
     private const val ID_PERSISTENT = 100  // постоянное — пока VPN активен
@@ -42,21 +42,21 @@ object NotificationHelper {
                 when (call.method) {
                     // Простое событийное уведомление (подключён / отключён)
                     "show" -> {
-                        val title = call.argument<String>("title") ?: "Aura VPN"
+                        val title = call.argument<String>("title") ?: "Vly"
                         val body  = call.argument<String>("body")  ?: ""
                         showEventNotification(context, title, body)
                         result.success(null)
                     }
                     // Постоянное уведомление пока VPN работает
                     "showPersistent" -> {
-                        val server = call.argument<String>("server") ?: "Aura VPN"
+                        val server = call.argument<String>("server") ?: "Vly"
                         val speed  = call.argument<String>("speed")  ?: ""
                         showPersistentNotification(context, server, speed)
                         result.success(null)
                     }
                     // Обновить данные в постоянном уведомлении (скорость/трафик)
                     "updatePersistent" -> {
-                        val server = call.argument<String>("server") ?: "Aura VPN"
+                        val server = call.argument<String>("server") ?: "Vly"
                         val speed  = call.argument<String>("speed")  ?: ""
                         showPersistentNotification(context, server, speed)
                         result.success(null)
@@ -155,7 +155,7 @@ object NotificationHelper {
         if (mgr.getNotificationChannel(CH_STATUS) == null) {
             NotificationChannel(
                 CH_STATUS,
-                "Aura VPN — Статус",
+                "Vly — Статус",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Показывается пока VPN активен"
@@ -169,7 +169,7 @@ object NotificationHelper {
         if (mgr.getNotificationChannel(CH_EVENTS) == null) {
             NotificationChannel(
                 CH_EVENTS,
-                "Aura VPN — События",
+                "Vly — События",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Подключение, отключение, AI обходы"

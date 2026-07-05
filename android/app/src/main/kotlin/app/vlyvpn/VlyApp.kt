@@ -1,18 +1,18 @@
 // ================================================================
-//  AuraVpnApp.kt
+//  VlyApp.kt
 //  Application класс — хранит ссылку на FlutterEngine
 //  чтобы DisconnectReceiver мог отправить команду во Flutter
 //
 //  Добавить в AndroidManifest.xml:
-//  <application android:name=".AuraVpnApp" ...>
+//  <application android:name=".VlyApp" ...>
 // ================================================================
 
-package com.example.vpn_new
+package app.vlyvpn
 
 import android.app.Application
 import io.flutter.embedding.engine.FlutterEngine
 
-class AuraVpnApp : Application() {
+class VlyApp : Application() {
     companion object {
         var engine: FlutterEngine? = null
     }

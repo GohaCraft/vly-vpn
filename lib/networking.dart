@@ -3,17 +3,10 @@ part of 'main.dart';
 
 class SelfHealingMirror {
   static final _rng = Random();
-  static const _uas = [
-    // FIX v3.0: нейтральные User-Agent — не раскрываем что это VPN клиент
-    // 'AuraVPN/5.6.0' идентифицировал трафик для систем мониторинга РКН
-    // Актуализировано 28.03.2026: Chrome 136 / Safari 18.3 / Edge 134
-    'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 13; Redmi Note 12 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.111 Mobile Safari/537.36',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
-  ];
+  // Нейтральные User-Agent — не раскрываем что это VPN клиент.
+  // 'VlyVPN/5.6.0' идентифицировал трафик для систем мониторинга провайдер.
+  // Источник версий — единый пул kModernUserAgents (constants.dart, обновл. 28.06.2026).
+  static const _uas = kModernUserAgents;
   static String get _ua => _uas[_rng.nextInt(_uas.length)];
 
   // Метка источника для логирования
@@ -101,8 +94,11 @@ class SelfHealingMirror {
           try {
             final decoded = utf8.decode(base64.decode(
                 data.length % 4 == 0 ? data : data + '=' * (4 - data.length % 4)));
-            final parsed  = jsonDecode(decoded) as Map<String, dynamic>;
-            final nodes   = List<String>.from(parsed['nodes'] ?? []);
+            // DNS TXT — самый ненадёжный источник (ответ может быть подменён
+            // on-path атакующим). Прогоняем через ту же строгую валидацию, что
+            // и остальные источники: только известные протоколы, лимит длины,
+            // без инъекции переносов строк.
+            final nodes = _validateNodes(decoded);
             if (nodes.isNotEmpty) {
               log('✅ DNS TXT nodes: ${nodes.length}');
               return nodes;
@@ -133,6 +129,25 @@ enum BlockType {
 
 class BlockDetector {
   static const _t = Duration(seconds: 5);
+  // Быстрый таймаут для ПАРАЛЛЕЛЬНОЙ детекции. Раньше шаги шли последовательно
+  // по 5с, а вызывающий код обрезал detect() на 2с → он почти всегда истекал и
+  // возвращал timeout, из-за чего реальный тип блока не определялся вовсе.
+  // Теперь пробы идут параллельно с коротким таймаутом и укладываются в окно.
+  static const _fast = Duration(milliseconds: 1400);
+
+  // Чистая классификация из результатов проб (тестируемо, без сети).
+  static BlockType classify({
+    required bool dnsOk, required TcpProbe tcp, required bool tlsOk,
+    required bool reachable,
+  }) {
+    if (!dnsOk)             return BlockType.dnsPoisoning;
+    if (tcp == TcpProbe.reset)   return BlockType.tcpReset;
+    if (tcp == TcpProbe.closed)  return BlockType.portBlocked;
+    if (tcp == TcpProbe.timeout) return BlockType.timeout;
+    if (!tlsOk)             return BlockType.tlsFingerprint;
+    if (!reachable)         return BlockType.serviceBlocked;
+    return BlockType.none;
+  }
 
   static Future<BlockType> detect(VpnConfig cfg) async {
     String host = ''; int port = 443;
@@ -143,26 +158,23 @@ class BlockDetector {
     } catch (_) { return BlockType.timeout; }
     if (host.isEmpty) return BlockType.timeout;
 
-    // Шаг 1: DNS — провайдер отравляет DNS для заблокированных IP
-    if (!await _dns(host)) return BlockType.dnsPoisoning;
-
-    // Шаг 2: TCP — RST значит активная блокировка ТСПУ
-    final tcp = await _tcp(host, port);
-    if (tcp == _TR.reset)   return BlockType.tcpReset;
-    if (tcp == _TR.closed)  return BlockType.portBlocked;
-    if (tcp == _TR.timeout) return BlockType.timeout;
-
-    // Шаг 3: TLS handshake к VPN серверу
-    // FIX v3.0: убран вызов _httpLevel(host, port) к VPN серверу —
-    // VPN серверы не отвечают на HTTP HEAD '/' → всегда false negative.
-    // Вместо этого проверяем достижимость нейтрального домена через тот же IP-маршрут.
-    if (!await _tls(host, port)) return BlockType.tlsFingerprint;
-
-    // Шаг 4: проверяем не подменён ли трафик — сверяем доступность контрольного домена
-    // Если Google недоступен — значит провайдер режет исходящий HTTPS (serviceBlocked)
-    if (!await _reachabilityProbe()) return BlockType.serviceBlocked;
-
-    return BlockType.none;
+    // Пробы параллельно — все с _fast таймаутом, укладываемся в ~1.4с.
+    //  • DNS: отравление резолва (DoH-проба)
+    //  • TCP: RST (активный DPI) / refused (порт) / timeout
+    //  • TLS: handshake — если рвётся, вероятен блок по TLS-fingerprint
+    //  • reachability: режет ли провайдер исходящий HTTPS (serviceBlocked)
+    final r = await Future.wait([
+      _dns(host, _fast),
+      _tcp(host, port, _fast),
+      _tls(host, port, _fast),
+      _reachabilityProbe(),
+    ]);
+    return classify(
+      dnsOk:     r[0] as bool,
+      tcp:       r[1] as TcpProbe,
+      tlsOk:     r[2] as bool,
+      reachable: r[3] as bool,
+    );
   }
 
   // FIX v3.0: circuit breaker — если Google недоступен, не проверяем каждый раз
@@ -181,11 +193,11 @@ class BlockDetector {
       }
     }
     try {
-      final client = HttpClient()..connectionTimeout = _t;
+      final client = HttpClient()..connectionTimeout = _fast;
       final req    = await client.getUrl(
           Uri.parse('https://connectivitycheck.gstatic.com/generate_204'));
-      req.headers.set('User-Agent', 'Mozilla/5.0 Chrome/124.0.0.0');
-      final resp = await req.close().timeout(_t);
+      req.headers.set('User-Agent', randomUserAgent());
+      final resp = await req.close().timeout(_fast);
       await resp.drain<void>();
       client.close();
       _probeCircuitOpen = false; // успех — circuit закрыт
@@ -199,15 +211,15 @@ class BlockDetector {
   }
 
   // FIX: используем DoH вместо системного DNS
-  // InternetAddress.lookup() = OS resolver = РКН отравляет его
+  // InternetAddress.lookup() = OS resolver = провайдер отравляет его
   // Cloudflare DoH по прямому IP — не зависит от DNS провайдера
-  static Future<bool> _dns(String h) async {
+  static Future<bool> _dns(String h, [Duration t = _t]) async {
     // Сначала пробуем DoH через Cloudflare (прямой IP, не DNS-имя)
     try {
       final res = await http.get(
         Uri.parse('https://1.1.1.1/dns-query?name=${Uri.encodeComponent(h)}&type=A'),
         headers: {'Accept': 'application/dns-json', 'User-Agent': kStealthUA},
-      ).timeout(_t);
+      ).timeout(t);
       if (res.statusCode == 200) {
         final j = jsonDecode(res.body) as Map<String, dynamic>;
         final answers = j['Answer'] as List? ?? [];
@@ -215,37 +227,37 @@ class BlockDetector {
       }
     } catch (_) {}
     // Fallback: системный DNS если DoH недоступен
-    try { return (await InternetAddress.lookup(h).timeout(_t)).isNotEmpty; }
+    try { return (await InternetAddress.lookup(h).timeout(t)).isNotEmpty; }
     catch (_) { return false; }
   }
 
-  static Future<_TR> _tcp(String h, int p) async {
+  static Future<TcpProbe> _tcp(String h, int p, [Duration t = _t]) async {
     try {
-      final s = await Socket.connect(h, p, timeout: _t);
-      await s.close(); return _TR.ok;
+      final s = await Socket.connect(h, p, timeout: t);
+      await s.close(); return TcpProbe.ok;
     } on SocketException catch (e) {
       final m = e.message.toLowerCase();
-      if (m.contains('reset')) return _TR.reset;
-      if (m.contains('refused') || m.contains('no route')) return _TR.closed;
-      return _TR.timeout;
-    } on TimeoutException { return _TR.timeout; }
-    catch (_) { return _TR.timeout; }
+      if (m.contains('reset')) return TcpProbe.reset;
+      if (m.contains('refused') || m.contains('no route')) return TcpProbe.closed;
+      return TcpProbe.timeout;
+    } on TimeoutException { return TcpProbe.timeout; }
+    catch (_) { return TcpProbe.timeout; }
   }
 
-  static Future<bool> _tls(String h, int p) async {
+  static Future<bool> _tls(String h, int p, [Duration t = _t]) async {
     try {
       // Только TLS handshake — не отправляем HTTP
-      // HEAD запрос создавал паттерн который РКН мог детектировать
+      // HEAD запрос создавал паттерн который провайдер мог детектировать
       // Для нас важно что TLS соединение устанавливается, не HTTP ответ
       final s = await SecureSocket.connect(h, p,
-          timeout: _t, onBadCertificate: (_) => true);
+          timeout: t, onBadCertificate: (_) => true);
       await s.close();
       return true;
     } catch (_) { return false; }
   }
 }
 
-enum _TR { ok, reset, closed, timeout }
+enum TcpProbe { ok, reset, closed, timeout }
 
 class BypassRulesEngine {
   List<Map<String, dynamic>> _rules = [];
@@ -260,7 +272,7 @@ class BypassRulesEngine {
   DateTime? get devLastSync     => _lastDomainSync;
 
   static const _builtin = [
-    // TCP reset / TLS fingerprint — самое частое у РКН
+    // TCP reset / TLS fingerprint — самое частое у провайдер
     {'id': 'tcp_reset', 'triggers': ['tcpReset', 'tlsFingerprint'], 'strategies': [
       {'priority': 1, 'type': 'rotate_reality_sni',  'params': {}},
       {'priority': 2, 'type': 'add_reality_sni',     'params': {'sni': 'www.yandex.ru'}},    // Яндекс — Tier 0
@@ -273,11 +285,10 @@ class BypassRulesEngine {
       {'priority': 9, 'type': 'add_reality_sni',     'params': {'sni': 'dl.google.com'}},
       {'priority': 10,'type': 'add_reality_sni',     'params': {'sni': 'update.microsoft.com'}},
       {'priority': 11,'type': 'trojan_ws_fallback',  'params': {'port': 443, 'path': '/api/v1'}},
-      // Hysteria2 fallback: UDP/QUIC обходит TCP-блокировки ТСПУ
-      {'priority': 12,'type': 'hysteria2_fallback',  'params': {'obfs': 'salamander'}},
-      // Zapret: локальный DPI bypass как последний рубеж перед CDN
-      {'priority': 13,'type': 'zapret_bypass',       'params': {'strategy': 'disorder'}},
-      {'priority': 14,'type': 'cdn_fallback',         'params': {'url': 'aura-vpn.workers.dev'}},
+      // (Hysteria2 и Zapret убраны: xray-core не запускает hy2, а Zapret требует
+      //  внешний nfqueue-процесс, которого на стоковом Android нет — обе давали
+      //  фантомную попытку.)
+      {'priority': 14,'type': 'cdn_fallback',         'params': {'url': 'vly-vpn.workers.dev'}},
     ]},
     // DNS отравление
     {'id': 'dns', 'triggers': ['dnsPoisoning'], 'strategies': [
@@ -304,12 +315,9 @@ class BypassRulesEngine {
       {'priority': 4, 'type': 'add_reality_sni',      'params': {'sni': 'vk.com'}},           // VK
       {'priority': 5, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/cdn'}},
       {'priority': 6, 'type': 'change_transport',     'params': {'transport': 'grpc', 'service': 'gun'}},
-      // Hysteria2 — QUIC/UDP обходит IP-блокировки лучше TCP
-      {'priority': 7, 'type': 'hysteria2_fallback',   'params': {'obfs': 'salamander'}},
-      // Zapret DPI bypass перед CDN
-      {'priority': 8, 'type': 'zapret_bypass',        'params': {'strategy': 'fake_sni'}},
-      {'priority': 9, 'type': 'cdn_fallback',          'params': {'url': 'aura-vpn.workers.dev'}},
-      {'priority': 10,'type': 'cdn_fallback',          'params': {'url': 'aura-cdn.pages.dev'}},
+      // (Hysteria2 и Zapret убраны — нерабочи текущим ядром/окружением)
+      {'priority': 9, 'type': 'cdn_fallback',          'params': {'url': 'vly-vpn.workers.dev'}},
+      {'priority': 10,'type': 'cdn_fallback',          'params': {'url': 'vly-cdn.pages.dev'}},
       {'priority': 11,'type': 'shadow_fallback',       'params': {}},
     ]},
     // Stealth: TLS fingerprint / сервисная блокировка
@@ -324,11 +332,10 @@ class BypassRulesEngine {
       {'priority': 8, 'type': 'add_reality_sni',      'params': {'sni': 'gateway.icloud.com'}},
       {'priority': 9, 'type': 'add_reality_sni',      'params': {'sni': 'mask.icloud.com'}},
       {'priority': 10,'type': 'trojan_ws_fallback',   'params': {'port': 443, 'path': '/stream'}},
-      // Zapret fake_sni: маскировка под разрешённый домен
-      {'priority': 11,'type': 'zapret_bypass',        'params': {'strategy': 'fake_sni'}},
-      {'priority': 12,'type': 'cdn_fallback',          'params': {'url': 'aura-vpn.workers.dev'}},
+      // (Zapret убран из каскада — требует внешний nfqueue, фантомная попытка)
+      {'priority': 12,'type': 'cdn_fallback',          'params': {'url': 'vly-vpn.workers.dev'}},
     ]},
-    // Stealth: TCP reset (активная блокировка ТСПУ)
+    // Stealth: TCP reset (активная блокировка DPI)
     {'id': 'stealth_reset', 'triggers': ['tcpReset'], 'strategies': [
       {'priority': 1, 'type': 'rotate_reality_sni',   'params': {}},
       {'priority': 2, 'type': 'change_transport',     'params': {'transport': 'ws',   'path': '/'}},
@@ -349,17 +356,26 @@ class BypassRulesEngine {
   Future<void> syncFromServer(void Function(String) log) async {
     await _loadCache();
 
-    // 1. Основные bypass-правила (стратегии)
+    // 1. Основные bypass-правила (стратегии) — подгружаются С СЕРВЕРА без
+    //    обновления приложения. ВАЖНО: применяем только ВАЛИДНЫЙ payload, иначе
+    //    кривой/злонамеренный ответ мог бы отравить движок. Built-in правила
+    //    всегда остаются «полом» (см. getStrategies: [..._rules, ..._builtin]),
+    //    поэтому пустой/битый remote = безопасно, не ломает обход.
     try {
       final res = await PinnedHttpClient.get(kBypassRulesUrl, timeout: const Duration(seconds: 8));
       if (res.statusCode == 200) {
         final j  = jsonDecode(res.body) as Map<String, dynamic>;
         final sv = j['version'] as int? ?? 0;
         if (sv > _version) {
-          _rules   = List<Map<String,dynamic>>.from(j['rules'] ?? []);
-          _version = sv;
-          await _saveCache(res.body);
-          log('✔ Bypass rules updated v$_version');
+          final validated = _validateRemoteRules(j['rules']);
+          if (validated != null) {
+            _rules   = validated;
+            _version = sv;
+            await _saveCache(res.body);
+            log('✔ Bypass rules updated v$_version (${validated.length} правил)');
+          } else {
+            log('⚠ Remote rules v$sv отклонены валидацией — оставляю текущие');
+          }
         }
       }
     } catch (e) { log('⚠ Rules sync: $e'); }
@@ -370,6 +386,32 @@ class BypassRulesEngine {
         now.difference(_lastDomainSync!) > const Duration(hours: 6)) {
       await _syncDomainList(log);
     }
+  }
+
+  // Валидация удалённых правил перед применением. Структурная санитизация:
+  // каждое правило должно иметь непустые triggers и хотя бы одну стратегию с
+  // непустым 'type'. Возвращает нормализованный список или null (payload не годен —
+  // движок оставляет текущие правила; built-in floor всё равно работает).
+  static List<Map<String, dynamic>>? _validateRemoteRules(dynamic raw) {
+    if (raw is! List || raw.isEmpty) return null;
+    final out = <Map<String, dynamic>>[];
+    for (final r in raw) {
+      if (r is! Map) continue;
+      final triggers   = r['triggers'];
+      final strategies = r['strategies'];
+      if (triggers is! List || triggers.isEmpty) continue;
+      if (strategies is! List || strategies.isEmpty) continue;
+      final validStrats = strategies.where((s) =>
+          s is Map && s['type'] is String && (s['type'] as String).isNotEmpty).toList();
+      if (validStrats.isEmpty) continue;
+      out.add({
+        'id':         r['id']?.toString() ?? 'remote',
+        'triggers':   triggers.map((t) => t.toString()).toList(),
+        'strategies': List<Map<String, dynamic>>.from(
+            validStrats.map((s) => Map<String, dynamic>.from(s as Map))),
+      });
+    }
+    return out.isEmpty ? null : out;
   }
 
   Future<void> _syncDomainList(void Function(String) log) async {
@@ -419,6 +461,24 @@ class BypassRulesEngine {
         if (dts != null) _lastDomainSync = DateTime.tryParse(dts);
       }
     } catch (_) {}
+    // Если правил нет (первый запуск, нет кэша) — берём дефолт из вшитого asset,
+    // чтобы движок работал из коробки ещё ДО ответа сервера. Сервер с более
+    // высоким version потом заменит. Built-in правила в коде — всегда пол.
+    if (_rules.isEmpty) await _loadBundledRules();
+  }
+
+  // Загрузка дефолтных правил из вшитого asset (assets/bypass_rules.json).
+  Future<void> _loadBundledRules() async {
+    try {
+      final raw = await rootBundle.loadString('assets/bypass_rules.json');
+      final j   = jsonDecode(raw) as Map<String, dynamic>;
+      final validated = _validateRemoteRules(j['rules']);
+      if (validated != null) {
+        _rules = validated;
+        final v = j['version'] as int? ?? 0;
+        if (v > _version) _version = v;
+      }
+    } catch (_) {}
   }
 
   Future<void> _saveCache(String raw) async {
@@ -437,7 +497,7 @@ class BypassRulesEngine {
     return _blockedDomains.any((b) => d == b || d.endsWith('.$b'));
   }
 
-  // Захардкоженные актуальные блокировки (РКН, март 2026)
+  // Захардкоженные актуальные блокировки (провайдер, март 2026)
   // Источник: postium.ru, gogov.ru — обновлено 19.03.2026
   static const List<String> _hardcodedBlocked = [
     // Социальные сети
@@ -515,7 +575,7 @@ class BypassRulesEngine {
         }
       }
     }
-    all.sort((a, b) => (a as BypassStrategy).priority.compareTo((b as BypassStrategy).priority));
+    all.sort((a, b) => a.priority.compareTo(b.priority));
     return all;
   }
 
@@ -619,9 +679,9 @@ class BypassRulesEngine {
         try {
           final uri    = Uri.parse(link);
           final q      = Map<String, String>.from(uri.queryParameters);
-          final cdnUrl = p['url'] as String? ?? 'aura-vpn.workers.dev';
+          final cdnUrl = p['url'] as String? ?? 'vly-vpn.workers.dev';
           q['type']       = 'ws';
-          q['path']       = '/aura-vpn-cdn';
+          q['path']       = '/vly-vpn-cdn';
           q['host']       = cdnUrl;
           q['security']   = 'tls';
           q['sni']        = cdnUrl;
@@ -632,7 +692,7 @@ class BypassRulesEngine {
         break;
 
       // Hysteria2 fallback — переключение на QUIC/UDP протокол.
-      // Когда TCP заблокирован ТСПУ, Hysteria2 продолжает работать через UDP.
+      // Когда TCP заблокирован DPI, Hysteria2 продолжает работать через UDP.
       // Salamander obfs скрывает QUIC fingerprint — выглядит как обычный UDP.
       // Нода должна иметь Hysteria2 сервер на том же хосте (или мы берём из пула).
       // Если hy2:// нода уже есть в конфиге — просто добавляем Salamander obfs.
@@ -703,24 +763,6 @@ class BypassRulesEngine {
         } catch (_) {}
         break;
 
-      // Zapret DPI bypass — активирует локальный Zapret как промежуточный прокси.
-      // Zapret работает на уровне пакетов (nfqueue/windivert) — не меняет VPN протокол.
-      // Эффективен когда ТСПУ блокирует по TLS fingerprint или делает TCP RST.
-      // Стратегии: fake_sni | disorder | split | ttl_trick
-      // ВАЖНО: Zapret должен быть установлен и запущен на устройстве отдельно.
-      case 'zapret_bypass':
-        try {
-          final strategy = p['strategy'] as String? ?? 'fake_sni';
-          // Zapret не меняет VPN ссылку — он работает на уровне ОС.
-          // Помечаем ссылку что нужен Zapret, VpnProvider активирует ZapretBridge.
-          // Используем fragment URI (#) чтобы не ломать парсинг протокола.
-          if (!link.contains('zapret=')) {
-            final sep = link.contains('#') ? '&' : '#';
-            link = '$link${sep}zapret=$strategy';
-          }
-        } catch (_) {}
-        break;
-
       // Shadow fallback — WebSocket+CDN транспорт через живой SNI
       case 'shadow_fallback':
         try {
@@ -738,7 +780,7 @@ class BypassRulesEngine {
         break;
 
       // Whitelist domain fronting — обход белого списка мобильных операторов
-      // ТСПУ DROP ALL кроме разрешённых IP (Яндекс, VK, Сбер).
+      // DPI DROP ALL кроме разрешённых IP (Яндекс, VK, Сбер).
       // Domain fronting: TLS SNI = разрешённый домен, реальный трафик идёт на наш сервер.
       case 'whitelist_domain_fronting':
         try {
@@ -754,62 +796,9 @@ class BypassRulesEngine {
         } catch (_) {}
         break;
 
-      // Adaptive mimicry — имитация полного цифрового следа пользователя
-      // FIX BUG-1.4: теперь реально применяет персону к конфигу
-      case 'adaptive_mimicry':
-        try {
-          // Генерируем новую персону и сбрасываем старую
-          AdaptiveMimicryEngine.resetPersona();
-          AdaptiveMimicryEngine.generatePersona();
-          // Помечаем ссылку маркером
-          if (!link.contains('mimicry=')) {
-            final sep = link.contains('#') ? '&' : '#';
-            final personaName = p['persona'] as String? ?? 'auto';
-            link = '$link${sep}mimicry=$personaName';
-          }
-        } catch (_) {}
-        break;
-
-      // QUIC/HTTP3 fallback — DPI ещё не умеет анализировать QUIC
-      // Источник: bypasscore.com/blog/vpn-detection-bypass-dpi-evasion (18.03.2026)
-      // QUIC = UDP-based, encrypted multiplexed streams, indistinguishable from HTTP/3
-      case 'quic_h3_fallback':
-        try {
-          final sni = p['sni'] as String? ?? 'www.google.com';
-          final alpn = p['alpn'] as String? ?? 'h3';
-          // Помечаем ссылку для VpnProvider
-          if (!link.contains('quic=')) {
-            final sep = link.contains('#') ? '&' : '#';
-            link = '$link${sep}quic=$sni&alpn=$alpn';
-          }
-        } catch (_) {}
-        break;
-
-      // HTTP3 CDN Tunnel — CDN edge relay через QUIC
-      // Трафик идёт через CDN (Cloudflare Workers / edge functions)
-      // DPI видит обычный HTTP/3 к CDN, не VPN
-      case 'http3_cdn_tunnel':
-        try {
-          final cdn = p['cdn'] as String? ?? 'cloudflare';
-          if (!link.contains('h3tunnel=')) {
-            final sep = link.contains('#') ? '&' : '#';
-            link = '$link${sep}h3tunnel=$cdn';
-          }
-        } catch (_) {}
-        break;
-
-      // Residential IP — проверка что IP сервера не дата-центр
-      // Дата-центры (AS хостингов) в чёрных списках РКН
-      // Residential IP выглядит как домашний пользователь
-      case 'residential_ip':
-        try {
-          final region = p['region'] as String? ?? 'eu';
-          if (!link.contains('residential=')) {
-            final sep = link.contains('#') ? '&' : '#';
-            link = '$link${sep}residential=$region';
-          }
-        } catch (_) {}
-        break;
+      // (Кейсы quic_h3_fallback / http3_cdn_tunnel / residential_ip удалены:
+      //  они ставили маркер quic=/h3tunnel=/residential=, который connect-путь
+      //  не читал — конфиг не менялся, попытка тратилась зря. Это был театр.)
     }
     return VpnConfig(
       name: '${orig.name} [AI]', link: link,
@@ -819,21 +808,8 @@ class BypassRulesEngine {
     );
   }
 
-  // Выбирает SNI по тиру доверия для обхода белых списков
-  // Tier 0: Яндекс — Ростелеком Сибирь никогда не блокирует
-  // Tier 1: VK/Mail.ru — в белом списке РКН
-  // Tier 2: Microsoft/Apple — корпоративный whitelist
-  static String _whitelistSniByTier(int tier) {
-    const t0 = ['yandex.ru', 'ya.ru', 'mail.yandex.ru', 'yastatic.net'];
-    const t1 = ['vk.com', 'userapi.com', 'mail.ru', 'ok.ru', 'sber.ru', 'gosuslugi.ru'];
-    const t2 = ['update.microsoft.com', 'www.apple.com', 'mask.icloud.com'];
-    switch (tier) {
-      case 0:  return t0[DateTime.now().millisecond % t0.length];
-      case 1:  return t1[DateTime.now().millisecond % t1.length];
-      case 2:  return t2[DateTime.now().millisecond % t2.length];
-      default: return 'yandex.ru';
-    }
-  }
+  // (Удалён _whitelistSniByTier: мёртвый — выбор SNI-фронта делает измеряющий
+  //  WhitelistBypassEngine.getBestSni, а не случайный тир-селектор.)
 }
 
 class BypassProber {
@@ -895,5 +871,224 @@ class BypassProber {
       sw.stop();
       return -1;
     }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  TELEMETRY — строго анонимная диагностика (opt-in, по умолчанию ВЫКЛ)
+//
+//  Зачем: после релиза видеть, ЧТО ломается (какие стратегии падают, какие
+//  коды ошибок частые) — БЕЗ слежки за пользователем.
+//
+//  🔒 ОТПРАВЛЯЕМ ТОЛЬКО ЭТО: версия/сборка app, ОС, класс сети
+//     (mobile/mobile_wl/wifi — без SSID), тип стратегии (наш внутренний токен),
+//     код ошибки, bool-успех, латентность вёдрами по 250 мс, случайный
+//     install-id (НЕ device/user id).
+//  🔒 НЕ ОТПРАВЛЯЕМ НИКОГДА: IP, посещённые домены, адреса/ссылки нод,
+//     идентификаторы пользователя/устройства, содержимое трафика.
+//  Fire-and-forget: провал отправки просто теряется; очередь ограничена.
+// ═══════════════════════════════════════════════════════════════════════════
+class Telemetry {
+  static bool _enabled = false;
+  static String? _iid;                       // анонимный install id
+  static final List<Map<String, dynamic>> _queue = [];
+  static Timer? _flushTimer;
+  static const _maxQueue   = 40;
+  static const _flushAfter = Duration(seconds: 20);
+
+  static bool get enabled => _enabled;
+
+  static Future<void> init() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      _iid = p.getString('tele_iid');
+      if (_iid == null) {
+        final r = Random.secure();
+        _iid = List.generate(8,
+            (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+        await p.setString('tele_iid', _iid!);
+      }
+    } catch (_) {}
+  }
+
+  static void configure({required bool enabled}) {
+    _enabled = enabled;
+    if (!enabled) { _queue.clear(); _flushTimer?.cancel(); _flushTimer = null; }
+  }
+
+  // Результат попытки стратегии — тип это наш внутренний токен, не данные юзера.
+  static void strategyResult({
+    required String type, required bool ok, required String netClass,
+    int latencyMs = 0,
+  }) => _add('strategy', {
+        'type': type, 'ok': ok, 'net': netClass,
+        if (latencyMs > 0) 'lat': (latencyMs / 250).round() * 250, // ведро 250мс
+      });
+
+  static void errorCode(String code) => _add('error', {'code': code});
+
+  // Анонимная сигнатура краша (тип исключения + место в коде, без сообщения).
+  static void crash(String signature) => _add('crash', {'sig': signature});
+
+  static void connectOutcome({required bool success, int attempts = 0}) =>
+      _add('connect', {'ok': success, if (attempts > 0) 'tries': attempts});
+
+  static void _add(String event, Map<String, dynamic> data) {
+    if (!_enabled) return;
+    _queue.add({
+      'e': event, 't': DateTime.now().toUtc().millisecondsSinceEpoch, ...data,
+    });
+    while (_queue.length > _maxQueue) { _queue.removeAt(0); }
+    _flushTimer ??= Timer(_flushAfter, () { _flushTimer = null; flush(); });
+  }
+
+  static Future<void> flush() async {
+    if (!_enabled || _queue.isEmpty) return;
+    final batch = List<Map<String, dynamic>>.from(_queue);
+    _queue.clear();
+    final payload = jsonEncode({
+      'iid': _iid, 'app': gAppVersion, 'build': gAppBuild,
+      'os': Platform.operatingSystem, 'osv': Platform.operatingSystemVersion,
+      'events': batch,
+    });
+    try {
+      await PinnedHttpClient.post(kTelemetryUrl, body: payload,
+          timeout: const Duration(seconds: 6));
+    } catch (_) { /* fire-and-forget: теряем батч, не копим бесконечно */ }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  IN-APP UPDATE CHECK — критично для sideload-дистрибуции
+//
+//  APK ставится в обход магазина → авто-обновления нет. Это критично:
+//  пользователь застревает на старой версии протоколов, пока сетевые условия
+//  эволюционируют. Клиент periodically проверяет version.json на control-plane
+//  и, если серверный build новее установленного, показывает баннер со ссылкой.
+//  Строгий парсинг + версионный гейт; при любой ошибке — тихо ничего.
+// ═══════════════════════════════════════════════════════════════════════════
+class AppUpdate {
+  final String version;   // '6.5.0'
+  final int    build;     // pubspec build number (сравнивается с gAppBuild)
+  final String url;       // страница загрузки / APK
+  final String notes;     // что нового
+  final bool   mandatory; // критическое обновление (напр. смена протокола)
+  const AppUpdate({required this.version, required this.build,
+      required this.url, this.notes = '', this.mandatory = false});
+
+  static AppUpdate? decode(dynamic raw) {
+    try {
+      if (raw is! Map) return null;
+      final build = (raw['build'] as num?)?.toInt() ?? 0;
+      final url   = raw['url'];
+      // Обязательно валидный build и http(s)-URL, иначе payload не годен.
+      if (build <= 0) return null;
+      if (url is! String || !url.startsWith('http')) return null;
+      return AppUpdate(
+        version: (raw['version'] ?? '').toString(),
+        build: build, url: url,
+        notes: (raw['notes'] ?? '').toString(),
+        mandatory: raw['mandatory'] == true,
+      );
+    } catch (_) { return null; }
+  }
+}
+
+class UpdateChecker {
+  static AppUpdate? _available;
+  static AppUpdate? get available => _available;
+
+  // Живой build из pubspec (gAppBuild) — единый источник, что и на экране.
+  static int get currentBuild => gAppBuild;
+  // Серверный build строго новее установленного?
+  static bool isNewerBuild(int build) => build > currentBuild;
+
+  static Future<AppUpdate?> check() async {
+    try {
+      final res = await PinnedHttpClient.get(kUpdateUrl,
+          timeout: const Duration(seconds: 6));
+      if (res.statusCode != 200) return null;
+      final u = AppUpdate.decode(jsonDecode(res.body));
+      _available = (u != null && isNewerBuild(u.build)) ? u : null;
+      return _available;
+    } catch (_) { return null; }
+  }
+
+  // Открыть страницу загрузки нативным Intent (ACTION_VIEW) через share-канал.
+  static Future<void> openDownload(AppUpdate u) async {
+    try {
+      await const MethodChannel('vly_vpn/share')
+          .invokeMethod('openUrl', {'url': u.url});
+    } catch (_) {}
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CRASH REPORTER — основа наблюдаемости (sideload → сторовой аналитики нет)
+//
+//  Ловит необработанные ошибки (Flutter framework + async), чтобы после релиза
+//  было видно, ЧТО ломается. Хранит последние N сигнатур локально (для Dev
+//  Dashboard) и, ТОЛЬКО если включена телеметрия (opt-in), шлёт анонимную
+//  сигнатуру.
+//
+//  🔒 Приватность: сигнатура = ТИП исключения + место в НАШЕМ коде
+//     (package:vpn_new/...:line). СООБЩЕНИЕ исключения НЕ включаем — оно может
+//     содержать адрес ноды/URL/данные пользователя.
+// ═══════════════════════════════════════════════════════════════════════════
+class CrashReporter {
+  static const _key = 'crash_log_v1';
+  static const _max = 20;
+  static final List<String> _recent = [];
+  static List<String> get recent => List.unmodifiable(_recent);
+
+  static void install() {
+    final prev = FlutterError.onError;
+    FlutterError.onError = (details) {
+      prev?.call(details);                 // сохраняем дефолтный вывод в консоль
+      record(details.exception, details.stack);
+    };
+    ui.PlatformDispatcher.instance.onError = (error, stack) {
+      record(error, stack);
+      return true;                         // проглатываем, не роняем процесс
+    };
+  }
+
+  static void record(Object error, StackTrace? stack) {
+    try {
+      final type  = error.runtimeType.toString();
+      final frame = _topFrame(stack);
+      final sig   = frame.isEmpty ? type : '$type @ $frame';
+      _recent.insert(0, '${DateTime.now().toIso8601String()}  $sig');
+      while (_recent.length > _max) { _recent.removeLast(); }
+      _persist();
+      Telemetry.crash(sig);                // уйдёт только при включённой телеметрии
+    } catch (_) {}
+  }
+
+  // Первый фрейм ИЗ НАШЕГО кода (без значений аргументов) — безопасно и полезно.
+  static String _topFrame(StackTrace? stack) {
+    if (stack == null) return '';
+    final s = stack.toString();
+    final m = RegExp(r'package:vpn_new/[\w/]+\.dart:\d+').firstMatch(s);
+    if (m != null) return m.group(0)!;
+    final first = s.split('\n').firstWhere(
+        (l) => l.trim().isNotEmpty, orElse: () => '');
+    return first.length > 80 ? first.substring(0, 80) : first;
+  }
+
+  static Future<void> _persist() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setStringList(_key, _recent);
+    } catch (_) {}
+  }
+
+  static Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      _recent
+        ..clear()
+        ..addAll(p.getStringList(_key) ?? const []);
+    } catch (_) {}
   }
 }

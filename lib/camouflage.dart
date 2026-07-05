@@ -15,32 +15,50 @@ enum CamouflageMode {
 }
 
 extension CamouflageModeExt on CamouflageMode {
+  // Названия НЕ содержат чужих торговых марок (Netflix/Discord/Apple и т.п.) —
+  // только описание типа трафика. Технически камуфляж по-прежнему имитирует
+  // паттерны популярных сервисов, но в UI брендов нет (нет риска претензий).
   String get label {
     switch (this) {
       case CamouflageMode.none:        return 'Без маскировки';
       case CamouflageMode.browser:     return 'HTTPS браузер';
-      case CamouflageMode.telegram:    return 'Telegram CDN';
-      case CamouflageMode.netflix:     return 'Netflix Stream';
-      case CamouflageMode.youtube:     return 'YouTube Video';
-      case CamouflageMode.discord:     return 'Discord Gateway';
-      case CamouflageMode.cloudflare:  return 'Cloudflare WARP';
-      case CamouflageMode.microsoft:   return 'Windows Update';
-      case CamouflageMode.apple:       return 'iCloud Sync';
-      case CamouflageMode.naive:       return 'NaïveProxy H2';
+      case CamouflageMode.telegram:    return 'Мессенджер CDN';
+      case CamouflageMode.netflix:     return 'Видеостриминг';
+      case CamouflageMode.youtube:     return 'Адаптивное видео';
+      case CamouflageMode.discord:     return 'Голос / чат (WS)';
+      case CamouflageMode.cloudflare:  return 'WireGuard-стиль';
+      case CamouflageMode.microsoft:   return 'Системное обновление';
+      case CamouflageMode.apple:       return 'Облачная синхр.';
+      case CamouflageMode.naive:       return 'HTTP/2 прокси';
     }
   }
   String get emoji {
     switch (this) {
       case CamouflageMode.none:        return '🔓';
       case CamouflageMode.browser:     return '🌐';
-      case CamouflageMode.telegram:    return '✈️';
+      case CamouflageMode.telegram:    return '💬';
       case CamouflageMode.netflix:     return '🎬';
-      case CamouflageMode.youtube:     return '▶️';
-      case CamouflageMode.discord:     return '🎮';
-      case CamouflageMode.cloudflare:  return '🟠';
-      case CamouflageMode.microsoft:   return '🪟';
-      case CamouflageMode.apple:       return '🍎';
+      case CamouflageMode.youtube:     return '📺';
+      case CamouflageMode.discord:     return '🎧';
+      case CamouflageMode.cloudflare:  return '🛡️';
+      case CamouflageMode.microsoft:   return '⚙️';
+      case CamouflageMode.apple:       return '☁️';
       case CamouflageMode.naive:       return '🔀';
+    }
+  }
+  // Векторная иконка (Material) для UI вместо эмодзи.
+  IconData get icon {
+    switch (this) {
+      case CamouflageMode.none:        return Icons.lock_open_rounded;
+      case CamouflageMode.browser:     return Icons.public_rounded;
+      case CamouflageMode.telegram:    return Icons.chat_bubble_outline_rounded;
+      case CamouflageMode.netflix:     return Icons.movie_outlined;
+      case CamouflageMode.youtube:     return Icons.smart_display_outlined;
+      case CamouflageMode.discord:     return Icons.headset_mic_outlined;
+      case CamouflageMode.cloudflare:  return Icons.vpn_lock_rounded;
+      case CamouflageMode.microsoft:   return Icons.settings_suggest_outlined;
+      case CamouflageMode.apple:       return Icons.cloud_outlined;
+      case CamouflageMode.naive:       return Icons.shuffle_rounded;
     }
   }
   String get description {
@@ -48,23 +66,23 @@ extension CamouflageModeExt on CamouflageMode {
       case CamouflageMode.none:
         return 'Чистый VLESS/VMess без дополнительной маскировки';
       case CamouflageMode.browser:
-        return 'Трафик выглядит как Chrome посещающий Google.com';
+        return 'Трафик как у обычного браузера к популярному сайту';
       case CamouflageMode.telegram:
-        return 'MTProto CDN — как Telegram звонки и медиа';
+        return 'MTProto CDN — как голос и медиа в мессенджере';
       case CamouflageMode.netflix:
-        return 'HTTP/2 chunked stream — Netflix video buffering';
+        return 'HTTP/2 chunked stream — как буферизация видео';
       case CamouflageMode.youtube:
-        return 'googlevideo.com adaptive bitrate — YouTube 4K';
+        return 'Adaptive bitrate — как потоковое видео высокого качества';
       case CamouflageMode.discord:
-        return 'WebSocket gateway.discord.gg — Discord real-time';
+        return 'WebSocket real-time — как голосовой/текстовый чат';
       case CamouflageMode.cloudflare:
-        return 'Cloudflare WARP endpoint — обычный мобильный VPN';
+        return 'WireGuard-подобный трафик — как обычный мобильный VPN';
       case CamouflageMode.microsoft:
-        return 'Windows Update / Office 365 sync — корпоративный';
+        return 'HTTPS sync — как системные и офисные обновления';
       case CamouflageMode.apple:
-        return 'iCloud Private Relay mask.icloud.com — iOS трафик';
+        return 'Encrypted relay — как облачная синхронизация';
       case CamouflageMode.naive:
-        return 'NaïveProxy: HTTP CONNECT через H2 — анти-DPI прокси';
+        return 'HTTP CONNECT через H2 — анти-DPI прокси';
     }
   }
 }
@@ -109,6 +127,12 @@ class TrafficCamouflageEngine {
       final proto = ob['protocol'] as String? ?? '';
       if (!['vless', 'vmess', 'trojan'].contains(proto)) continue;
 
+      // Reality сам задаёт транспорт на стороне сервера и уже маскирует трафик.
+      // Смена network (на ws/grpc/http) рассинхронизирует клиент с сервером и
+      // оборвёт соединение — камуфляж для Reality-нод пропускаем.
+      final curSec = ((ob['streamSettings'] as Map?)?['security'] as String?) ?? '';
+      if (curSec == 'reality') continue;
+
       final ss = Map<String, dynamic>.from(ob['streamSettings'] as Map? ?? {});
       ss['network'] = network;
       ss[networkSettings.keys.first] = networkSettings.values.first;
@@ -139,7 +163,7 @@ class TrafficCamouflageEngine {
 
   // ────────────────────────────────────────────────────────────────────────────
   // BROWSER: Chrome посещает Google.com
-  // WebSocket на 443, User-Agent Chrome 136, путь /search?q=...
+  // WebSocket на 443, User-Agent Chrome (kChromeFull), путь /search?q=...
   // ────────────────────────────────────────────────────────────────────────────
   static void _applyBrowser(Map<String, dynamic> j) {
     final searches = ['news', 'weather', 'maps', 'translate', 'mail'];
@@ -149,7 +173,7 @@ class TrafficCamouflageEngine {
         'path': path,
         'headers': {
           'Host':            'www.google.com',
-          'User-Agent':      'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.60 Mobile Safari/537.36',
+          'User-Agent':      'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
           'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
           'Accept-Encoding': 'gzip, deflate, br',
@@ -166,7 +190,7 @@ class TrafficCamouflageEngine {
   // ────────────────────────────────────────────────────────────────────────────
   static void _applyTelegram(Map<String, dynamic> j) {
     // Telegram MTProto через WebSocket — максимальная маскировка
-    // Март 2026: РКН анализирует JA4+ fingerprint
+    // Март 2026: провайдер анализирует JA4+ fingerprint
     // Ротация CDN + реальный fingerprint iOS клиента
     final cdns = ['cdn4.telegram.org', 'cdn5.telegram.org', 'cdn1.telegram.org'];
     final sni  = cdns[DateTime.now().millisecond % cdns.length];
@@ -229,7 +253,7 @@ class TrafficCamouflageEngine {
         'host': ['rr1---sn-ab5l6ne7.googlevideo.com'],
         'path': '/videoplayback?id=$videoId&itag=$itag&source=youtube',
         'headers': {
-          'User-Agent':      ['Mozilla/5.0 (Linux; Android 14) Chrome/136 YT/19.12.34'],
+          'User-Agent':      ['Mozilla/5.0 (Linux; Android 14) Chrome/$kChromeMajor YT/20.25.40'],
           'Accept':          ['*/*'],
           'Accept-Encoding': ['identity;q=1, *;q=0'],
           'Range':           ['bytes=0-'],
@@ -250,7 +274,7 @@ class TrafficCamouflageEngine {
         'headers': {
           'Host':       'gateway.discord.gg',
           'Origin':     'https://discord.com',
-          'User-Agent': 'Mozilla/5.0 (Android 14; Mobile) Chrome/136 Discord/228.0',
+          'User-Agent': 'Mozilla/5.0 (Android 14; Mobile) Chrome/$kChromeMajor Discord/241.0',
           'Sec-WebSocket-Version':  '13',
           'Sec-WebSocket-Protocol': 'binary',
         },
@@ -279,7 +303,7 @@ class TrafficCamouflageEngine {
 
   // ────────────────────────────────────────────────────────────────────────────
   // MICROSOFT: Windows Update / Office 365 sync
-  // Корпоративный трафик — РКН НИКОГДА не блокирует (риск)
+  // Корпоративный трафик — провайдер НИКОГДА не блокирует (риск)
   // ────────────────────────────────────────────────────────────────────────────
   static void _applyMicrosoft(Map<String, dynamic> j) {
     _patchOutbounds(j, 'h2', {
@@ -319,7 +343,7 @@ class TrafficCamouflageEngine {
   // ────────────────────────────────────────────────────────────────────────────
   // NAÏVE PROXY: HTTP CONNECT через HTTP/2
   // NaïveProxy паттерн: браузер отправляет CONNECT запрос как Chrome
-  // ТСПУ видит обычный браузерный HTTPS — самый сложный для детектирования
+  // DPI видит обычный браузерный HTTPS — самый сложный для детектирования
   // ────────────────────────────────────────────────────────────────────────────
   static void _applyNaive(Map<String, dynamic> j) {
     // NaïveProxy использует HTTP/2 CONNECT — имитирует Chrome встроенный прокси
@@ -329,7 +353,7 @@ class TrafficCamouflageEngine {
         'path': '/',
         'method': 'CONNECT',
         'headers': {
-          'User-Agent':      ['Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/136.0.7103.60'],
+          'User-Agent':      ['Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/$kChromeFull'],
           'Accept':          ['text/html,application/xhtml+xml'],
           'Accept-Language': ['ru-RU,ru;q=0.9,en;q=0.8'],
           'Proxy-Connection':['keep-alive'],

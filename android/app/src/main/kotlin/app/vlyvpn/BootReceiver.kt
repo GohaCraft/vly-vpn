@@ -1,4 +1,4 @@
-package com.example.vpn_new
+package app.vlyvpn
 
 import android.content.BroadcastReceiver
 import android.content.Context

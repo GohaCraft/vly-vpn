@@ -7,7 +7,7 @@
 //  <service
 //      android:name=".VpnTileService"
 //      android:exported="true"
-//      android:label="Aura VPN"
+//      android:label="Vly"
 //      android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
 //      <intent-filter>
 //          <action android:name="android.service.quicksettings.action.QS_TILE"/>
@@ -17,7 +17,7 @@
 //  Требует API 24+ (Android 7.0) — уже стоит у 99% пользователей
 // ================================================================
 
-package com.example.vpn_new
+package app.vlyvpn
 
 import android.os.Build
 import android.service.quicksettings.Tile
@@ -31,20 +31,20 @@ class VpnTileService : TileService() {
     companion object {
         // Состояние тайла — обновляется из Flutter
         var isVpnActive: Boolean = false
-        var serverName: String   = "Aura VPN"
+        var serverName: String   = "Vly"
 
         // Обновить тайл из Flutter (вызывается после смены статуса VPN)
         fun requestTileUpdate() {
             requestListeningState(
                 // Используем глобальный контекст через Application
-                AuraVpnApp.engine?.let {
+                VlyApp.engine?.let {
                     try {
-                        Class.forName("com.example.vpn_new.VpnTileService")
+                        Class.forName("app.vlyvpn.VpnTileService")
                     } catch (e: Exception) { null }
                 }?.let { null } ?: return,
                 android.content.ComponentName(
-                    "com.example.vpn_new",
-                    "com.example.vpn_new.VpnTileService"
+                    "app.vlyvpn",
+                    "app.vlyvpn.VpnTileService"
                 )
             )
         }
@@ -60,10 +60,10 @@ class VpnTileService : TileService() {
     override fun onClick() {
         super.onClick()
         try {
-            AuraVpnApp.engine?.let { engine ->
+            VlyApp.engine?.let { engine ->
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
-                    "aura_vpn/commands"
+                    "vly_vpn/commands"
                 ).invokeMethod(
                     if (isVpnActive) "disconnect" else "connect",
                     null
@@ -82,13 +82,13 @@ class VpnTileService : TileService() {
         val tile = qsTile ?: return
         if (isVpnActive) {
             tile.state = Tile.STATE_ACTIVE
-            tile.label = "Aura VPN"
+            tile.label = "Vly"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 tile.subtitle = serverName
             }
         } else {
             tile.state = Tile.STATE_INACTIVE
-            tile.label = "Aura VPN"
+            tile.label = "Vly"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 tile.subtitle = "Отключён"
             }

@@ -3,63 +3,122 @@ part of 'main.dart';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-const String kControlPlaneUrl   = 'https://api.auravpn.app';
+const String kControlPlaneUrl   = 'https://api.vlyvpn.app';
 
 // ── Certificate Pinning ───────────────────────────────────────────────────────
-// SHA-256 отпечатки публичных ключей нашего сервера api.auravpn.app
-// Когда получишь реальный сертификат — замени PLACEHOLDER на настоящие SHA256
-// Формат: base64(sha256(SubjectPublicKeyInfo DER))
-// Команда для получения: openssl s_client -connect api.auravpn.app:443 |
-//   openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER |
-//   openssl dgst -sha256 -binary | base64
+// Отпечатки сертификата нашего сервера api.vlyvpn.app. Enforcement включается
+// в PinnedHttpClient АВТОМАТИЧЕСКИ, как только здесь появятся реальные значения
+// (не PLACEHOLDER). Пока placeholders — работает обычная CA-проверка.
+// Формат: base64(sha256(DER всего сертификата)).
+// Получить значение можно двумя путями:
+//   1) PinnedHttpClient.fetchFingerprint('https://api.vlyvpn.app') — вернёт
+//      готовую строку для вставки сюда;
+//   2) openssl s_client -connect api.vlyvpn.app:443 </dev/null 2>/dev/null |
+//        openssl x509 -outform DER | openssl dgst -sha256 -binary | base64
+// Пиньте ДВА значения (текущий + резервный/следующий сертификат), чтобы ротация
+// сертификата не оборвала клиентов.
 const kPinnedSha256 = [
   'PLACEHOLDER_REPLACE_WITH_REAL_SHA256_OF_YOUR_CERT==',  // Primary cert
-  'PLACEHOLDER_REPLACE_WITH_REAL_SHA256_OF_BACKUP_CERT==', // Backup / Let's Encrypt root
+  'PLACEHOLDER_REPLACE_WITH_REAL_SHA256_OF_BACKUP_CERT==', // Backup / next cert
 ];
 
 // Домены для которых применяется cert pinning (только наши серверы)
 // Cloudflare, Google, antifilter.download — без pinning (у них своя цепочка)
-const kPinnedDomains = ['api.auravpn.app', 'auravpn.app'];
+const kPinnedDomains = ['api.vlyvpn.app', 'vlyvpn.app'];
 
 const String kBypassRulesUrl    = '$kControlPlaneUrl/bypass_rules.json';
 const String kTelemetryUrl      = '$kControlPlaneUrl/telemetry';
 const String kNodesUrl          = '$kControlPlaneUrl/nodes.json';
+// Серверные mutation-программы для AI-каскада (обновляются без пересборки app).
+const String kAiMutationsUrl    = '$kControlPlaneUrl/ai_mutations.json';
+// Проверка обновлений (sideload APK: пользователь должен обновляться сам, иначе
+// застрянет на старых версиях протоколов пока сеть эволюционирует).
+const String kUpdateUrl         = '$kControlPlaneUrl/version.json';
+// Версия схемы mutation-программы, которую УМЕЕТ интерпретировать этот клиент.
+// Программа с min_client > этого значения отвергается (клиент слишком старый).
+const int    kAiCascadeSchema   = 1;
 
 // ── Stealth Engine 2.0 — Dead Drop зеркала ──────────────────────────────────
 // Если основной API недоступен — берём ноды из этих источников
-// Порядок: сначала Яндекс/VK (белый список РКН) → потом GitHub → DNS TXT
+// Порядок: сначала Яндекс/VK (белый список провайдер) → потом GitHub → DNS TXT
 const List<String> kDeadDropMirrors = [
-  // ── Tier 0: Яндекс — всегда белый список РКН (AS13238) ───────────────────
+  // ── Tier 0: Яндекс — всегда белый список провайдер (AS13238) ───────────────────
   // storage.yandexcloud.net: S3-совместимое Object Storage, Яндекс CDN
   // Не блокируется т.к. используется тысячами российских сайтов
-  'https://storage.yandexcloud.net/auravpn-nodes/nodes.json',
+  'https://storage.yandexcloud.net/vlyvpn-nodes/nodes.json',
   // Яндекс Диск public link (через get.disk.yandex.net — белый список)
-  'https://getfile.dokpub.com/yandex/get/https://disk.yandex.ru/d/auravpn-nodes',
+  'https://getfile.dokpub.com/yandex/get/https://disk.yandex.ru/d/vlyvpn-nodes',
 
   // ── Tier 1: VK — крупнейшая российская соцсеть (AS47541) ─────────────────
   // userapi.com / vk.com CDN — блокировка означает падение ВКонтакте
-  'https://vk.com/doc-auravpn_nodes',             // VK Documents (публичный)
-  'https://sun6-21.userapi.com/auravpn/nodes.json', // VK CDN edge
+  'https://vk.com/doc-vlyvpn_nodes',             // VK Documents (публичный)
+  'https://sun6-21.userapi.com/vlyvpn/nodes.json', // VK CDN edge
 
   // ── Tier 2: GitHub (международный, может быть заблокирован) ──────────────
-  'https://raw.githubusercontent.com/auravpn/nodes/main/nodes.json',
-  'https://gist.githubusercontent.com/auravpn/nodes/raw/nodes.json',
+  'https://raw.githubusercontent.com/vlyvpn/nodes/main/nodes.json',
+  'https://gist.githubusercontent.com/vlyvpn/nodes/raw/nodes.json',
 
   // ── Tier 3: jsDelivr CDN — зеркало GitHub через CDN ─────────────────────
   // jsDelivr использует Cloudflare + Fastly — сложнее заблокировать
-  'https://cdn.jsdelivr.net/gh/auravpn/nodes@main/nodes.json',
+  'https://cdn.jsdelivr.net/gh/vlyvpn/nodes@main/nodes.json',
 
-  // DNS TXT: dig TXT nodes.auravpn.app — содержит base64 списка нод
+  // DNS TXT: dig TXT nodes.vlyvpn.app — содержит base64 списка нод
 ];
-const String kDeadDropDnsTxt = 'nodes.auravpn.app';
+const String kDeadDropDnsTxt = 'nodes.vlyvpn.app';
 
-// Reality SNI пул — высокоавторитетные домены (в белом списке РКН)
+// ── Browser identity — ЕДИНЫЙ источник правды ────────────────────────────────
+// Обновлено 28.06.2026. Раньше версии Chrome (134/135/136/137) и User-Agent
+// были захардкожены и разбросаны по 5 файлам (networking/stealth/camouflage/
+// netcond_2026). Они рассинхронизировались между собой и с uTLS fingerprint.
+// Рассинхрон UA ↔ TLS fingerprint = готовый признак для ML-классификатора DPI
+// (слой 4 — поведенческий анализ). При обновлении браузеров правим ТОЛЬКО здесь.
+const String kChromeMajor    = '138';
+const String kChromeFull     = '138.0.7204.97';
+const String kEdgeFull       = '138.0.3351.65';
+const String kIosUaVersion   = '18_5';   // подчёркивания — формат внутри UA
+const String kSafariVersion  = '18.5';
+const String kFirefoxVersion = '140.0';
+
+// Канонический пул реалистичных User-Agent (доли рынка РФ, июнь 2026):
+// Android Chrome ~45% · iOS Safari ~30% · Windows Chrome/Edge ~20% · прочее ~5%.
+// Используется и для warm-up запросов, и для HTTP-камуфляжа outbound'ов.
+const List<String> kModernUserAgents = [
+  // Android Chrome — самый частый клиент в РФ
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 14; 23049PCD8G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Mobile Safari/537.36',
+  // iOS Safari
+  'Mozilla/5.0 (iPhone; CPU iPhone OS $kIosUaVersion like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/$kSafariVersion Mobile/15E148 Safari/604.1',
+  // Windows Chrome
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Safari/537.36',
+  // Windows Edge
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/$kChromeFull Safari/537.36 Edg/$kEdgeFull',
+];
+
+// Случайный реалистичный User-Agent из канонического пула.
+final Random _kUaRng = Random();
+String randomUserAgent() => kModernUserAgents[_kUaRng.nextInt(kModernUserAgents.length)];
+
+// ── Post-Quantum fingerprint (дыра обнаружена 28.06.2026) ────────────────────
+// ~57% Chrome ClientHello несут key share X25519MLKEM768 (+1088 байт). Его
+// ОТСУТСТВИЕ при UA=Chrome — прямой fingerprint-mismatch, срабатывает ДО HTTP:
+// DPI/CDN сверяют наличие PQ-keyshare с User-Agent. Старый uTLS 'chrome' без
+// PQ-keyshare выдаёт VPN. Реальный PQ-handshake делает НАТИВНЫЙ xray-core —
+// из Dart мы это не контролируем, поэтому требование к движку, не к клиенту:
+//   • нужен свежий xray-core (PQ-fingerprint: mlkem768 / mldsa65 в Reality);
+//   • Reality-сервер должен иметь PQ-ключи (xray x25519 --pq / mldsa65).
+// Здесь — флаг и заметка, чтобы UI/диагностика показывали статус требования.
+const bool   kRequiresPqFingerprint = true;
+const String kPqKeyShare            = 'X25519MLKEM768';
+
+// Reality SNI пул — высокоавторитетные домены (в белом списке провайдер)
 // SNI-пул актуализирован 28.03.2026
-// Источник: анализ CIDR белых списков ТСПУ + net4people/bbs #490 + XTLS/Xray-examples
-// Критерии: (1) IP в CIDR-whitelist РКН, (2) TLS1.3 + поддержка REALITY, (3) не блокируется в РФ
+// Источник: анализ CIDR белых списков DPI + net4people/bbs #490 + XTLS/Xray-examples
+// Критерии: (1) IP в CIDR-whitelist провайдер, (2) TLS1.3 + поддержка REALITY, (3) не блокируется в РФ
 // ВАЖНО: dest и serverName должны совпадать — XTLS-Vision требует реального TLS с этого сервера
 const List<String> kRealitySniPool = [
-  // ── Tier 0: ЯНДЕКС — 100% белый список РКН (AS13238, 77.88.0.0/18) ──────
+  // ── Tier 0: ЯНДЕКС — 100% белый список провайдер (AS13238, 77.88.0.0/18) ──────
   // Самый надёжный выбор для России — Яндекс никогда не блокируется
   'www.yandex.ru',               // Яндекс главная — иконический российский домен
   'mail.yandex.ru',              // Яндекс Почта — корпоративный whitelist
@@ -68,7 +127,7 @@ const List<String> kRealitySniPool = [
   'api.browser.yandex.com',      // Яндекс Браузер API — высокий трафик
 
   // ── Tier 1: VK / MAIL.RU GROUP (AS47541, 87.240.128.0/18) ───────────────
-  // Блокировка VK = социальный коллапс → ТСПУ никогда не тронет
+  // Блокировка VK = социальный коллапс → DPI никогда не тронет
   'vk.com',                      // ВКонтакте — крупнейшая соцсеть РФ
   'userapi.com',                 // VK CDN — медиа контент всех пользователей
   'mail.ru',                     // Mail.ru — почта, белый список
@@ -77,8 +136,8 @@ const List<String> kRealitySniPool = [
   // ── Tier 2: MICROSOFT — крупнейший CIDR whitelist (20.112.0.0/13) ────────
   'www.microsoft.com',           // Рекомендован XTLS-examples для России/Ирана
   'login.microsoft.com',         // Microsoft Login — высокий корпоративный трафик
-  'login.microsoftonline.com',   // Azure AD OAuth — в белом списке РКН
-  'update.microsoft.com',        // Windows Update — критически важен для РКН
+  'login.microsoftonline.com',   // Azure AD OAuth — в белом списке провайдер
+  'update.microsoft.com',        // Windows Update — критически важен для провайдер
   'office.com',                  // Microsoft Office Online
   'teams.microsoft.com',         // Microsoft Teams — корпоративный, всегда whitelist
 
@@ -110,12 +169,12 @@ const List<String> kRealitySniPool = [
 // CDN Workers URL для финального fallback
 // Трафик идёт через Cloudflare CDN — блокировка означает блокировку половины интернета
 const List<String> kCdnFallbackUrls = [
-  'https://aura-vpn.workers.dev',  // Cloudflare Workers
-  'https://aura-cdn.pages.dev',    // Cloudflare Pages
+  'https://vly-vpn.workers.dev',  // Cloudflare Workers
+  'https://vly-cdn.pages.dev',    // Cloudflare Pages
 ];
 
 // ── Hysteria2 настройки по умолчанию ────────────────────────────────────────
-// Hysteria2 использует QUIC (UDP) — ТСПУ плохо фильтрует UDP трафик
+// Hysteria2 использует QUIC (UDP) — DPI плохо фильтрует UDP трафик
 // Salamander: XOR обфускация QUIC пакетов — скрывает Hysteria fingerprint
 // Порт 443 — выглядит как QUIC/HTTP3 (Chrome, YouTube используют QUIC)
 const kHysteria2Defaults = {
@@ -131,32 +190,10 @@ const kHysteria2Defaults = {
   },
 };
 
-// ── Zapret интеграция ────────────────────────────────────────────────────────
-// Zapret — локальный инструмент обхода DPI (не VPN, работает на сетевом уровне)
-// Используется как ДОПОЛНЕНИЕ к VPN когда ТСПУ активно блокирует TLS handshake
-// Режимы: fake_sni (подмена SNI) + disorder (переупорядочивание пакетов)
-// Источник: github.com/bol-van/zapret
-const kZapretConfig = {
-  'enabled':     false,            // по умолчанию выключен — только если VPN упал
-  'httpPort':    1080,             // локальный SOCKS5 порт Zapret
-  'strategies': [
-    'fake_sni',     // подменяет SNI в ClientHello → ТСПУ видит разрешённый домен
-    'disorder',     // переупорядочивает TLS пакеты → DPI не собирает fingerprint
-    'split',        // split TLS ClientHello → аналог fragment в Xray
-    'ttl_trick',    // TTL=5 для первого пакета → ТСПУ не видит, сервер видит
-  ],
-  'fakeSniFallback': 'www.yandex.ru',  // SNI для подмены — Яндекс всегда в whitelist
-};
-
-// Zapret/GoodbyeDPI локальный порт (запускается отдельно на устройстве)
-const int    kZapretLocalPort     = 1080;  // SOCKS5 порт Zapret
-const String kZapretDefaultSni    = 'www.microsoft.com'; // SNI для fake_sni стратегии
-
-
 // Warm-up домены — реальный HTTPS трафик перед VPN туннелем
 // Warm-up домены обновлены март 2026:
 // Используем те же URL что запрашивает Android при подключении к WiFi
-// ТСПУ не может заблокировать эти домены без отключения миллионов устройств
+// DPI не может заблокировать эти домены без отключения миллионов устройств
 const List<String> kWarmupTargets = [
   // Google — самый надёжный, отвечает 204 за ~10ms
   'https://connectivitycheck.gstatic.com/generate_204',
@@ -169,20 +206,42 @@ const List<String> kWarmupTargets = [
   // Cloudflare — CDN trace
   'https://1.1.1.1/cdn-cgi/trace',
 ];
-const String kSupportEmail      = 'support@auravpn.app';
+const String kSupportEmail      = 'support@vlyvpn.app';
 const int    kLocalRulesVersion = 0;
 const String kBackupMagic       = 'VLY_VPN_BACKUP_V1';
 
 // ─── COLORS ──────────────────────────────────────────────────────────────────
 
 // ── Версия приложения ────────────────────────────────────────────────────────
-const kAppVersion = '6.3.0';
-const kAppBuild   = '20260414';
+// ЕДИНСТВЕННЫЙ источник версии — pubspec.yaml (`version: X.Y.Z+build`). При
+// старте AppInfo.load() читает реальные значения из собранного пакета через
+// package_info_plus и кладёт в gAppVersion/gAppBuild. Константы ниже — только
+// запасной вариант на случай, если плагин не успел/не смог загрузиться (тесты,
+// холодный старт до init). Больше НЕ нужно править версию в двух местах.
+const kAppVersion = '6.4.0';
+const kAppBuild   = '20260628';
+
+// Живые значения версии/билда (обновляются AppInfo.load() из pubspec).
+String gAppVersion = kAppVersion;
+int    gAppBuild   = int.tryParse(kAppBuild) ?? 0;
+
+class AppInfo {
+  // Читаем реальную версию собранного APK — display и update-check берут отсюда,
+  // поэтому версия всегда совпадает с pubspec без ручной синхронизации.
+  static Future<void> load() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (info.version.isNotEmpty) gAppVersion = info.version;
+      final b = int.tryParse(info.buildNumber);
+      if (b != null && b > 0) gAppBuild = b;
+    } catch (_) {/* остаёмся на запасных константах */}
+  }
+}
 
 // ── Responsive breakpoints ────────────────────────────────────────────────────
 // phone < 600  |  tablet 600-840  |  desktop > 840
 // Все функции — extension на BuildContext для удобного доступа
-extension AuraLayout on BuildContext {
+extension VlyLayout on BuildContext {
   double get screenW   => MediaQuery.of(this).size.width;
   double get screenH   => MediaQuery.of(this).size.height;
   bool   get isTablet  => screenW >= 600;
@@ -201,32 +260,18 @@ extension AuraLayout on BuildContext {
   int get nodeColumns => isDesktop ? 3 : (isTablet && isLandscape ? 2 : 1);
 }
 
-// FIX v3.0: нейтральный User-Agent для всех исходящих HTTP запросов
-// 'AuraVPN/5.6.0' мгновенно идентифицирует трафик системами РКН/ТСПУ
-// Используем Chrome Android — самый распространённый UA в мире
-// Актуальные User-Agent строки (март 2026)
-// Chrome 136 — текущая стабильная версия на Android
-// РКН блокирует запросы от Dart/2.x — используем реальные браузерные UA
+// Нейтральный User-Agent для всех исходящих HTTP запросов (Dead Drop, DoH, warm-up).
+// 'VlyVPN/5.6.0' мгновенно идентифицирует трафик системами провайдер/DPI.
+// Версия привязана к единому источнику kChromeFull (обновл. 28.06.2026).
 const kStealthUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) '
     'AppleWebKit/537.36 (KHTML, like Gecko) '
-    'Chrome/136.0.7103.60 Mobile Safari/537.36';
+    'Chrome/$kChromeFull Mobile Safari/537.36';
 
-// Пул UA для ротации — каждый запрос выглядит как другое устройство
-const kStealthUAPool = [
-  // Chrome 137 Mobile (март 2026) — актуальные JA4+ fingerprint не под блокировкой
-  'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.55 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; SM-A556B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; Redmi Note 13 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.48 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 13; POCOF5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.7151.55 Mobile Safari/537.36',
-  // Chrome 136 — запасной (менее новый но работает)
-  'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.125 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.125 Mobile Safari/537.36',
+// Пул UA для ротации — каждый запрос выглядит как другое устройство.
+// Берём из единого канонического пула (см. kModernUserAgents выше).
+const kStealthUAPool = kModernUserAgents;
 
-];
-
-// Акцентные цвета — управляются через AuraSkin (динамические)
+// Акцентные цвета — управляются через VlySkin (динамические)
 // Дефолтные значения — используются до инициализации скина
 Color _accent     = const Color(0xFF00E5FF);
 Color _accentBlue = const Color(0xFF4FC3F7);

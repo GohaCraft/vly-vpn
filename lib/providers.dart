@@ -1,10 +1,22 @@
 // ignore_for_file: unused_import, unused_element, prefer_const_constructors, prefer_const_literals_to_create_immutables, deprecated_member_use, prefer_final_fields, unnecessary_to_list_in_spreads, unused_local_variable, dead_code, unnecessary_null_comparison, avoid_print, unused_field, unnecessary_statements, duplicate_ignore, unnecessary_brace_in_string_interp, prefer_interpolation_to_compose_strings, unnecessary_string_interpolations, unnecessary_string_escapes, library_private_types_in_public_api, non_constant_identifier_names, constant_identifier_names, use_build_context_synchronously, no_leading_underscores_for_local_identifiers, unnecessary_import, depend_on_referenced_packages, unnecessary_overrides, avoid_unnecessary_containers, sized_box_for_whitespace, sort_child_properties_last, prefer_final_locals, omit_local_variable_types, always_use_package_imports, curly_braces_in_flow_control_structures, argument_type_not_assignable, invalid_assignment, body_might_complete_normally
 part of 'main.dart';
 
+// Стиль кнопки питания, настраиваемый в редакторе своей темы.
+enum PowerButtonStyle {
+  glass,   // полупрозрачное «жидкое стекло» (по умолчанию)
+  neon,    // яркое свечение + тонкая контурная граница
+  solid,   // залитая акцентом, мягкая тень
+  ring,    // прозрачный центр + толстое акцентное кольцо
+}
+
+PowerButtonStyle _powerBtnStyleFromName(String? n) =>
+    PowerButtonStyle.values.firstWhere((e) => e.name == n,
+        orElse: () => PowerButtonStyle.glass);
+
 class AppProvider extends ChangeNotifier {
-  AuraTheme  _theme  = AuraTheme.system;
-  AuraLocale _locale = AuraLocale.en;
-  AuraSkinId _skinId = AuraSkinId.crimson;
+  VlyTheme  _theme  = VlyTheme.system;
+  VlyLocale _locale = VlyLocale.en;
+  VlySkinId _skinId = VlySkinId.crimson;
   bool _disposed = false;
 
   // Пользовательская тема
@@ -15,11 +27,12 @@ class AppProvider extends ChangeNotifier {
   Color  _customBlob2      = const Color(0xFF0D47A1);
   String _customMediaPath  = ''; // путь к фото/GIF
   String _customMediaType  = ''; // 'photo' | 'gif' | ''
+  PowerButtonStyle _customButtonStyle = PowerButtonStyle.glass; // стиль кнопки питания
 
-  AuraTheme  get theme  => _theme;
-  AuraLocale get locale => _locale;
-  AuraSkinId get skinId => _skinId;
-  AuraSkin   get skin   => _skinId == AuraSkinId.custom ? _buildCustomSkin() : AuraSkin.byId(_skinId);
+  VlyTheme  get theme  => _theme;
+  VlyLocale get locale => _locale;
+  VlySkinId get skinId => _skinId;
+  VlySkin   get skin   => _skinId == VlySkinId.custom ? _buildCustomSkin() : VlySkin.byId(_skinId);
   
   // Custom theme getters
   Color  get customAccent    => _customAccent;
@@ -30,9 +43,13 @@ class AppProvider extends ChangeNotifier {
   String get customMediaPath => _customMediaPath;
   String get customMediaType => _customMediaType;
   bool   get hasCustomMedia  => _customMediaPath.isNotEmpty && File(_customMediaPath).existsSync();
+  // Стиль кнопки питания активной темы (для кастомной — выбранный, иначе стекло).
+  PowerButtonStyle get powerButtonStyle =>
+      _skinId == VlySkinId.custom ? _customButtonStyle : PowerButtonStyle.glass;
+  PowerButtonStyle get customButtonStyle => _customButtonStyle;
 
-  AuraSkin _buildCustomSkin() => AuraSkin(
-    id: AuraSkinId.custom,
+  VlySkin _buildCustomSkin() => VlySkin(
+    id: VlySkinId.custom,
     name: 'My Theme',
     emoji: '🎨',
     accent: _customAccent,
@@ -43,9 +60,9 @@ class AppProvider extends ChangeNotifier {
 
   ThemeMode get themeMode {
     switch (_theme) {
-      case AuraTheme.dark:   return ThemeMode.dark;
-      case AuraTheme.light:  return ThemeMode.light;
-      case AuraTheme.system: return ThemeMode.system;
+      case VlyTheme.dark:   return ThemeMode.dark;
+      case VlyTheme.light:  return ThemeMode.light;
+      case VlyTheme.system: return ThemeMode.system;
     }
   }
 
@@ -53,10 +70,10 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> _load() async {
     final p = await SharedPreferences.getInstance();
-    final ts  = p.getString('aura_theme') ?? 'system';
-    final sid = p.getString('aura_skin')  ?? 'crimson';
-    _theme  = AuraTheme.values.firstWhere((e) => e.name == ts,  orElse: () => AuraTheme.system);
-    _skinId = AuraSkinId.values.firstWhere((e) => e.name == sid, orElse: () => AuraSkinId.crimson);
+    final ts  = p.getString('vly_theme') ?? 'system';
+    final sid = p.getString('vly_skin')  ?? 'crimson';
+    _theme  = VlyTheme.values.firstWhere((e) => e.name == ts,  orElse: () => VlyTheme.system);
+    _skinId = VlySkinId.values.firstWhere((e) => e.name == sid, orElse: () => VlySkinId.crimson);
     // Загружаем кастомную тему
     _customAccent   = Color(p.getInt('ct_accent')   ?? 0xFF00E5FF);
     _customAccent2  = Color(p.getInt('ct_accent2')  ?? 0xFF4FC3F7);
@@ -65,24 +82,25 @@ class AppProvider extends ChangeNotifier {
     _customBlob2    = Color(p.getInt('ct_blob2')    ?? 0xFF0D47A1);
     _customMediaPath = p.getString('ct_media_path') ?? '';
     _customMediaType = p.getString('ct_media_type') ?? '';
+    _customButtonStyle = _powerBtnStyleFromName(p.getString('ct_btn_style'));
     _applySkin(skin);
     await S.init();
     _locale = S.locale;
     _safeNotify();
   }
 
-  Future<void> setTheme(AuraTheme t) async {
+  Future<void> setTheme(VlyTheme t) async {
     _theme = t;
     final p = await SharedPreferences.getInstance();
-    await p.setString('aura_theme', t.name);
+    await p.setString('vly_theme', t.name);
     _safeNotify();
   }
 
-  Future<void> setSkin(AuraSkinId id) async {
+  Future<void> setSkin(VlySkinId id) async {
     _skinId = id;
     _applySkin(skin); // skin getter уже учитывает custom
     final p = await SharedPreferences.getInstance();
-    await p.setString('aura_skin', id.name);
+    await p.setString('vly_skin', id.name);
     _safeNotify();
   }
 
@@ -90,6 +108,7 @@ class AppProvider extends ChangeNotifier {
     Color? accent, Color? accent2, Color? bg,
     Color? blob1, Color? blob2,
     String? mediaPath, String? mediaType,
+    PowerButtonStyle? buttonStyle,
   }) async {
     if (accent    != null) _customAccent    = accent;
     if (accent2   != null) _customAccent2   = accent2;
@@ -98,7 +117,8 @@ class AppProvider extends ChangeNotifier {
     if (blob2     != null) _customBlob2     = blob2;
     if (mediaPath != null) _customMediaPath = mediaPath;
     if (mediaType != null) _customMediaType = mediaType;
-    _skinId = AuraSkinId.custom;
+    if (buttonStyle != null) _customButtonStyle = buttonStyle;
+    _skinId = VlySkinId.custom;
     _applySkin(_buildCustomSkin());
     final p = await SharedPreferences.getInstance();
     await p.setInt('ct_accent',   _customAccent.value);
@@ -108,7 +128,8 @@ class AppProvider extends ChangeNotifier {
     await p.setInt('ct_blob2',    _customBlob2.value);
     await p.setString('ct_media_path', _customMediaPath);
     await p.setString('ct_media_type', _customMediaType);
-    await p.setString('aura_skin', 'custom');
+    await p.setString('ct_btn_style', _customButtonStyle.name);
+    await p.setString('vly_skin', 'custom');
     _safeNotify();
   }
 
@@ -121,7 +142,63 @@ class AppProvider extends ChangeNotifier {
     _safeNotify();
   }
 
-  Future<void> setLocale(AuraLocale l) async {
+  // ── Обмен темами ────────────────────────────────────────────────────────
+  // Кодируем 5 цветов темы в компактную строку, которой можно поделиться.
+  // Фон-фото не шарится (это файл на устройстве) — только палитра.
+  static const _themePrefix = 'VLY-THEME:';
+
+  // Чистое кодирование палитры в код (тестируемо, без состояния).
+  static String encodeThemeColors({
+    required int accent, required int accent2, required int bg,
+    required int blob1, required int blob2,
+  }) {
+    final m = {'v': 1, 'a': accent, 'a2': accent2, 'bg': bg, 'b1': blob1, 'b2': blob2};
+    return _themePrefix + base64Url.encode(utf8.encode(jsonEncode(m)));
+  }
+
+  // Чистое декодирование кода в 5 цветов. null — код не распознан.
+  static Map<String, Color>? decodeThemeColors(String code) {
+    try {
+      var s = code.trim();
+      final idx = s.indexOf(_themePrefix);
+      if (idx >= 0) s = s.substring(idx + _themePrefix.length).trim();
+      s = s.replaceAll(RegExp(r'\s'), '');
+      final pad = s.length % 4;
+      if (pad != 0) s = s + '=' * (4 - pad);
+      final m = jsonDecode(utf8.decode(base64Url.decode(s))) as Map<String, dynamic>;
+      int col(String k, int def) {
+        final v = m[k];
+        return v is int ? v : (v is num ? v.toInt() : def);
+      }
+      // Требуем хотя бы один валидный цветовой ключ, иначе это не наш код.
+      if (!m.containsKey('a') && !m.containsKey('bg')) return null;
+      return {
+        'accent':  Color(col('a',  0xFF00E5FF)),
+        'accent2': Color(col('a2', 0xFF4FC3F7)),
+        'bg':      Color(col('bg', 0xFF050610)),
+        'blob1':   Color(col('b1', 0xFF1A237E)),
+        'blob2':   Color(col('b2', 0xFF0D47A1)),
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String exportThemeCode() => encodeThemeColors(
+      accent: _customAccent.value, accent2: _customAccent2.value,
+      bg: _customBg.value, blob1: _customBlob1.value, blob2: _customBlob2.value);
+
+  // Возвращает true при успешном импорте, false — если код не распознан.
+  Future<bool> importThemeCode(String code) async {
+    final c = decodeThemeColors(code);
+    if (c == null) return false;
+    await saveCustomTheme(
+      accent: c['accent'], accent2: c['accent2'], bg: c['bg'],
+      blob1: c['blob1'], blob2: c['blob2']);
+    return true;
+  }
+
+  Future<void> setLocale(VlyLocale l) async {
     _locale = l;
     await S.setLocale(l);
     _safeNotify();
@@ -171,7 +248,7 @@ const _darkBlobs  = [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF01579B), Co
 //  PROFILE  (v3.0)
 // ═══════════════════════════════════════════════════════════════
 
-class AuraProfile {
+class VlyProfile {
   String id;
   String name;
   List<Map<String, dynamic>> configsJson;
@@ -181,6 +258,10 @@ class AuraProfile {
   // ── Безопасность ──────────────────────────────────────────────────────────
   bool killSwitch;
   bool aiEnabled;
+  // Анонимная диагностика. По умолчанию ВЫКЛ
+  // (opt-in): пользователь включает сам. Шлём только обезличенное — версия,
+  // класс сети, тип стратегии, коды ошибок; НИКОГДА IP/домены/адреса нод.
+  bool telemetryEnabled;
   SplitTunnelMode splitMode;
   List<String> splitApps;
 
@@ -212,7 +293,7 @@ class AuraProfile {
   String pingType;  // 'tcp' | 'proxy' | 'icmp'
   String pingUrl;   // URL для теста пинга
 
-  AuraProfile({
+  VlyProfile({
     required this.id,
     required this.name,
     this.configsJson      = const [],
@@ -220,6 +301,7 @@ class AuraProfile {
     this.subNames         = const {},
     this.killSwitch       = false,
     this.aiEnabled        = true,
+    this.telemetryEnabled = false,   // opt-in: по умолчанию выключено
     this.splitMode        = SplitTunnelMode.disabled,
     this.splitApps        = const [],
     // Tunnel
@@ -239,7 +321,7 @@ class AuraProfile {
     this.subPingOnOpen    = true,
     this.subConnectOnOpen = false,
     this.subSortMode      = 'none',
-    this.subUserAgent     = 'AuraVPN/$kAppVersion/Android',
+    this.subUserAgent     = 'VlyVPN/$kAppVersion/Android',
     this.subAllowDuplicates = false,
     // Ping
     this.pingType          = 'tcp',
@@ -254,6 +336,7 @@ class AuraProfile {
     'subNames': subNames,
     'killSwitch': killSwitch,
     'aiEnabled': aiEnabled,
+    'telemetryEnabled': telemetryEnabled,
     'splitMode': splitMode.name,
     'splitApps': splitApps,
     'ipPreference': ipPreference,
@@ -278,7 +361,7 @@ class AuraProfile {
     'camouflageMode': camouflageMode,
   };
 
-  factory AuraProfile.fromJson(Map<String, dynamic> j) => AuraProfile(
+  factory VlyProfile.fromJson(Map<String, dynamic> j) => VlyProfile(
     id: j['id'] ?? _uid(),
     name: j['name'] ?? 'Profile',
     configsJson: List<Map<String,dynamic>>.from(j['configs'] ?? []),
@@ -286,6 +369,7 @@ class AuraProfile {
     subNames: Map<String,String>.from(j['subNames'] ?? {}),
     killSwitch: j['killSwitch'] ?? false,
     aiEnabled: j['aiEnabled'] ?? true,
+    telemetryEnabled: j['telemetryEnabled'] ?? false,
     splitMode: SplitTunnelMode.values.firstWhere(
         (e) => e.name == (j['splitMode'] ?? 'disabled'),
         orElse: () => SplitTunnelMode.disabled),
@@ -305,7 +389,7 @@ class AuraProfile {
     subPingOnOpen: j['subPingOnOpen'] ?? true,
     subConnectOnOpen: j['subConnectOnOpen'] ?? false,
     subSortMode: j['subSortMode'] ?? 'none',
-    subUserAgent: j['subUserAgent'] ?? 'AuraVPN/$kAppVersion/Android',
+    subUserAgent: j['subUserAgent'] ?? 'VlyVPN/$kAppVersion/Android',
     subAllowDuplicates: j['subAllowDuplicates'] ?? false,
     pingType: j['pingType'] ?? 'tcp',
     pingUrl: j['pingUrl'] ?? 'https://www.gstatic.com/generate_204',

@@ -7,7 +7,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final light = Theme.of(context).brightness == Brightness.light;
-    return AuraBlobBg(isLight: light, child: Scaffold(
+    return VlyBlobBg(isLight: light, child: Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
         title: Text(S.t('settings'), style: TextStyle(
@@ -35,14 +35,14 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.route_outlined,
             iconColor: const Color(0xFF26A69A),
             title: S.t('tunnel_settings'),
-            subtitle: 'Маршрутизация · MUX · TUN · IP-режим',
-            helpText: 'Управляет как именно трафик идёт через VPN: IPv4/IPv6, мультиплексирование соединений (MUX), TUN-режим для полного перехвата трафика ОС.',
+            subtitle: S.t('sub_tunnel'),
+            helpText: S.t('help_tunnel'),
             onTap: () => _push(context, const _TunnelPage())),
           _SettingsTile(
             icon: Icons.call_split_rounded,
             iconColor: const Color(0xFFAB47BC),
             title: S.t('split_tunnel'),
-            subtitle: 'Выбрать приложения для VPN',
+            subtitle: S.t('sub_split_apps'),
             onTap: () {
               final vpn = Provider.of<VpnProvider>(context, listen: false);
               Navigator.push(context, CupertinoPageRoute(
@@ -52,8 +52,8 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.wifi_tethering_rounded,
             iconColor: const Color(0xFF42A5F5),
             title: S.t('lan_share'),
-            subtitle: 'Прокси для устройств в сети',
-            helpText: 'Позволяет другим устройствам (телефон, ноутбук) в вашей WiFi-сети использовать Ауру как прокси. Адрес: 0.0.0.0:10808.',
+            subtitle: S.t('sub_lan'),
+            helpText: S.t('help_lan'),
             onTap: () => _push(context, const _LanPage())),
 
           const SizedBox(height: 20),
@@ -66,35 +66,35 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.shield_outlined,
             iconColor: const Color(0xFF43A047),
             title: S.t('protection'),
-            subtitle: 'Kill Switch · Авторотация',
+            subtitle: S.t('sub_protection'),
             onTap: () => _push(context, const _ProtectionPage())),
           _SettingsTile(
             icon: Icons.blur_on_rounded,
             iconColor: const Color(0xFF7C4DFF),
             title: S.t('stealth_engine'),
             subtitle: 'Anti-DPI · JA4+ · Reality SNI · Siberia',
-            helpText: 'Маскирует VPN под обычный HTTPS. Anti-DPI обманывает глубокую проверку пакетов. Reality SNI показывает ТСПУ что вы посещаете Google/Microsoft.',
+            helpText: S.t('help_stealth'),
             onTap: () => _push(context, const _StealthPage())),
           _SettingsTile(
             icon: Icons.theater_comedy_outlined,
             iconColor: const Color(0xFFFF6D00),
             title: S.t('camouflage'),
-            subtitle: 'Под что скрываться: Netflix · YouTube · iCloud · NaïveProxy',
-            helpText: 'Делает VPN трафик неотличимым от конкретного сервиса. ТСПУ видит запросы к Netflix/iCloud — не подозрительный VPN. Для России лучше: Windows Update или iCloud.',
+            subtitle: S.t('sub_camouflage'),
+            helpText: S.t('help_camouflage'),
             onTap: () => _push(context, const _CamouflagePage())),
           _SettingsTile(
             icon: Icons.psychology_outlined,
             iconColor: _accent,
             title: S.t('ai_bypass_engine'),
-            subtitle: '100 стратегий · Авто-обход блокировок',
-            helpText: 'Автоматически перебирает 100 способов обхода когда VPN заблокирован. Учится на неудачах — заблокированные стратегии помечаются на 5-60 минут.',
+            subtitle: S.t('sub_ai_bypass'),
+            helpText: S.t('help_ai_bypass'),
             onTap: () => _push(context, const _AiBypassPage())),
           _SettingsTile(
             icon: Icons.public_off_rounded,
             iconColor: const Color(0xFF7C4DFF),
-            title: 'Обход белых списков',
+            title: S.t('wl_bypass_title'),
             subtitle: 'CDN · WebSocket · 443',
-            helpText: 'Маршрутизирует трафик через Cloudflare CDN. Используй если сам VPN-сервер заблокирован — трафик идёт через незаблокированный CDN.',
+            helpText: S.t('help_wl_bypass'),
             onTap: () => _push(context, const _BypassPage())),
 
           const SizedBox(height: 20),
@@ -106,16 +106,16 @@ class SettingsScreen extends StatelessWidget {
           _SettingsTile(
             icon: Icons.rss_feed_rounded,
             iconColor: const Color(0xFF26A69A),
-            title: 'Управление подписками',
-            subtitle: 'Добавить · Обновить · Удалить',
-            helpText: 'Подписки — это URL-ссылки от провайдера VPN, содержащие список серверов. Вставь ссылку и Аура загрузит все доступные серверы.',
+            title: S.t('subs_manage'),
+            subtitle: S.t('sub_subs_manage'),
+            helpText: S.t('help_subs_manage'),
             onTap: () => _push(context, const _SubscriptionsPage())),
           _SettingsTile(
             icon: Icons.update_rounded,
             iconColor: const Color(0xFF29B6F6),
             title: S.t('sub_settings'),
-            subtitle: 'Авто · При запуске · Сортировка',
-            helpText: 'Настрой как часто обновлять список серверов, сортировку по пингу, и поведение при запуске приложения.',
+            subtitle: S.t('sub_sub_settings'),
+            helpText: S.t('help_sub_settings'),
             onTap: () => _push(context, const _SubSettingsPage())),
 
           const SizedBox(height: 20),
@@ -127,21 +127,21 @@ class SettingsScreen extends StatelessWidget {
           _SettingsTile(
             icon: Icons.wifi_outlined,
             iconColor: const Color(0xFF29B6F6),
-            title: 'Автоподключение',
-            subtitle: 'По WiFi · По приложениям',
+            title: S.t('auto_connect'),
+            subtitle: S.t('sub_auto_connect'),
             onTap: () => _push(context, const _AutoConnectPage())),
           _SettingsTile(
             icon: Icons.speed_rounded,
             iconColor: const Color(0xFFFFCA28),
             title: S.t('ping_settings'),
             subtitle: 'TCP · Proxy · ICMP · URL',
-            helpText: 'Метод измерения скорости серверов. TCP — быстро. Proxy — точнее, через VPN. ICMP — классический ping (нужен root).',
+            helpText: S.t('help_ping'),
             onTap: () => _push(context, const _PingSettingsPage())),
           _SettingsTile(
             icon: Icons.fact_check_outlined,
             iconColor: const Color(0xFF66BB6A),
-            title: 'Тест белых списков',
-            subtitle: 'Проверка: Госуслуги · VK · Яндекс · Instagram',
+            title: S.t('whitelist_test'),
+            subtitle: S.t('sub_whitelist_test'),
             onTap: () => _push(context, const _WhitelistTesterPage())),
 
           const SizedBox(height: 20),
@@ -153,9 +153,9 @@ class SettingsScreen extends StatelessWidget {
           _SettingsTile(
             icon: Icons.palette_outlined,
             iconColor: const Color(0xFFFF7043),
-            title: 'Тема и скины',
-            subtitle: 'Тёмная · Светлая · Кастом · 13 тем',
-            helpText: '13 встроенных тем + редактор собственной темы с поддержкой фото/GIF фона. Выбери цвета акцента, фона и блобов.',
+            title: S.t('theme_skins'),
+            subtitle: S.t('sub_theme_skins'),
+            helpText: S.t('help_theme_skins'),
             onTap: () => _push(context, const _AppearancePage())),
           _SettingsTile(
             icon: Icons.language_rounded,
@@ -173,26 +173,26 @@ class SettingsScreen extends StatelessWidget {
           _SettingsTile(
             icon: Icons.person_outline_rounded,
             iconColor: const Color(0xFF5C6BC0),
-            title: 'Профили',
-            subtitle: 'Несколько наборов настроек',
+            title: S.t('profiles'),
+            subtitle: S.t('sub_profiles'),
             onTap: () => _push(context, const _ProfilesPage())),
           _SettingsTile(
             icon: Icons.backup_outlined,
             iconColor: const Color(0xFF8D6E63),
             title: S.t('backup'),
-            subtitle: 'Экспорт и импорт настроек',
+            subtitle: S.t('sub_backup'),
             onTap: () => _push(context, const _BackupPage())),
           _SettingsTile(
             icon: Icons.history_rounded,
             iconColor: const Color(0xFF78909C),
             title: S.t('history'),
-            subtitle: 'Журнал сессий',
+            subtitle: S.t('sub_history'),
             onTap: () => _push(context, const _HistoryPage())),
           _SettingsTile(
             icon: Icons.terminal_rounded,
             iconColor: const Color(0xFF546E7A),
             title: S.t('logs'),
-            subtitle: 'Отладочный журнал',
+            subtitle: S.t('sub_logs'),
             onTap: () => _push(context, const _LogsPage())),
 
           const SizedBox(height: 20),
@@ -202,7 +202,7 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.info_outline_rounded,
             iconColor: const Color(0xFF42A5F5),
             title: S.t('about_app'),
-            subtitle: 'v$kAppVersion · build $kAppBuild · 22.03.2026',
+            subtitle: 'v$gAppVersion · build $gAppBuild',
             onTap: () => _push(context, const _AboutPage())),
 
           const SizedBox(height: 32),
@@ -210,7 +210,7 @@ class SettingsScreen extends StatelessWidget {
         ),  // ListView
         ),  // ConstrainedBox
       ),    // Align
-    ));     // Scaffold + AuraBlobBg
+    ));     // Scaffold + VlyBlobBg
   }
 
   void _push(BuildContext context, Widget page) {
@@ -225,24 +225,24 @@ class _TunnelPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Настройки туннеля', child: Column(
+    return _SubPage(title: S.t('tunnel_settings'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
 
       _SubSection(S.t('routing')),
       _SwitchRow(
         icon: Icons.route_outlined, iconColor: const Color(0xFF26A69A),
-        title: 'Умная маршрутизация',
-        subtitle: 'RU-домены → прямо, заблокированные → VPN',
+        title: S.t('smart_routing'),
+        subtitle: S.t('sub_smart_routing'),
         value: true, onChanged: null,
         trailing: const Icon(Icons.check_circle, color: Colors.greenAccent, size: 18)),
       const SizedBox(height: 4),
       _SubSection(S.t('ip_preference')),
       _RadioGroup<String>(
         value: vpn.ipPreference,
-        options: const [
-          ('auto',  '🌐 Авто',  'IPv4 с fallback на IPv6'),
-          ('ipv4',  '4️⃣  IPv4',  'Только IPv4 адреса'),
-          ('ipv6',  '6️⃣  IPv6',  'Только IPv6 адреса'),
+        options: [
+          ('auto',  S.t('ip_auto'),  S.t('ip_auto_d')),
+          ('ipv4',  '4️⃣  IPv4',  S.t('ip_v4_d')),
+          ('ipv6',  '6️⃣  IPv6',  S.t('ip_v6_d')),
         ],
         onChanged: vpn.setIpPreference),
 
@@ -250,45 +250,44 @@ class _TunnelPage extends StatelessWidget {
       _SubSection(S.t('mux_enable')),
       _SwitchRow(
         icon: Icons.compress_rounded, iconColor: const Color(0xFF42A5F5),
-        title: 'Включить MUX',
-        subtitle: 'Уплотнение TCP-потоков — снижает overhead на повторные подключения',
+        title: S.t('mux_on'),
+        subtitle: S.t('sub_mux'),
         value: vpn.enableMux,
         onChanged: vpn.setEnableMux,
-        hint: 'MUX (мультиплексирование): несколько запросов идут через один TLS туннель. Снижает задержку при частых подключениях. Не совместим с VLESS+Reality — включается только для VMess/Trojan.'),
+        hint: S.t('hint_mux')),
       _InfoCard(
         icon: Icons.info_outline_rounded,
-        text: 'MUX уменьшает количество TLS-рукопожатий. '
-              'Отключи если замечаешь лаги на мобильном интернете.'),
+        text: S.t('info_mux')),
 
       const SizedBox(height: 16),
       _SubSection(S.t('tun_enable')),
       _SwitchRow(
         icon: Icons.router_outlined, iconColor: const Color(0xFF7C4DFF),
-        title: 'Включить TUN',
-        subtitle: 'sing-box стиль — перехватывает весь трафик ОС',
+        title: S.t('tun_on'),
+        subtitle: S.t('sub_tun'),
         value: vpn.enableTun,
         onChanged: vpn.setEnableTun,
-        hint: 'TUN — виртуальный сетевой интерфейс. Перехватывает ВЕСЬ трафик ОС включая UDP, DNS, QUIC. В отличие от SOCKS5/HTTP прокси — ни одно приложение не «пройдёт мимо».'),
+        hint: S.t('hint_tun')),
       if (vpn.enableTun) ...[
         const SizedBox(height: 4),
         _RadioGroup<String>(
           value: vpn.tunMode,
-          options: const [
-            ('mixed',   'Смешанный',  'TCP + UDP через tun2socks'),
-            ('fakedns', 'FakeDNS',    'DNS перехват для снижения утечек'),
+          options: [
+            ('mixed',   S.t('tun_mixed'),  S.t('tun_mixed_d')),
+            ('fakedns', 'FakeDNS',    S.t('tun_fakedns_d')),
           ],
           onChanged: vpn.setTunMode),
         const SizedBox(height: 8),
         _SwitchRow(
           icon: Icons.dns_outlined, iconColor: const Color(0xFF29B6F6),
-          title: 'DNS для TUN',
-          subtitle: 'Использовать DoH внутри туннеля',
+          title: S.t('dns_for_tun'),
+          subtitle: S.t('sub_dns_tun'),
           value: vpn.enableDns,
           onChanged: vpn.setEnableDns),
         if (vpn.enableDns) ...[
           const SizedBox(height: 4),
           _TextInputRow(
-            label: 'DNS адрес',
+            label: S.t('dns_addr'),
             hint: '1.1.1.1',
             value: vpn.dnsAddress,
             onChanged: vpn.setDnsAddress),
@@ -299,16 +298,16 @@ class _TunnelPage extends StatelessWidget {
       _SubSection(S.t('section_data')),
       _SwitchRow(
         icon: Icons.analytics_outlined, iconColor: const Color(0xFFFF7043),
-        title: 'Анализ пакетов',
-        subtitle: 'DPI-детектирование типа трафика для маршрутизации',
+        title: S.t('packet_analysis'),
+        subtitle: S.t('sub_packet'),
         value: vpn.enablePacketSniff,
         onChanged: vpn.setPacketSniff,
-        hint: 'Аура анализирует SNI/HTTP Host каждого пакета и маршрутизирует по содержимому. Например: gosuslugi.ru → прямо, instagram.com → через VPN. Требует чуть больше CPU.'),
+        hint: S.t('hint_packet')),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.swap_horiz_rounded, iconColor: const Color(0xFF78909C),
-        title: 'Системный прокси',
-        subtitle: 'Также устанавливать HTTP/HTTPS прокси в системе',
+        title: S.t('system_proxy'),
+        subtitle: S.t('sub_system_proxy'),
         value: vpn.enableSystemProxy,
         onChanged: vpn.setSystemProxy),
     ]));
@@ -322,26 +321,24 @@ class _LanPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Локальная сеть (LAN)', child: Column(
+    return _SubPage(title: S.t('lan_share'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
       _InfoCard(
         icon: Icons.wifi_tethering_rounded,
-        text: 'Разрешает другим устройствам в сети использовать '
-              'Ауру как прокси-сервер. Включает прослушивание на '
-              '0.0.0.0 вместо 127.0.0.1.'),
+        text: S.t('info_lan')),
       const SizedBox(height: 16),
-      _SubSection('ДОСТУП'),
+      _SubSection(S.t('access_caps')),
       _SwitchRow(
         icon: Icons.wifi_tethering_rounded, iconColor: const Color(0xFF42A5F5),
-        title: 'Разрешить из LAN',
-        subtitle: 'Раздавать интернет устройствам в локальной сети',
+        title: S.t('allow_lan'),
+        subtitle: S.t('sub_allow_lan'),
         value: vpn.enableLan,
         onChanged: vpn.setEnableLan),
       if (vpn.enableLan) ...[
         const SizedBox(height: 12),
         _InfoCard(
           icon: Icons.info_outline_rounded,
-          text: 'Socks5:\n0.0.0.0:10808  HTTP: 0.0.0.0:10809\nУкажи эти адреса на других устройствах.'),
+          text: S.t('info_socks')),
       ],
     ]));
   }
@@ -354,73 +351,73 @@ class _SubSettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Параметры обновления', child: Column(
+    return _SubPage(title: S.t('update_params'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-      _SubSection('АВТООБНОВЛЕНИЕ'),
+      _SubSection(S.t('auto_update_caps')),
       _SwitchRow(
         icon: Icons.update_rounded, iconColor: const Color(0xFF29B6F6),
-        title: 'Автообновление подписок',
-        subtitle: 'Обновлять ноды по расписанию',
+        title: S.t('title_auto_upd'),
+        subtitle: S.t('sub2_auto_upd'),
         value: vpn.subAutoUpdate,
         onChanged: vpn.setSubAutoUpdate),
       if (vpn.subAutoUpdate) ...[
         const SizedBox(height: 4),
         _StepperRow(
-          label: 'Интервал (часы)',
+          label: S.t('interval_hours'),
           value: vpn.subUpdateInterval,
           min: 1, max: 72, step: 1,
           onChanged: vpn.setSubInterval),
       ],
 
       const SizedBox(height: 16),
-      _SubSection('ПАРАМЕТРЫ ЗАПУСКА'),
+      _SubSection(S.t('startup_params_caps')),
       _SwitchRow(
         icon: Icons.refresh_rounded, iconColor: const Color(0xFF26A69A),
-        title: 'Обновить при открытии',
-        subtitle: 'Загружать новые ноды каждый раз при запуске',
+        title: S.t('upd_on_open'),
+        subtitle: S.t('sub_upd_on_open'),
         value: vpn.subUpdateOnOpen,
         onChanged: vpn.setSubUpdateOnOpen),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.speed_rounded, iconColor: const Color(0xFFFFCA28),
-        title: 'Пинговать при открытии',
-        subtitle: 'Измерять задержку нод при запуске',
+        title: S.t('ping_on_open'),
+        subtitle: S.t('sub_ping_on_open'),
         value: vpn.subPingOnOpen,
         onChanged: vpn.setSubPingOnOpen),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.play_arrow_rounded, iconColor: const Color(0xFF66BB6A),
-        title: 'Подключаться при открытии',
-        subtitle: 'Автоматически подключиться при запуске',
+        title: S.t('connect_on_open'),
+        subtitle: S.t('sub_connect_on_open'),
         value: vpn.subConnectOnOpen,
         onChanged: vpn.setSubConnectOnOpen),
 
       const SizedBox(height: 16),
-      _SubSection('ЛОГИКА'),
+      _SubSection(S.t('logic_caps')),
       _SwitchRow(
         icon: Icons.filter_list_off_rounded, iconColor: const Color(0xFF78909C),
-        title: 'Разрешить дубликаты',
-        subtitle: 'Не удалять одинаковые ноды из разных подписок',
+        title: S.t('allow_dups'),
+        subtitle: S.t('allow_dups_desc'),
         value: vpn.subAllowDups,
         onChanged: vpn.setSubAllowDups),
 
       const SizedBox(height: 16),
-      _SubSection('СОРТИРОВКА'),
+      _SubSection(S.t('sorting_caps')),
       _RadioGroup<String>(
         value: vpn.subSortMode,
-        options: const [
-          ('none',  'Без сортировки', 'В порядке получения из подписки'),
-          ('ping',  'По пингу',       'Лучшие ноды первыми'),
-          ('alpha', 'По алфавиту',    'A → Z по имени ноды'),
+        options: [
+          ('none',  S.t('sort_none'), S.t('sort_none_d')),
+          ('ping',  S.t('sort_ping'),       S.t('sort_ping_d')),
+          ('alpha', S.t('sort_alpha'),    S.t('sort_alpha_d')),
         ],
         onChanged: vpn.setSubSortMode),
 
       const SizedBox(height: 16),
       _SubSection('USER AGENT'),
       _TextInputRow(
-        label: 'User-Agent запросов',
-        hint: 'Vly/$kAppVersion/Android',
+        label: S.t('ua_requests'),
+        hint: 'Vly/$gAppVersion/Android',
         value: vpn.subUserAgent,
         onChanged: vpn.setSubUserAgent),
     ]));
@@ -434,37 +431,35 @@ class _PingSettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Настройки пинга', child: Column(
+    return _SubPage(title: S.t('ping_settings'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-      _SubSection('ТИП ПИНГА'),
+      _SubSection(S.t('ping_type_caps')),
       _RadioGroup<String>(
         value: vpn.pingType,
-        options: const [
-          ('tcp',   'TCP',        'Прямое TCP соединение — быстро, точно'),
-          ('proxy', 'via Proxy',  'Через VPN туннель — реальная задержка'),
-          ('icmp',  'ICMP',       'PING команда — требует root'),
+        options: [
+          ('tcp',   'TCP',        S.t('ping_tcp_d')),
+          ('proxy', 'via Proxy',  S.t('ping_proxy_d')),
+          ('icmp',  'ICMP',       S.t('ping_icmp_d')),
         ],
         onChanged: vpn.setPingType),
 
       const SizedBox(height: 16),
-      _SubSection('ТЕСТОВЫЙ URL'),
+      _SubSection(S.t('test_url_caps')),
       _TextInputRow(
-        label: 'URL для проверки',
+        label: S.t('url_to_check'),
         hint: 'https://www.gstatic.com/generate_204',
         value: vpn.pingUrl,
         onChanged: vpn.setPingUrl),
       _InfoCard(
         icon: Icons.info_outline_rounded,
-        text: 'URL должен возвращать HTTP 200-204. '
-              'Рекомендуется: gstatic.com/generate_204 (Google) '
-              'или connectivitycheck.gstatic.com'),
+        text: S.t('info_ping_url')),
 
       const SizedBox(height: 16),
-      _SubSection('РЕЗУЛЬТАТ'),
-      _DetailRow2('📊', 'Отображение', 'Время (мс) или статус OK/FAIL'),
-      _DetailRow2('🔄', 'Повторов', '3 попытки, берём медиану'),
-      _DetailRow2('⏱', 'Таймаут', '3000 мс на попытку'),
+      _SubSection(S.t('result_caps')),
+      _DetailRow2('📊', S.t('res_display'), S.t('res_display_d')),
+      _DetailRow2('🔄', S.t('res_repeats'), S.t('res_repeats_d')),
+      _DetailRow2('⏱', S.t('res_timeout'), S.t('res_timeout_d')),
     ]));
   }
 }
@@ -613,17 +608,15 @@ class _CamouflagePage extends StatelessWidget {
     final vpn = Provider.of<VpnProvider>(context);
 
     return _SubPage(
-      title: 'Маскировка трафика',
+      title: S.t('camouflage_traffic'),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
         _InfoCard(
           icon: Icons.theater_comedy_outlined,
-          text: 'Делает VPN трафик неотличимым от конкретного сервиса. '
-                'ТСПУ видит запросы к Netflix/YouTube/Discord — '
-                'не подозрительный "VPN паттерн".'),
+          text: S.t('info_camo')),
         const SizedBox(height: 16),
 
-        _SubSection('ВЫБЕРИ МАСКИРОВКУ'),
+        _SubSection(S.t('choose_camo_caps')),
         ...CamouflageMode.values.map((mode) {
           final selected = vpn.camouflageMode == mode.name;
           return GestureDetector(
@@ -655,8 +648,8 @@ class _CamouflagePage extends StatelessWidget {
                         ? _accent.withOpacity(0.20)
                         : Colors.white.withOpacity(0.06),
                     borderRadius: BorderRadius.circular(12)),
-                  child: Center(child: Text(mode.emoji,
-                      style: const TextStyle(fontSize: 22)))),
+                  child: Center(child: Icon(mode.icon, size: 22,
+                      color: selected ? _accent : Colors.white70))),
                 const SizedBox(width: 14),
                 // Текст
                 Expanded(child: Column(
@@ -674,7 +667,7 @@ class _CamouflagePage extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Colors.green.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(4)),
-                          child: const Text('ПО УМОЛЧАНИЮ',
+                          child: Text(S.t('default_caps'),
                               style: TextStyle(fontSize: 8, color: Colors.green,
                                   fontWeight: FontWeight.bold))),
                       if (mode == CamouflageMode.microsoft || mode == CamouflageMode.apple)
@@ -684,7 +677,7 @@ class _CamouflagePage extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: Colors.orange.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(4)),
-                          child: const Text('СИЛЬНЫЙ',
+                          child: Text(S.t('strong_caps'),
                               style: TextStyle(fontSize: 8, color: Colors.orange,
                                   fontWeight: FontWeight.bold))),
                       if (mode == CamouflageMode.naive)
@@ -694,7 +687,7 @@ class _CamouflagePage extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: const Color(0xFF7C4DFF).withOpacity(0.15),
                             borderRadius: BorderRadius.circular(4)),
-                          child: const Text('ТОПОВЫЙ',
+                          child: Text(S.t('top_caps'),
                               style: TextStyle(fontSize: 8, color: Color(0xFF7C4DFF),
                                   fontWeight: FontWeight.bold))),
                     ]),
@@ -721,11 +714,7 @@ class _CamouflagePage extends StatelessWidget {
         const SizedBox(height: 16),
         _InfoCard(
           icon: Icons.warning_amber_rounded,
-          text: '⚠️ Для России: Microsoft 🪟 и Apple 🍎 — САМЫЕ СИЛЬНЫЕ. '
-                'РКН не может заблокировать Windows Update и iCloud. '
-                'NaïveProxy 🔀 — лучший против ML-DPI. '
-                'Если Россия отключится от глобального интернета — '
-                'работают только Microsoft и Apple (RU CIDR).'),
+          text: S.t('info_camo_warn')),
       ]),
     );
   }
@@ -803,7 +792,7 @@ class _HelpOverlayState extends State<_HelpOverlay>
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4),
                   blurRadius: 20, spreadRadius: 2)]),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('ℹ️', style: TextStyle(fontSize: 16)),
+              Icon(Icons.info_outline_rounded, size: 16, color: _accent.withOpacity(0.8)),
               const SizedBox(width: 10),
               Expanded(child: Text(widget.text, style: const TextStyle(
                   fontSize: 13, color: Colors.white, height: 1.4))),
@@ -901,7 +890,7 @@ class _ProfilesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Профили', child: Column(children: [
+    return _SubPage(title: S.t('profiles'), child: Column(children: [
       ...vpn.profiles.asMap().entries.map((e) {
         final prof = e.value;
         final isActive = prof.id == vpn.activeProfileId;
@@ -983,7 +972,7 @@ class _SubscriptionsPageState extends State<_SubscriptionsPage> {
       if (subs.isEmpty)
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 24),
-          child: Text('Нет подписок', style: TextStyle(
+          child: Text(S.t('no_subscriptions'), style: const TextStyle(
               fontSize: 13, color: Colors.white38)))
       else
         ...subs.map((url) {
@@ -1037,7 +1026,7 @@ class _SubscriptionsPageState extends State<_SubscriptionsPage> {
           ))),
       const SizedBox(height: 10),
       _ActionBtn(
-        icon: Icons.add_rounded, label: 'Добавить подписку',
+        icon: Icons.add_rounded, label: S.t('add_subscription'),
         color: const Color(0xFF26A69A),
         onTap: () async {
           final url = _ctrl.text.trim();
@@ -1066,7 +1055,7 @@ class _BackupPageState extends State<_BackupPage> {
     final vpn = Provider.of<VpnProvider>(context);
     return _SubPage(title: S.t('backup'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _SubSection('ЭКСПОРТ'),
+      _SubSection(S.t('export_caps')),
       ClipRRect(borderRadius: BorderRadius.circular(12),
         child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
           child: TextField(controller: _pwCtrl,
@@ -1094,7 +1083,7 @@ class _BackupPageState extends State<_BackupPage> {
             backgroundColor: const Color(0xFF1B2A1B)));
         }),
       const SizedBox(height: 24),
-      _SubSection('ИМПОРТ'),
+      _SubSection(S.t('import_caps')),
       ClipRRect(borderRadius: BorderRadius.circular(12),
         child: BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
           child: TextField(controller: _imCtrl,
@@ -1102,7 +1091,7 @@ class _BackupPageState extends State<_BackupPage> {
             style: const TextStyle(fontSize: 11,
                 fontFamily: 'monospace', color: Colors.white70),
             decoration: InputDecoration(
-              hintText: 'Вставьте строку бэкапа…',
+              hintText: S.t('backup_import_hint'),
               hintStyle: const TextStyle(fontSize: 11, color: Colors.white24),
               filled: true, fillColor: Colors.white.withOpacity(0.06),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
@@ -1139,6 +1128,23 @@ class _ProtectionPage extends StatelessWidget {
         title: S.t('kill_switch'), subtitle: S.t('kill_switch_sub'),
         value: vpn.killSwitch,
         onChanged: vpn.setKillSwitch),
+      const SizedBox(height: 8),
+      // Честно: наш переключатель делает мгновенный авто-реконнект, но полностью
+      // заблокировать трафик в момент обрыва может только сама ОС (Always-on VPN
+      // + Lockdown). Ведём пользователя туда одной кнопкой.
+      _InfoCard(icon: Icons.info_outline, text: S.t('kill_switch_note')),
+      const SizedBox(height: 8),
+      _ActionRow(
+        icon: Icons.verified_user_outlined, iconColor: const Color(0xFF43A047),
+        title: S.t('always_on_vpn'), subtitle: S.t('always_on_vpn_sub'),
+        actionLabel: S.t('open'),
+        onTap: () async {
+          final ok = await vpn.openSystemVpnSettings();
+          if (context.mounted && !ok) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(S.t('always_on_vpn_hint'))));
+          }
+        }),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.autorenew_rounded, iconColor: const Color(0xFF29B6F6),
@@ -1149,10 +1155,10 @@ class _ProtectionPage extends StatelessWidget {
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.public_off_rounded, iconColor: const Color(0xFF7C4DFF),
-        title: 'Кнопка обхода',
+        title: S.t('bypass_button'),
         subtitle: vpn.bypassBtnMode
-            ? 'Нажатие → Обход белых списков'
-            : 'Нажатие → Вкл/Выкл VPN',
+            ? S.t('bypass_btn_wl')
+            : S.t('bypass_btn_vpn'),
         value: vpn.bypassBtnMode,
         onChanged: (_) => vpn.toggleBypassBtnMode()),
     ]));
@@ -1169,17 +1175,16 @@ class _AiBypassPage extends StatelessWidget {
     return _SubPage(title: 'AI Bypass + Stealth', child: Column(children: [
 
       // ── МЕТОД ОБХОДА ────────────────────────────────────────────────────
-      _SubSection('МЕТОД ОБХОДА (АПРЕЛЬ 2026)'),
+      _SubSection(S.t('bypass_method_caps')),
       _InfoCard(
         icon: Icons.security_outlined,
-        text: '✅ Hysteria2/QUIC — лучший выбор\n'
-            '✅ VLESS+xHTTP — новый 2026\n'
-            '✅ Reality+VK SNI — белый список РКН\n'
-            '❌ VLESS+TCP plain TLS — заблокирован с 17.02.2026'),
+        text: S.t('info_bypass_method')),
       const SizedBox(height: 12),
 
       // Карточки режимов обхода
-      ...BypassMode.values.map((mode) => _BypassModeCard(
+      // Показываем только режимы, которые реально запускает текущее ядро
+      // (Hysteria2/ShadowTLS скрыты — xray-core их не поддерживает).
+      ...BypassMode.values.where((m) => m.isAvailable).map((mode) => _BypassModeCard(
         mode: mode,
         selected: vpn.bypassMode == mode,
         onSelect: () => vpn.setBypassMode(mode),
@@ -1197,6 +1202,11 @@ class _AiBypassPage extends StatelessWidget {
         title: S.t('sync_rules'), subtitle: S.t('sync_rules_sub'),
         actionLabel: 'SYNC',
         onTap: vpn.syncRules),
+      const SizedBox(height: 4),
+      _SwitchRow(
+        icon: Icons.insights_outlined, iconColor: const Color(0xFF66BB6A),
+        title: S.t('telemetry'), subtitle: S.t('telemetry_sub'),
+        value: vpn.telemetryEnabled, onChanged: vpn.setTelemetryEnabled),
 
       const SizedBox(height: 20),
       _SubSection('STEALTH ENGINE 3.0'),
@@ -1204,16 +1214,14 @@ class _AiBypassPage extends StatelessWidget {
       // Инфо-карточка
       _InfoCard(
         icon: Icons.visibility_off_outlined,
-        text: 'Защита от JA4+ fingerprinting. '
-            'TLS фрагментация разбивает handshake, '
-            'Reality SNI маскирует трафик под Google/Apple/Microsoft.'),
+        text: S.t('info_stealth3')),
       const SizedBox(height: 12),
 
       _SwitchRow(
         icon: Icons.visibility_off_outlined,
         iconColor: const Color(0xFF7C4DFF),
         title: 'Stealth Mode',
-        subtitle: 'Анти-DPI + анти-JA4+ защита',
+        subtitle: S.t('stealth_mode_sub'),
         value: vpn.stealthMode,
         onChanged: (v) { vpn.stealthMode = v; vpn.saveToDisk(); vpn.refresh(); }),
       const SizedBox(height: 4),
@@ -1221,8 +1229,8 @@ class _AiBypassPage extends StatelessWidget {
       _SwitchRow(
         icon: Icons.call_split_rounded,
         iconColor: const Color(0xFFFF6D00),
-        title: 'TLS Фрагментация',
-        subtitle: 'Ghost Handshake — разбивает TLS ClientHello на 1-3 пакета',
+        title: S.t('tls_frag'),
+        subtitle: S.t('tls_frag_sub'),
         value: vpn.stealthFragment,
         onChanged: vpn.stealthMode
             ? (v) { vpn.stealthFragment = v; vpn.saveToDisk(); vpn.refresh(); }
@@ -1232,8 +1240,8 @@ class _AiBypassPage extends StatelessWidget {
       _SwitchRow(
         icon: Icons.language_rounded,
         iconColor: const Color(0xFF26A69A),
-        title: 'Reality SNI Ротация',
-        subtitle: 'Авто-смена SNI: Google → Apple → Microsoft…',
+        title: S.t('reality_sni_rot'),
+        subtitle: S.t('reality_sni_rot_sub'),
         value: vpn.stealthRealitySni,
         onChanged: vpn.stealthMode
             ? (v) { vpn.stealthRealitySni = v; vpn.saveToDisk(); vpn.refresh(); }
@@ -1244,14 +1252,23 @@ class _AiBypassPage extends StatelessWidget {
         icon: Icons.local_fire_department_outlined,
         iconColor: const Color(0xFFFF5252),
         title: 'Warm-up',
-        subtitle: 'HTTPS запрос к безопасному домену перед VPN туннелем',
+        subtitle: S.t('warmup_sub'),
         value: vpn.stealthWarmup,
         onChanged: vpn.stealthMode
             ? (v) { vpn.stealthWarmup = v; vpn.saveToDisk(); vpn.refresh(); }
             : null),
+      const SizedBox(height: 4),
+
+      _SwitchRow(
+        icon: Icons.apps_rounded,
+        iconColor: const Color(0xFF42A5F5),
+        title: S.t('per_service_bypass'),
+        subtitle: S.t('per_service_bypass_sub'),
+        value: vpn.perAppBypass,
+        onChanged: (v) => vpn.setPerAppBypass(v)),
 
       const SizedBox(height: 16),
-      _SubSection('ТЕКУЩИЙ SNI ПУЛ'),
+      _SubSection(S.t('current_sni_pool_caps')),
       ...kRealitySniPool.map((sni) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(children: [
@@ -1266,8 +1283,7 @@ class _AiBypassPage extends StatelessWidget {
       _SubSection('SELF-HEALING'),
       _InfoCard(
         icon: Icons.health_and_safety_outlined,
-        text: 'Если основной API недоступен, ноды загружаются из GitHub '
-            'зеркала или DNS TXT записи автоматически.'),
+        text: S.t('info_selfheal')),
     ]));
   }
 }
@@ -1287,58 +1303,64 @@ class _StealthPage extends StatelessWidget {
       _StealthStatusCard(vpn: vpn),
       const SizedBox(height: 16),
 
-      _SubSection('АНТИ-DPI'),
+      _SubSection(S.t('anti_dpi_caps')),
       _SwitchRow(
         icon: Icons.broken_image_outlined, iconColor: const Color(0xFF7C4DFF),
-        title: 'Stealth режим',
-        subtitle: 'Включает все анти-DPI механизмы',
+        title: S.t('stealth_mode_title'),
+        subtitle: S.t('stealth_mode_sub2'),
         value: vpn.stealthMode,
         onChanged: (v) => vpn.setStealthMode(v),
-        hint: 'Мастер-переключатель всех stealth функций. Включает фрагментацию TLS, ротацию SNI, jitter задержки. ТСПУ не может определить тип трафика.'),
+        hint: S.t('hint_stealth_master')),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.scatter_plot_outlined, iconColor: const Color(0xFF7C4DFF),
-        title: 'TLS Фрагментация',
-        subtitle: 'Разбивает ClientHello на 1-3 части · JA4+ bypass',
+        title: S.t('tls_frag'),
+        subtitle: S.t('tls_frag_sub2'),
         value: vpn.stealthFragment,
         onChanged: (v) => vpn.setStealthFragment(v),
-        hint: 'TLS ClientHello разбивается на 2-4 пакета по 20-100 байт. DPI видит фрагменты и не распознаёт VPN. Обходит JA4+/JA3 fingerprinting. Рекомендуется всегда включать.'),
+        hint: S.t('hint_tls_frag')),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.rotate_90_degrees_cw_outlined, iconColor: const Color(0xFF7C4DFF),
-        title: 'Reality SNI ротация',
+        title: S.t('reality_sni_rot'),
         subtitle: 'dl.google.com · icloud.com · microsoft.com',
         value: vpn.stealthRealitySni,
         onChanged: (v) => vpn.setStealthRealitySni(v),
-        hint: 'SNI — имя сервера в TLS handshake. Каждый раз берём SNI из белого списка РКН (Google, Apple, Microsoft). ТСПУ видит соединение к легитимному домену, не к VPN серверу.'),
+        hint: S.t('hint_reality_sni')),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.local_fire_department_outlined, iconColor: const Color(0xFFFF7043),
-        title: 'Warm-up прогрев',
-        subtitle: 'HTTP запрос к Google перед VPN туннелем',
+        title: S.t('warmup_title'),
+        subtitle: S.t('warmup_sub2'),
         value: vpn.stealthWarmup,
         onChanged: (v) => vpn.setStealthWarmup(v),
-        hint: 'Перед VPN соединением делаем обычный HTTPS запрос к Google. DPI видит: браузер открыл страницу, потом подключился к VPN. Паттерн как у реального пользователя.'),
+        hint: S.t('hint_warmup')),
 
       const SizedBox(height: 16),
-      _SubSection('СИБИРСКАЯ БЛОКИРОВКА'),
+      _SubSection(S.t('siberia_block_caps')),
       _InfoCard(
         icon: Icons.shield_outlined,
-        text: 'РКН детектирует burst TLS соединений к одному IP '
-              '(3+ за 5 сек) и блокирует сервер на 2 минуты. '
-              'Siberia Shield пейсит соединения и использует один '
-              'мультиплексированный туннель вместо множества.'),
+        text: S.t('info_siberia')),
       const SizedBox(height: 8),
       _SwitchRow(
         icon: Icons.shield_moon_outlined, iconColor: const Color(0xFF00BCD4),
-        title: 'Siberia Shield 🇷🇺',
+        title: 'Siberia Shield',
         subtitle: 'Connection pacing · Single-tunnel XMUX · Decoy traffic',
         value: vpn.siberiaShield,
         onChanged: (v) => vpn.setSiberiaShield(v),
-        hint: 'Защита от «Сибирской блокировки»: ТСПУ блокирует сервер при 2+ SYN за 8 сек. Siberia Shield: пейсит соединения (1 за 8 сек), шлёт decoy HTTPS трафик к белым доменам между сессиями.'),
+        hint: S.t('hint_siberia')),
+
+      const SizedBox(height: 8),
+      _SwitchRow(
+        icon: Icons.apps_rounded, iconColor: const Color(0xFF7C4DFF),
+        title: S.t('per_app_bypass'),
+        subtitle: 'Telegram · YouTube · TikTok · Instagram · Discord · X',
+        value: vpn.perAppBypass,
+        onChanged: (v) => vpn.setPerAppBypass(v),
+        hint: S.t('hint_per_app')),
 
       const SizedBox(height: 16),
-      _SubSection('SNI ПУЛ'),
+      _SubSection(S.t('sni_pool_caps')),
       ...kRealitySniPool.asMap().entries.map((e) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: Container(
@@ -1365,11 +1387,10 @@ class _StealthPage extends StatelessWidget {
           ])))),
 
       const SizedBox(height: 16),
-      _SubSection('DEAD DROP ЗЕРКАЛА'),
+      _SubSection(S.t('dead_drop_caps')),
       _InfoCard(
         icon: Icons.cloud_off_outlined,
-        text: 'Если основной сервер недоступен — ноды берутся из '
-            'GitHub Gist или DNS TXT записи автоматически.'),
+        text: S.t('info_deaddrop')),
       const SizedBox(height: 8),
       ...kDeadDropMirrors.map((m) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
@@ -1427,13 +1448,13 @@ class _StealthStatusCard extends StatelessWidget {
         const SizedBox(width: 14),
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(active ? 'STEALTH АКТИВЕН' : 'STEALTH ВЫКЛЮЧЕН',
+          Text(active ? S.t('stealth_active') : S.t('stealth_off'),
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800,
                   color: color, letterSpacing: 1.5)),
           const SizedBox(height: 4),
           Text(active
               ? 'JA4+ bypass · TLS fragment · Reality SNI'
-              : 'Нажми переключатель выше для активации',
+              : S.t('stealth_tap_hint'),
               style: TextStyle(fontSize: 10, color: color.withOpacity(0.6))),
         ])),
         if (active && vpn.stealthHandshakeFails > 0)
@@ -1456,14 +1477,13 @@ class _BypassPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vpn = Provider.of<VpnProvider>(context);
-    return _SubPage(title: 'Обход белых списков', child: Column(children: [
+    return _SubPage(title: S.t('wl_bypass_title'), child: Column(children: [
       _InfoCard(
         icon: Icons.info_outline_rounded,
-        text: 'Трафик маскируется под HTTPS и проходит через CDN. '
-            'Используй если VPN заблокирован на уровне протокола.'),
+        text: S.t('info_wl_bypass_short')),
       const SizedBox(height: 12),
       _DetailRow2('🔒', 'Порт', '443 (HTTPS)'),
-      _DetailRow2('🌐', 'Транспорт', 'WebSocket через CDN'),
+      _DetailRow2('🌐', S.t('transport'), S.t('wl_transport_val')),
       _DetailRow2('🎭', 'SNI', 'speed.cloudflare.com'),
       _DetailRow2('📡', 'DNS', 'DoH — 1.1.1.1'),
       const SizedBox(height: 16),
@@ -1471,7 +1491,7 @@ class _BypassPage extends StatelessWidget {
         icon: vpn.whitelistBypassActive
             ? Icons.close_rounded : Icons.public_off_rounded,
         label: vpn.whitelistBypassActive
-            ? 'Деактивировать' : 'Активировать обход',
+            ? S.t('deactivate') : S.t('activate_bypass'),
         color: vpn.whitelistBypassActive
             ? Colors.redAccent : const Color(0xFF7C4DFF),
         onTap: vpn.activateWhitelistBypass),
@@ -1485,30 +1505,30 @@ class _AutoConnectPage extends StatelessWidget {
   const _AutoConnectPage();
   @override
   Widget build(BuildContext context) {
-    return _SubPage(title: 'Автоподключение', child: Column(children: [
+    return _SubPage(title: S.t('auto_connect'), child: Column(children: [
       _SwitchRow(
         icon: Icons.wifi_outlined, iconColor: const Color(0xFF29B6F6),
-        title: 'Открытый WiFi',
-        subtitle: 'Включать VPN при подключении к незащищённой сети',
+        title: S.t('open_wifi'),
+        subtitle: S.t('sub_open_wifi'),
         value: _autoConnect.onOpenWifi,
         onChanged: _autoConnect.toggleWifi),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.wifi_lock_outlined, iconColor: const Color(0xFF66BB6A),
-        title: 'Любой новый WiFi',
-        subtitle: 'Включать VPN при смене сети',
+        title: S.t('any_new_wifi'),
+        subtitle: S.t('sub_any_new_wifi'),
         value: _autoConnect.onNewWifi,
         onChanged: _autoConnect.toggleNewWifi),
       const SizedBox(height: 4),
       _SwitchRow(
         icon: Icons.signal_cellular_alt_rounded, iconColor: const Color(0xFFFFA726),
-        title: 'Мобильный интернет',
-        subtitle: 'Включать при переходе на мобильные данные',
+        title: S.t('mobile_data'),
+        subtitle: S.t('sub_mobile_data'),
         value: _autoConnect.onMobileData,
         onChanged: _autoConnect.toggleMobile),
       const SizedBox(height: 16),
       _ActionBtn(
-        icon: Icons.apps_rounded, label: 'Выбрать приложения-триггеры',
+        icon: Icons.apps_rounded, label: S.t('select_trigger_apps'),
         color: const Color(0xFF29B6F6),
         onTap: () => Navigator.push(context, CupertinoPageRoute(
             builder: (_) => const AutoConnectAppsScreen()))),
@@ -1524,18 +1544,18 @@ class _AppearancePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = Provider.of<AppProvider>(context);
     final light = Theme.of(context).brightness == Brightness.light;
-    return _SubPage(title: 'Тема и скины', child: Column(
+    return _SubPage(title: S.t('theme_skins'), child: Column(
       crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _SubSection('ТЕМА'),
+      _SubSection(S.t('theme_caps')),
       Container(
         decoration: BoxDecoration(
           color: light ? Colors.white.withOpacity(0.7) : Colors.white.withOpacity(0.06),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white.withOpacity(0.10))),
-        child: Row(children: AuraTheme.values.map((t) {
+        child: Row(children: VlyTheme.values.map((t) {
           final sel = app.theme == t;
-          final label = t == AuraTheme.dark ? S.t('theme_dark')
-              : t == AuraTheme.light ? S.t('theme_light') : S.t('theme_system');
+          final label = t == VlyTheme.dark ? S.t('theme_dark')
+              : t == VlyTheme.light ? S.t('theme_light') : S.t('theme_system');
           return Expanded(child: GestureDetector(
             onTap: () => app.setTheme(t),
             child: AnimatedContainer(
@@ -1552,7 +1572,7 @@ class _AppearancePage extends StatelessWidget {
                   fontWeight: sel ? FontWeight.bold : FontWeight.normal)))));
         }).toList())),
       const SizedBox(height: 20),
-      _SubSection('СКИН'),
+      _SubSection(S.t('skin_caps')),
       _SkinPicker(app: app),
     ]));
   }
@@ -1565,24 +1585,56 @@ class _LanguagePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = Provider.of<AppProvider>(context);
-    return _SubPage(title: S.t('language'), child: Wrap(
-      spacing: 8, runSpacing: 8,
-      children: AuraLocale.values.map((loc) {
+    // mainAxisExtent фиксирует ВЫСОТУ ячейки (64px) независимо от ширины экрана.
+    // Раньше был childAspectRatio: 3.1 — высота зависела от ширины, и на телефоне
+    // ячейка выходила ~55px при контенте ~58px → «Bottom overflowed» на КАЖДОМ
+    // языке (и хуже на узких экранах). Теперь высоты хватает всегда.
+    return _SubPage(title: S.t('language'), child: GridView(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        mainAxisExtent: 64,
+      ),
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: VlyLocale.values.map((loc) {
         final sel = app.locale == loc;
         return GestureDetector(
           onTap: () => app.setLocale(loc),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
             decoration: BoxDecoration(
-              color: sel ? _accent.withOpacity(0.18) : Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(10),
+              color: sel ? _accent.withOpacity(0.14) : Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: sel ? _accent.withOpacity(0.5) : Colors.white.withOpacity(0.10))),
-            child: Text(S.localeNames[loc] ?? loc.name,
-              style: TextStyle(fontSize: 12,
-                color: sel ? _accent : Colors.white54,
-                fontWeight: sel ? FontWeight.bold : FontWeight.normal))));
+                color: sel ? _accent : Colors.white.withOpacity(0.08),
+                width: sel ? 1.6 : 1)),
+            child: Row(children: [
+              Container(width: 38, height: 38, alignment: Alignment.center,
+                decoration: BoxDecoration(shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.06)),
+                child: Text(S.localeFlags[loc] ?? '🏳️',
+                  style: const TextStyle(fontSize: 21))),
+              const SizedBox(width: 11),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(S.localeNames[loc] ?? loc.name,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13.5,
+                      color: sel ? _accent : Colors.white,
+                      fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 1),
+                  Text(S.localeEnglish[loc] ?? '',
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 10.5,
+                      color: Colors.white.withOpacity(0.4))),
+                ])),
+              if (sel) Icon(Icons.check_circle_rounded, color: _accent, size: 19),
+            ])));
       }).toList()));
   }
 }
@@ -1596,7 +1648,7 @@ class _HistoryPage extends StatelessWidget {
     final vpn   = Provider.of<VpnProvider>(context);
     final light = Theme.of(context).brightness == Brightness.light;
     return _SubPage(
-      title: 'История подключений',
+      title: S.t('connection_history'),
       trailing: vpn.connectionHistory.isNotEmpty
           ? GestureDetector(
               onTap: vpn.clearHistory,
@@ -1604,10 +1656,10 @@ class _HistoryPage extends StatelessWidget {
                   fontSize: 12, color: Colors.redAccent)))
           : null,
       child: vpn.connectionHistory.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
-              child: Center(child: Text('Нет записей',
-                  style: TextStyle(fontSize: 13, color: Colors.white38))))
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(child: Text(S.t('no_records'),
+                  style: const TextStyle(fontSize: 13, color: Colors.white38))))
           : Column(children: vpn.connectionHistory.asMap().entries.map((e) {
               final r      = e.value;
               final isLast = e.key == vpn.connectionHistory.length - 1;
@@ -1714,7 +1766,7 @@ class _AboutPageState extends State<_AboutPage> {
     } else if (_tapCount >= 3) {
       // Показываем прогресс (незаметно для обычного пользователя)
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('🛠 ${5 - _tapCount} тапа до Dev Dashboard',
+        content: Text('${5 - _tapCount} ${S.t('dev_taps_hint')}',
             style: const TextStyle(fontSize: 11)),
         duration: const Duration(milliseconds: 800),
         backgroundColor: const Color(0xFF1A1A2E),
@@ -1726,7 +1778,41 @@ class _AboutPageState extends State<_AboutPage> {
 
   @override
   Widget build(BuildContext context) {
-    return _SubPage(title: 'О приложении', child: Column(children: [
+    final upd = Provider.of<VpnProvider>(context).updateAvailable;
+    return _SubPage(title: S.t('about_app'), child: Column(children: [
+      // ── Баннер обновления (sideload: авто-апдейта нет) ──────────────────
+      if (upd != null) GestureDetector(
+        onTap: () => UpdateChecker.openDownload(upd),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(colors: [
+              Color(0xFF43A047), Color(0xFF2E7D32)]),
+            boxShadow: [BoxShadow(
+                color: const Color(0xFF43A047).withOpacity(0.4), blurRadius: 16)]),
+          child: Row(children: [
+            const Icon(Icons.system_update_rounded, color: Colors.white, size: 24),
+            const SizedBox(width: 12),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${S.t('update_available')} · v${upd.version}',
+                style: const TextStyle(color: Colors.white, fontSize: 13,
+                    fontWeight: FontWeight.w800)),
+              if (upd.notes.isNotEmpty) Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(upd.notes, maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 11))),
+            ])),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10)),
+              child: Text(S.t('download'), style: const TextStyle(
+                  color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800))),
+          ]))),
       // Логотип
       // VLY иконка с неоновым свечением
       Container(
@@ -1758,23 +1844,23 @@ class _AboutPageState extends State<_AboutPage> {
         onTap: _onVersionTap,
         onLongPress: () {
           Clipboard.setData(ClipboardData(
-              text: 'Vly v$kAppVersion build $kAppBuild'));
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Версия скопирована'),
+              text: 'Vly v$gAppVersion build $gAppBuild'));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(S.t('version_copied')),
             duration: Duration(seconds: 2),
             backgroundColor: Color(0xFF1B2A1B)));
         },
         child: Column(children: [
-          Text('v$kAppVersion · build $kAppBuild', style: TextStyle(
+          Text('v$gAppVersion · build $gAppBuild', style: TextStyle(
               fontSize: 11, color: Colors.white.withOpacity(0.35),
               letterSpacing: 1)),
           const SizedBox(height: 4),
-          Text('Удержи для копирования', style: TextStyle(
+          Text(S.t('hold_to_copy'), style: TextStyle(
               fontSize: 9, color: Colors.white.withOpacity(0.15))),
         ])),
       const SizedBox(height: 24),
       _DetailRow2('🛡', 'Протоколы', 'VLESS, VMess, SS, Trojan, HY2'),
-      _DetailRow2('🤖', 'AI Engine', 'Bypass Arsenal · 100 стратегий'),
+      _DetailRow2('🤖', 'AI Engine', 'Bypass Arsenal · 100 strategies'),
       _DetailRow2('🇷🇺', 'Белые списки', 'antifilter.download · runetfreedom'),
       _DetailRow2('🛡', 'Siberia Shield', 'Connection pacing · Single-tunnel MUX'),
       _DetailRow2('✈️', 'Telegram', 'Fast Protocol · Auto-detect'),
@@ -1823,8 +1909,8 @@ class _BypassModeCard extends StatelessWidget {
                   ? _accent.withOpacity(0.2)
                   : Colors.white.withOpacity(0.06),
               borderRadius: BorderRadius.circular(10)),
-            child: Center(child: Text(mode.emoji,
-                style: const TextStyle(fontSize: 20)))),
+            child: Center(child: Icon(mode.icon, size: 20,
+                color: selected ? _accent : Colors.white70))),
           const SizedBox(width: 12),
           // Название + описание
           Expanded(child: Column(
@@ -1844,10 +1930,8 @@ class _BypassModeCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xFF00C853).withOpacity(0.15),
                       borderRadius: BorderRadius.circular(4)),
-                    child: const Text('✓',
-                        style: TextStyle(fontSize: 9,
-                            color: Color(0xFF00C853),
-                            fontWeight: FontWeight.w600))),
+                    child: const Icon(Icons.check_rounded, size: 11,
+                        color: Color(0xFF00C853))),
                 ],
               ]),
               const SizedBox(height: 3),
@@ -1859,11 +1943,7 @@ class _BypassModeCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(mode.status, style: TextStyle(
                 fontSize: 10,
-                color: mode.status.startsWith('✅')
-                    ? const Color(0xFF00C853)
-                    : mode.status.startsWith('⚠️')
-                        ? const Color(0xFFFFB300)
-                        : const Color(0xFFE53935),
+                color: mode.statusColor,
                 fontWeight: FontWeight.w500)),
             ])),
           // Индикатор выбора
@@ -1890,10 +1970,10 @@ class _DevDashboardState extends State<_DevDashboard> {
   Widget build(BuildContext context) {
     final vpn   = Provider.of<VpnProvider>(context);
     final light = Theme.of(context).brightness == Brightness.light;
-    return AuraBlobBg(isLight: light, child: Scaffold(
+    return VlyBlobBg(isLight: light, child: Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
-        title: Text('🛠 Dev Dashboard', style: TextStyle(
+        title: Text('Dev Dashboard', style: TextStyle(
             fontSize: 13, fontWeight: FontWeight.w800,
             color: _textColor(context), letterSpacing: 1)),
         actions: [
@@ -1959,10 +2039,14 @@ class _DevDashboardState extends State<_DevDashboard> {
       _DevRow('AI running',        '${vpn.devAiAgent.isRunning}'),
       _DevRow('Current strategy',  stratId > 0 ? '#$stratId' : '—'),
       _DevRow('Arsenal size',      '${BypassArsenal.strategies.length} strategies'),
+      _DevRow('Recent errors',     '${CrashReporter.recent.length}',
+          color: CrashReporter.recent.isEmpty ? null : Colors.orangeAccent),
+      if (CrashReporter.recent.isNotEmpty)
+        _DevRow('Last error',      CrashReporter.recent.first, color: Colors.orangeAccent),
       const SizedBox(height: 12),
-      _DevSection('STRATEGY BLACKLIST (${blacklist.length} заблокировано, 5 мин TTL)'),
+      _DevSection('STRATEGY BLACKLIST (${blacklist.length} banned, 5 min TTL)'),
       if (blacklist.isEmpty)
-        const _DevEmptyMsg('Чёрный список пуст — все стратегии доступны')
+        const _DevEmptyMsg('Blacklist empty — all strategies available')
       else
         ...blacklist.map((e) {
           final key = e.length > 28 ? e.substring(0, 28) : e;
@@ -1988,7 +2072,7 @@ class _DevDashboardState extends State<_DevDashboard> {
       _DevBtn('🧹 Clear blacklist (${blacklist.length})', Colors.orange, () {
         StrategyBlacklist.clear();
         setState(() {});
-        _showSnack('Blacklist cleared — все стратегии разблокированы');
+        _showSnack('Blacklist cleared — all strategies unbanned');
       }),
       const SizedBox(height: 6),
       _DevBtn('🛡 Clear Siberia cooldowns', Colors.teal, () {
@@ -2042,13 +2126,13 @@ class _DevDashboardState extends State<_DevDashboard> {
 
   // ── Errors Tab ────────────────────────────────────────────────────────────
   Widget _buildErrorsTab() {
-    final codes = AuraErrorCode.values;
+    final codes = VlyErrorCode.values;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _DevSection('ERROR CODES (${codes.length})'),
       ...codes.map((e) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: GestureDetector(
-          onTap: () { Clipboard.setData(ClipboardData(text: e.code)); _showSnack('${e.code} скопирован'); },
+          onTap: () { Clipboard.setData(ClipboardData(text: e.code)); _showSnack('${e.code} copied'); },
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -2189,7 +2273,7 @@ class _SubPage extends StatelessWidget {
   final String title; final Widget child; final Widget? trailing;
   const _SubPage({required this.title, required this.child, this.trailing});
   @override
-  Widget build(BuildContext context) => AuraScaffold(
+  Widget build(BuildContext context) => VlyScaffold(
     title: title,
     trailing: trailing,
     body: ListView(
@@ -2317,7 +2401,7 @@ class _WhitelistTesterPage extends StatefulWidget {
 }
 
 class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
-  // Ключевые домены РКН — должны быть доступны БЕЗ VPN
+  // Ключевые домены провайдер — должны быть доступны БЕЗ VPN
   static const _ruDomains = [
     ('gosuslugi.ru',     '🏛 Госуслуги'),
     ('mos.ru',           '🏙 Mos.ru (Москва)'),
@@ -2333,7 +2417,7 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
     ('2gis.ru',          '🗺 2ГИС'),
   ];
 
-  // Домены которые БЛОКИРУЮТСЯ РКН — должны работать ЧЕРЕЗ VPN
+  // Домены которые БЛОКИРУЮТСЯ провайдер — должны работать ЧЕРЕЗ VPN
   static const _blockedDomains = [
     ('instagram.com',    '📸 Instagram'),
     ('twitter.com',      '🐦 X (Twitter)'),
@@ -2368,6 +2452,15 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
     } catch (_) { return null; }
   }
 
+  Widget _legendRow(Color color, IconData icon, String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Row(children: [
+      Icon(icon, size: 15, color: color),
+      const SizedBox(width: 10),
+      Expanded(child: Text(text, style: const TextStyle(
+          fontSize: 11.5, color: Colors.white70))),
+    ]));
+
   Widget _domainRow(String domain, String label, bool expectReachable) {
     final result = _results[domain];
     final tested = _results.containsKey(domain);
@@ -2389,12 +2482,12 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
     } else if (!reachable && !expectReachable) {
       // Заблокированный недоступен без VPN — правильно
       statusColor = Colors.blueAccent;
-      statusText  = 'Блок ✓';
+      statusText  = S.t('status_blocked');
       statusIcon  = Icons.shield_rounded;
     } else if (!reachable && expectReachable) {
       // RU домен недоступен — ПРОБЛЕМА (VPN режет РФ трафик?)
       statusColor = Colors.redAccent;
-      statusText  = 'Нет!';
+      statusText  = S.t('status_fail');
       statusIcon  = Icons.error_rounded;
     } else {
       // Заблокированный доступен — VPN не подключён
@@ -2425,8 +2518,8 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
 
   @override
   Widget build(BuildContext context) {
-    return AuraScaffold(
-      title: 'Тест белых списков',
+    return VlyScaffold(
+      title: S.t('whitelist_test'),
       trailing: GestureDetector(
         onTap: _testing ? null : _runTest,
         child: Container(
@@ -2435,7 +2528,7 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
             color: _accent.withOpacity(0.15),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: _accent.withOpacity(0.4))),
-          child: Text(_testing ? 'Тест...' : 'Запустить',
+          child: Text(_testing ? S.t('testing_btn') : S.t('run_btn'),
               style: TextStyle(fontSize: 11, color: _accent,
                   fontWeight: FontWeight.bold)),
         )),
@@ -2445,22 +2538,30 @@ class _WhitelistTesterPageState extends State<_WhitelistTesterPage> {
         children: [
           _InfoCard(
             icon: Icons.info_outline_rounded,
-            text: 'Проверяет доступность ключевых доменов.\n🟢 РФ домены должны быть доступны всегда.\n🔵 Заблокированные — только через VPN.\nЕсли РФ домен недоступен — проблема в маршрутизации.',
+            text: S.t('info_wl_test'),
           ),
+          const SizedBox(height: 14),
+
+          // Легенда цветов — чтобы результаты читались однозначно.
+          _SubSection(S.t('legend_caps')),
+          _legendRow(Colors.greenAccent, Icons.check_circle_rounded, S.t('legend_ok')),
+          _legendRow(Colors.blueAccent, Icons.shield_rounded, S.t('legend_blocked')),
+          _legendRow(Colors.redAccent, Icons.error_rounded, S.t('legend_fail')),
+          _legendRow(Colors.orangeAccent, Icons.warning_rounded, S.t('legend_vpnoff')),
           const SizedBox(height: 16),
 
-          _SubSection('РФ ДОМЕНЫ (должны быть доступны)'),
+          _SubSection(S.t('ru_domains_caps')),
           ..._ruDomains.map((e) => _domainRow(e.$1, e.$2, true)),
 
           const SizedBox(height: 16),
-          _SubSection('ЗАБЛОКИРОВАННЫЕ (без VPN — недоступны)'),
+          _SubSection(S.t('blocked_caps')),
           ..._blockedDomains.map((e) => _domainRow(e.$1, e.$2, false)),
 
           if (_testing) ...[
             const SizedBox(height: 16),
             const Center(child: CupertinoActivityIndicator()),
             const SizedBox(height: 8),
-            const Center(child: Text('Проверяем доступность...',
+            Center(child: Text(S.t('checking_avail'),
                 style: TextStyle(fontSize: 11, color: Colors.white38))),
           ],
         ],
@@ -2640,47 +2741,28 @@ class _SkinPicker extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
-          childAspectRatio: 1.1,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
+          childAspectRatio: 1.15,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
         ),
-        itemCount: AuraSkin.all.length + 1,
+        itemCount: VlySkin.all.length + 1,
         itemBuilder: (ctx, i) {
-          if (i == AuraSkin.all.length) {
+          if (i == VlySkin.all.length) {
             return _SkinGridTile(
-              name: 'My Theme',
-              emoji: '🎨',
-              accent: app.skin.accent,
-              bgColor: const Color(0xFF1A1A2E),
-              selected: app.skinId == AuraSkinId.custom,
+              selected: app.skinId == VlySkinId.custom,
+              customAccent: app.skin.accent,
               onTap: () => Navigator.push(context, PageRouteBuilder(
                 pageBuilder: (_, a, __) => const _CustomThemeEditor(),
                 transitionsBuilder: (_, a, __, c) => SlideTransition(
                   position: Tween(begin: const Offset(0,1), end: Offset.zero)
                       .animate(CurvedAnimation(parent: a, curve: Curves.easeOutCubic)),
                   child: c))),
-              customChild: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.palette_outlined, color: app.skin.accent, size: 28),
-                  const SizedBox(height: 6),
-                  Text('My Theme', style: TextStyle(
-                    fontSize: 11, color: app.skin.accent,
-                    fontWeight: FontWeight.w600)),
-                  if (app.skinId == AuraSkinId.custom)
-                    const SizedBox(height: 4),
-                  if (app.skinId == AuraSkinId.custom)
-                    Text('активна', style: TextStyle(
-                      fontSize: 9, color: app.skin.accent.withOpacity(0.7))),
-                ]),
             );
           }
-          final skin = AuraSkin.all[i];
-          final sel  = app.skinId == skin.id;
+          final skin = VlySkin.all[i];
           return _SkinGridTile(
-            name: skin.name, emoji: skin.emoji,
-            accent: skin.accent, bgColor: skin.bgDark,
-            selected: sel,
+            skin: skin,
+            selected: app.skinId == skin.id,
             onTap: () => app.setSkin(skin.id),
           );
         },
@@ -2689,78 +2771,95 @@ class _SkinPicker extends StatelessWidget {
   }
 }
 
-// Плитка темы в сетке
+// Плитка темы — РЕАЛЬНОЕ мини-превью (градиент + акцентные блобы), без эмодзи.
+// Если skin == null — это плитка «My Theme» (кастомный редактор).
 class _SkinGridTile extends StatelessWidget {
-  final String   name, emoji;
-  final Color    accent, bgColor;
-  final bool     selected;
+  final VlySkin?    skin;          // null = кастомная плитка
+  final bool         selected;
   final VoidCallback onTap;
-  final Widget?  customChild;
+  final Color?       customAccent;  // акцент для рамки кастомной плитки
 
   const _SkinGridTile({
-    required this.name, required this.emoji,
-    required this.accent, required this.bgColor,
-    required this.selected, required this.onTap,
-    this.customChild,
+    this.skin,
+    required this.selected,
+    required this.onTap,
+    this.customAccent,
   });
 
   @override
   Widget build(BuildContext context) {
+    final a = skin?.accent ?? customAccent ?? const Color(0xFF00E5FF);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
+        duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: bgColor,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [
-              accent.withOpacity(selected ? 0.25 : 0.08),
-              bgColor.withOpacity(0.95),
-            ]),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: selected ? accent : accent.withOpacity(0.2),
-            width: selected ? 1.8 : 0.8),
-          boxShadow: selected ? [
-            BoxShadow(color: accent.withOpacity(0.4), blurRadius: 12, spreadRadius: 1),
-            BoxShadow(color: accent.withOpacity(0.2), blurRadius: 24),
-          ] : [],
+            color: selected ? a : Colors.white.withOpacity(0.08),
+            width: selected ? 2 : 1),
+          boxShadow: selected
+            ? [BoxShadow(color: a.withOpacity(0.45), blurRadius: 18, spreadRadius: 1)]
+            : [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 8,
+                offset: const Offset(0, 3))],
         ),
-        child: customChild ?? Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Превью фона — мини блобы
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  accent.withOpacity(0.7),
-                  accent.withOpacity(0.1),
-                ])),
-              child: Center(child: Text(emoji,
-                  style: const TextStyle(fontSize: 18)))),
-            const SizedBox(height: 8),
-            Text(name, style: TextStyle(
-              fontSize: 11,
-              color: selected ? accent : Colors.white.withOpacity(0.7),
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center),
-            if (selected) ...[
-              const SizedBox(height: 4),
-              Container(
-                width: 20, height: 2,
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(1))),
-            ],
-          ]),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: skin == null ? _customPreview(a) : _themePreview(skin!, a, selected),
+        ),
       ),
     );
   }
+
+  // Превью реальной темы
+  static Widget _themePreview(VlySkin s, Color a, bool selected) {
+    Color blob(int i) => i < s.blobs.length ? s.blobs[i] : s.accentSecondary;
+    return Stack(fit: StackFit.expand, children: [
+      DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: [s.bgDark, s.bgGradientMid, s.bgGradientEnd]))),
+      Positioned(left: -18, top: -14, child: _blob(blob(2), 64)),
+      Positioned(right: -22, bottom: 16, child: _blob(blob(3), 76)),
+      Positioned(right: 12, top: -10, child: _blob(s.accentSecondary, 38)),
+      Align(alignment: Alignment.bottomCenter, child: Container(height: 44,
+        decoration: BoxDecoration(gradient: LinearGradient(
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [Colors.transparent, Colors.black.withOpacity(0.55)])))),
+      Positioned(left: 11, right: 11, bottom: 10, child: Row(children: [
+        Container(width: 9, height: 9, decoration: BoxDecoration(shape: BoxShape.circle,
+          color: a, boxShadow: [BoxShadow(color: a.withOpacity(0.6), blurRadius: 6)])),
+        const SizedBox(width: 7),
+        Expanded(child: Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: Colors.white.withOpacity(0.95),
+            fontSize: 12, fontWeight: FontWeight.w700))),
+      ])),
+      if (selected) Positioned(right: 8, top: 8, child: Container(
+        width: 22, height: 22, decoration: BoxDecoration(shape: BoxShape.circle,
+          color: a, boxShadow: [BoxShadow(color: a.withOpacity(0.6), blurRadius: 8)]),
+        child: const Icon(Icons.check_rounded, size: 15, color: Colors.white))),
+    ]);
+  }
+
+  // Превью кастомной плитки
+  static Widget _customPreview(Color a) => Stack(fit: StackFit.expand, children: [
+    DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
+      begin: Alignment.topLeft, end: Alignment.bottomRight,
+      colors: [const Color(0xFF15151F), a.withOpacity(0.18), const Color(0xFF15151F)]))),
+    Center(child: Icon(Icons.palette_outlined, color: a.withOpacity(0.9), size: 30)),
+    Align(alignment: Alignment.bottomCenter, child: Container(height: 40,
+      decoration: BoxDecoration(gradient: LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [Colors.transparent, Colors.black.withOpacity(0.5)])))),
+    Positioned(left: 11, right: 11, bottom: 10, child: Text('My Theme',
+      maxLines: 1, overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: Colors.white.withOpacity(0.95),
+        fontSize: 12, fontWeight: FontWeight.w700))),
+  ]);
+
+  static Widget _blob(Color c, double s) => Container(width: s, height: s,
+    decoration: BoxDecoration(shape: BoxShape.circle, gradient: RadialGradient(
+      colors: [c.withOpacity(0.55), c.withOpacity(0.0)])));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2782,36 +2881,16 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
 
   Future<void> _pickPhoto() async {
     try {
-      // Используем текстовый ввод пути — FilePicker требует отдельной зависимости
-      final ctrl = TextEditingController();
-      final path = await showDialog<String>(
-        context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: const Color(0xFF1A1A2E),
-          title: const Text('Путь к фото/GIF',
-              style: TextStyle(color: Colors.white, fontSize: 15)),
-          content: TextField(
-            controller: ctrl,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: '/storage/emulated/0/Pictures/bg.jpg',
-              hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.07),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none)),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context),
-                child: const Text('Отмена', style: TextStyle(color: Colors.white54))),
-            TextButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-                child: Text('ОК', style: TextStyle(color: _accent))),
-          ]));
-      if (path == null || path.isEmpty) return;
+      // Системный выбор изображения/GIF из галереи (Android Photo Picker —
+      // разрешений не требует). Файл копируется плагином в хранилище приложения,
+      // поэтому путь стабилен между запусками.
+      final XFile? file = await ImagePicker().pickImage(
+        source: ImageSource.gallery, imageQuality: 92);
+      if (file == null) return; // пользователь отменил
+      final path = file.path;
       if (!File(path).existsSync()) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Файл не найден'), backgroundColor: Colors.red));
+          SnackBar(content: Text(S.t('file_not_found')), backgroundColor: Colors.red));
         return;
       }
       final ext  = path.split('.').last.toLowerCase();
@@ -2820,7 +2899,7 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
       if (mounted) setState(() {});
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red));
+          SnackBar(content: Text('${S.t('error')}: $e'), backgroundColor: Colors.red));
     }
   }
 
@@ -2829,68 +2908,135 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
     if (mounted) setState(() {});
   }
 
+  // Поделиться темой: копируем код в буфер и открываем системный share-лист.
+  Future<void> _shareTheme(AppProvider app) async {
+    final code = app.exportThemeCode();
+    await Clipboard.setData(ClipboardData(text: code));
+    try {
+      await const MethodChannel('vly_vpn/share').invokeMethod('share', {
+        'text': '${S.t('share_theme_msg')}\n\n$code',
+        'subject': 'Vly Theme',
+      });
+    } catch (_) {/* нет нативного share — код уже в буфере обмена */}
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(S.t('theme_code_copied'))));
+  }
+
+  // Импорт темы друга: вставить код → применить.
+  Future<void> _importTheme(AppProvider app) async {
+    final ctrl = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        title: Text(S.t('import_theme'),
+            style: const TextStyle(color: Colors.white, fontSize: 15)),
+        content: TextField(
+          controller: ctrl, autofocus: true, maxLines: 3, minLines: 1,
+          style: const TextStyle(color: Colors.white, fontSize: 12),
+          decoration: InputDecoration(
+            hintText: S.t('paste_theme_code'),
+            hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+            filled: true, fillColor: Colors.white.withOpacity(0.07),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context),
+              child: Text(S.t('cancel'), style: const TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+              child: Text(S.t('ok'), style: TextStyle(color: _accent))),
+        ]));
+    if (code == null || code.isEmpty) return;
+    final ok = await app.importThemeCode(code);
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? S.t('theme_imported') : S.t('invalid_theme_code')),
+      backgroundColor: ok ? null : Colors.red));
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = Provider.of<AppProvider>(context);
-    return AuraBlobBg(child: Scaffold(
+    return VlyBlobBg(child: Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
-        title: const Text('Моя тема',
+        title: Text(S.t('my_theme'),
           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
               color: Colors.white)),
-        actions: [
-          // Сохранить
-          TextButton(
-            onPressed: () {
-              app.setSkin(AuraSkinId.custom);
-              Navigator.pop(context);
-            },
-            child: Text('Сохранить',
-              style: TextStyle(color: _accent, fontWeight: FontWeight.w700,
-                  fontSize: 13))),
-        ],
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, GlassAppBar.totalHeight(context) + 8, 16, 40),
         children: [
 
-          // ── ПРЕВЬЮ ──────────────────────────────────────────────────────
+          // ── ПРЕВЬЮ — живой мини-макет главного экрана с выбранной темой ──
+          // Показывает реальный фон (фото/GIF или блобы), кнопку питания в
+          // стиле приложения и акцентные чипы — как будет выглядеть на самом деле.
           Container(
-            height: 140,
-            margin: const EdgeInsets.only(bottom: 20),
+            height: 168,
+            margin: const EdgeInsets.only(bottom: 8),
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              color: app.skin.bgDark,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-                colors: [app.skin.accent.withOpacity(0.2), app.skin.bgDark]),
-              border: Border.all(color: app.skin.accent.withOpacity(0.3)),
+              color: app.customBg,
+              border: Border.all(color: app.customAccent.withOpacity(0.35)),
               boxShadow: [BoxShadow(
-                  color: app.skin.accent.withOpacity(0.25), blurRadius: 20)],
+                  color: app.customAccent.withOpacity(0.25), blurRadius: 20)],
             ),
-            child: Center(child: Column(
-              mainAxisAlignment: MainAxisAlignment.center, children: [
-                Container(
-                  width: 50, height: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: app.skin.accent, width: 2),
-                    color: app.skin.accent.withOpacity(0.1)),
-                  child: Icon(Icons.power_settings_new_rounded,
-                      color: app.skin.accent, size: 26)),
-                const SizedBox(height: 10),
-                Text('ПРЕДПРОСМОТР', style: TextStyle(
-                    color: app.skin.accent, fontSize: 11,
-                    fontWeight: FontWeight.w800, letterSpacing: 2)),
-              ]))),
+            child: Stack(fit: StackFit.expand, children: [
+              // Слой фона: фото/GIF если выбрано, иначе градиент из блобов
+              if (app.hasCustomMedia)
+                Image.file(File(app.customMediaPath), fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox())
+              else
+                DecoratedBox(decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    colors: [
+                      app.customBlob1.withOpacity(0.65),
+                      app.customBg,
+                      app.customBlob2.withOpacity(0.55),
+                    ]))),
+              // Затемнение поверх фото, чтобы кнопка читалась
+              if (app.hasCustomMedia)
+                DecoratedBox(decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                    colors: [Colors.black.withOpacity(0.15),
+                             Colors.black.withOpacity(0.45)]))),
+              // Контент: кнопка питания в стиле приложения + статус + чипы
+              Center(child: Column(
+                mainAxisAlignment: MainAxisAlignment.center, children: [
+                  _PreviewPowerButton(
+                    accent: app.customAccent, accent2: app.customAccent2,
+                    style: app.customButtonStyle),
+                  const SizedBox(height: 12),
+                  Text(S.t('connected').toUpperCase(), style: TextStyle(
+                      color: app.customAccent, fontSize: 11,
+                      fontWeight: FontWeight.w800, letterSpacing: 2.5,
+                      shadows: [Shadow(color: app.customAccent.withOpacity(0.5),
+                          blurRadius: 10)])),
+                  const SizedBox(height: 10),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    _PreviewChip('AUTO', app.customAccent),
+                    const SizedBox(width: 6),
+                    _PreviewChip('STEALTH', app.customAccent2),
+                  ]),
+                ])),
+            ])),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 18, left: 4),
+            child: Text(S.t('applies_immediately'),
+              style: TextStyle(color: Colors.white.withOpacity(0.35),
+                  fontSize: 11))),
 
           // ── ЦВЕТ АКЦЕНТА ────────────────────────────────────────────────
-          _SectionLabel('Цвет акцента'),
-          _ColorRow(label: 'Акцент', color: app.customAccent,
+          _SectionLabel(S.t('accent_color')),
+          _ColorRow(label: S.t('accent'), color: app.customAccent,
             onTap: () => _showColorPicker(context, app.customAccent, (c) {
               app.saveCustomTheme(accent: c); setState((){});
             })),
-          _ColorRow(label: 'Акцент 2', color: app.customAccent2,
+          _ColorRow(label: S.t('accent2'), color: app.customAccent2,
             onTap: () => _showColorPicker(context, app.customAccent2, (c) {
               app.saveCustomTheme(accent2: c); setState((){});
             })),
@@ -2898,24 +3044,57 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
           const SizedBox(height: 16),
 
           // ── ЦВЕТ ФОНА ────────────────────────────────────────────────────
-          _SectionLabel('Цвет фона'),
-          _ColorRow(label: 'Фон', color: app.customBg,
+          _SectionLabel(S.t('bg_color')),
+          _ColorRow(label: S.t('bg'), color: app.customBg,
             onTap: () => _showColorPicker(context, app.customBg, (c) {
               app.saveCustomTheme(bg: c); setState((){});
             })),
-          _ColorRow(label: 'Блоб 1', color: app.customBlob1,
+          _ColorRow(label: S.t('blob1'), color: app.customBlob1,
             onTap: () => _showColorPicker(context, app.customBlob1, (c) {
               app.saveCustomTheme(blob1: c); setState((){});
             })),
-          _ColorRow(label: 'Блоб 2', color: app.customBlob2,
+          _ColorRow(label: S.t('blob2'), color: app.customBlob2,
             onTap: () => _showColorPicker(context, app.customBlob2, (c) {
               app.saveCustomTheme(blob2: c); setState((){});
             })),
 
           const SizedBox(height: 16),
 
+          // ── СТИЛЬ КНОПКИ ПИТАНИЯ ──────────────────────────────────────────
+          _SectionLabel(S.t('button_style')),
+          Row(children: PowerButtonStyle.values.map((s) {
+            final selected = app.customButtonStyle == s;
+            return Expanded(child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () { app.saveCustomTheme(buttonStyle: s); setState((){}); },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: selected
+                        ? app.customAccent.withOpacity(0.14)
+                        : Colors.white.withOpacity(0.04),
+                    border: Border.all(
+                      color: selected
+                          ? app.customAccent.withOpacity(0.6)
+                          : Colors.white.withOpacity(0.08),
+                      width: selected ? 1.5 : 1)),
+                  child: Column(children: [
+                    _MiniButtonPreview(style: s, accent: app.customAccent),
+                    const SizedBox(height: 6),
+                    Text(S.t('btn_style_${s.name}'), style: TextStyle(
+                        fontSize: 10,
+                        color: selected ? app.customAccent : Colors.white54,
+                        fontWeight: FontWeight.w600)),
+                  ])))));
+          }).toList()),
+
+          const SizedBox(height: 16),
+
           // ── ФОН — ФОТО / GIF ─────────────────────────────────────────────
-          _SectionLabel('Фото / GIF фон'),
+          _SectionLabel(S.t('photo_gif_bg')),
           GestureDetector(
             onTap: _pickPhoto,
             child: Container(
@@ -2931,14 +3110,14 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
                 const SizedBox(width: 12),
                 Expanded(child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Выбрать фото или GIF',
+                  Text(S.t('choose_photo_gif'),
                     style: TextStyle(color: Colors.white.withOpacity(0.9),
                         fontSize: 13, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),
                   Text(
                     app.hasCustomMedia
                       ? app.customMediaPath.split('/').last
-                      : 'JPG, PNG, GIF — до 20 МБ',
+                      : S.t('photo_hint'),
                     style: TextStyle(
                       color: app.hasCustomMedia
                         ? _accent : Colors.white.withOpacity(0.4),
@@ -2972,12 +3151,50 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
             const SizedBox(height: 8),
           ],
 
+          const SizedBox(height: 16),
+
+          // ── ОБМЕН ТЕМАМИ ─────────────────────────────────────────────────
+          _SectionLabel(S.t('share_theme_caps')),
+          Row(children: [
+            Expanded(child: GestureDetector(
+              onTap: () => _shareTheme(app),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: app.customAccent.withOpacity(0.14),
+                  border: Border.all(color: app.customAccent.withOpacity(0.4))),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.ios_share_rounded, size: 16, color: app.customAccent),
+                  const SizedBox(width: 8),
+                  Text(S.t('share_theme'), style: TextStyle(
+                      color: app.customAccent, fontSize: 12.5,
+                      fontWeight: FontWeight.w700)),
+                ])))),
+            const SizedBox(width: 10),
+            Expanded(child: GestureDetector(
+              onTap: () => _importTheme(app),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white.withOpacity(0.05),
+                  border: Border.all(color: Colors.white.withOpacity(0.14))),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Icon(Icons.download_rounded, size: 16, color: Colors.white70),
+                  const SizedBox(width: 8),
+                  Text(S.t('import_theme'), style: const TextStyle(
+                      color: Colors.white70, fontSize: 12.5,
+                      fontWeight: FontWeight.w700)),
+                ])))),
+          ]),
+
           const SizedBox(height: 24),
 
-          // ── ПРИМЕНИТЬ ────────────────────────────────────────────────────
+          // ── ГОТОВО (тема уже активна — кнопка просто закрывает) ──────────
           GestureDetector(
             onTap: () {
-              app.setSkin(AuraSkinId.custom);
+              app.setSkin(VlySkinId.custom);
               Navigator.pop(context);
             },
             child: Container(
@@ -2985,8 +3202,8 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 gradient: LinearGradient(colors: [
-                  _accent, _accent.withOpacity(0.7)])),
-              child: const Text('Применить тему',
+                  app.customAccent, app.customAccent2])),
+              child: Text(S.t('done'),
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white, fontSize: 15,
                     fontWeight: FontWeight.w700, letterSpacing: 0.5))),
@@ -3003,6 +3220,89 @@ class _CustomThemeEditorState extends State<_CustomThemeEditor> {
       isScrollControlled: true,
       builder: (_) => _ColorPickerSheet(current: current, onChanged: onChanged));
   }
+}
+
+// Кнопка питания для превью — повторяет стиль реальной _LiquidGlassButton
+// под выбранный PowerButtonStyle (через общий _powerBtnStyleParams), статична.
+class _PreviewPowerButton extends StatelessWidget {
+  final Color accent, accent2;
+  final PowerButtonStyle style;
+  const _PreviewPowerButton({
+    required this.accent, required this.accent2,
+    this.style = PowerButtonStyle.glass});
+  @override
+  Widget build(BuildContext context) {
+    final st = _powerBtnStyleParams(style, false);
+    final List<Color> core = st.solidFill
+        ? [accent.withOpacity(0.85), accent.withOpacity(0.55), accent.withOpacity(0.35)]
+        : st.ring
+            ? [Colors.transparent, Colors.transparent, Colors.black.withOpacity(0.18)]
+            : [Colors.white.withOpacity(0.24), accent.withOpacity(0.20),
+               Colors.black.withOpacity(0.22)];
+    return Container(
+      width: 62, height: 62,
+      decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [
+        // Свечение масштабируем под размер превью (кнопка ~вдвое меньше реальной).
+        BoxShadow(color: accent.withOpacity(0.55), blurRadius: st.glowA * 0.5),
+        BoxShadow(color: accent.withOpacity(0.25), blurRadius: st.glowB * 0.5),
+      ]),
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            center: const Alignment(-0.3, -0.4), radius: 1.0, colors: core),
+          border: Border.all(
+            color: st.ring ? accent.withOpacity(0.9) : accent.withOpacity(0.6),
+            width: st.ring ? st.border : (st.solidFill ? 0.0 : 1.5))),
+        child: Icon(Icons.power_settings_new_rounded,
+            color: st.solidFill ? Colors.white : accent, size: 28,
+            shadows: [Shadow(color: accent.withOpacity(0.6), blurRadius: 14)])));
+  }
+}
+
+// Мини-превью кнопки для чипа выбора стиля (маленькая, 28px).
+class _MiniButtonPreview extends StatelessWidget {
+  final PowerButtonStyle style; final Color accent;
+  const _MiniButtonPreview({required this.style, required this.accent});
+  @override
+  Widget build(BuildContext context) {
+    final st = _powerBtnStyleParams(style, false);
+    final List<Color> core = st.solidFill
+        ? [accent.withOpacity(0.85), accent.withOpacity(0.45)]
+        : st.ring
+            ? [Colors.transparent, Colors.black.withOpacity(0.18)]
+            : [Colors.white.withOpacity(0.22), accent.withOpacity(0.18)];
+    return Container(
+      width: 30, height: 30,
+      decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [
+        BoxShadow(color: accent.withOpacity(0.5), blurRadius: st.glowA * 0.28),
+      ]),
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            center: const Alignment(-0.3, -0.4), radius: 1.0, colors: core),
+          border: Border.all(
+            color: st.ring ? accent.withOpacity(0.9) : accent.withOpacity(0.55),
+            width: st.ring ? 2.4 : (st.solidFill ? 0.0 : 1.0))),
+        child: Icon(Icons.power_settings_new_rounded, size: 14,
+            color: st.solidFill ? Colors.white : accent)));
+  }
+}
+
+// Мини-чип статуса для превью (AUTO / STEALTH).
+class _PreviewChip extends StatelessWidget {
+  final String label; final Color color;
+  const _PreviewChip(this.label, this.color);
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.18),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withOpacity(0.45))),
+    child: Text(label, style: TextStyle(color: color, fontSize: 8,
+        fontWeight: FontWeight.w800, letterSpacing: 1)));
 }
 
 // Строка выбора цвета
@@ -3055,7 +3355,8 @@ class _SectionLabel extends StatelessWidget {
       letterSpacing: 1.2)));
 }
 
-// Bottom sheet выбора цвета
+// Профессиональный HSV color picker: SV-квадрат + слайдер оттенка + быстрые
+// свотчи + HEX-ввод. Живой предпросмотр, точный подбор цвета жестами.
 class _ColorPickerSheet extends StatefulWidget {
   final Color current;
   final ValueChanged<Color> onChanged;
@@ -3064,107 +3365,206 @@ class _ColorPickerSheet extends StatefulWidget {
 }
 
 class _ColorPickerSheetState extends State<_ColorPickerSheet> {
-  late Color _selected;
+  late HSVColor _hsv;
   late TextEditingController _hexCtrl;
 
-  // Палитра популярных цветов
+  // Быстрые пресеты для мгновенного выбора
   static const _palette = [
     Color(0xFFFF4D4D), Color(0xFFFF6B35), Color(0xFFFFD700), Color(0xFF00E676),
-    Color(0xFF00B4D8), Color(0xFF00E5FF), Color(0xFF4FC3F7), Color(0xFF7C4DFF),
-    Color(0xFFD500F9), Color(0xFFFF4081), Color(0xFFFFB5D8), Color(0xFFE8B8A0),
-    Color(0xFF00FF9F), Color(0xFF00FF41), Color(0xFFFF9800), Color(0xFFCDDC39),
+    Color(0xFF00B4D8), Color(0xFF00E5FF), Color(0xFF7C4DFF), Color(0xFFD500F9),
+    Color(0xFFFF4081), Color(0xFFFFB5D8), Color(0xFF00FF9F), Color(0xFFFF9800),
     Color(0xFFFFFFFF), Color(0xFFBDBDBD), Color(0xFF757575), Color(0xFF212121),
   ];
 
   @override
   void initState() {
     super.initState();
-    _selected = widget.current;
-    _hexCtrl = TextEditingController(
-        text: widget.current.value.toRadixString(16).substring(2).toUpperCase());
+    _hsv = HSVColor.fromColor(widget.current);
+    _hexCtrl = TextEditingController(text: _hex(widget.current));
   }
 
   @override
   void dispose() { _hexCtrl.dispose(); super.dispose(); }
 
+  String _hex(Color c) =>
+      c.value.toRadixString(16).substring(2).toUpperCase();
+
+  // Тема оперирует непрозрачными цветами.
+  Color get _color => _hsv.toColor().withOpacity(1);
+
+  void _emit({bool syncHex = true}) {
+    if (syncHex) _hexCtrl.text = _hex(_color);
+    widget.onChanged(_color);
+  }
+
+  void _setSV(Offset local, Size size) {
+    final s = (local.dx / size.width).clamp(0.0, 1.0);
+    final v = 1 - (local.dy / size.height).clamp(0.0, 1.0);
+    setState(() => _hsv = _hsv.withSaturation(s).withValue(v));
+    _emit();
+  }
+
+  void _setHue(double dx, double width) {
+    final h = (dx / width).clamp(0.0, 1.0) * 360;
+    setState(() => _hsv = _hsv.withHue(h));
+    _emit();
+  }
+
+  void _pickSwatch(Color c) {
+    setState(() => _hsv = HSVColor.fromColor(c));
+    _emit();
+  }
+
   @override
   Widget build(BuildContext ctx) {
+    final color = _color;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
+        color: const Color(0xFF15151F),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         border: Border.all(color: Colors.white.withOpacity(0.1))),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+      child: Column(mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // Handle
-        Container(width: 36, height: 4,
+        Center(child: Container(width: 36, height: 4,
           decoration: BoxDecoration(color: Colors.white24,
-              borderRadius: BorderRadius.circular(2))),
-        const SizedBox(height: 16),
-        // Превью
-        Container(
-          width: double.infinity, height: 56,
-          decoration: BoxDecoration(
-            color: _selected,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: _selected.withOpacity(0.5), blurRadius: 16)])),
-        const SizedBox(height: 16),
-        // Палитра
-        Wrap(spacing: 10, runSpacing: 10, children: _palette.map((c) =>
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _selected = c;
-                _hexCtrl.text = c.value.toRadixString(16).substring(2).toUpperCase();
-              });
-              widget.onChanged(c);
-            },
-            child: Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                color: c, borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(2)))),
+        const SizedBox(height: 18),
+
+        // ── SV-квадрат (насыщенность × яркость) ──────────────────────────
+        LayoutBuilder(builder: (_, c) {
+          final size = Size(c.maxWidth, 180);
+          return GestureDetector(
+            onPanDown: (d) => _setSV(d.localPosition, size),
+            onPanUpdate: (d) => _setSV(d.localPosition, size),
+            child: SizedBox(
+              width: size.width, height: size.height,
+              child: Stack(children: [
+                Positioned.fill(child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: CustomPaint(painter: _SVPainter(_hsv.hue)))),
+                Positioned(
+                  left: (_hsv.saturation * size.width - 10)
+                      .clamp(-2.0, size.width - 18),
+                  top: ((1 - _hsv.value) * size.height - 10)
+                      .clamp(-2.0, size.height - 18),
+                  child: IgnorePointer(child: Container(
+                    width: 20, height: 20,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle, color: color,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black45, blurRadius: 4)])))),
+              ])),
+          );
+        }),
+        const SizedBox(height: 18),
+
+        // ── Слайдер оттенка (радуга) ─────────────────────────────────────
+        LayoutBuilder(builder: (_, c) {
+          final w = c.maxWidth;
+          return GestureDetector(
+            onPanDown: (d) => _setHue(d.localPosition.dx, w),
+            onPanUpdate: (d) => _setHue(d.localPosition.dx, w),
+            child: SizedBox(width: w, height: 24, child: Stack(children: [
+              Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: const LinearGradient(colors: [
+                  Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
+                  Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF),
+                  Color(0xFFFF0000)])))),
+              Positioned(
+                left: (_hsv.hue / 360 * w - 12).clamp(-2.0, w - 22),
+                top: -1,
+                child: IgnorePointer(child: Container(
+                  width: 24, height: 26, decoration: BoxDecoration(
+                    shape: BoxShape.circle, color: Colors.white,
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black38, blurRadius: 3)])))),
+            ])),
+          );
+        }),
+        const SizedBox(height: 20),
+
+        // ── Быстрые пресеты ──────────────────────────────────────────────
+        Wrap(spacing: 10, runSpacing: 10, children: _palette.map((sw) {
+          final sel = _color.value == sw.value;
+          return GestureDetector(
+            onTap: () => _pickSwatch(sw),
+            child: Container(width: 34, height: 34,
+              decoration: BoxDecoration(color: sw,
+                borderRadius: BorderRadius.circular(9),
                 border: Border.all(
-                  color: _selected == c ? Colors.white : Colors.transparent,
-                  width: 2.5))),
-          )).toList()),
-        const SizedBox(height: 16),
-        // HEX ввод
+                  color: sel ? Colors.white : Colors.white12,
+                  width: sel ? 2.5 : 1))));
+        }).toList()),
+        const SizedBox(height: 18),
+
+        // ── HEX + предпросмотр + OK ──────────────────────────────────────
         Row(children: [
-          Text('HEX: ', style: TextStyle(
-              color: Colors.white.withOpacity(0.6), fontSize: 13)),
-          Expanded(child: TextField(
-            controller: _hexCtrl,
-            style: const TextStyle(color: Colors.white, fontSize: 13,
-                fontFamily: 'monospace'),
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              filled: true, fillColor: Colors.white.withOpacity(0.07),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none)),
-            onChanged: (v) {
-              if (v.length == 6) {
-                try {
-                  final c = Color(int.parse('FF$v', radix: 16));
-                  setState(() => _selected = c);
-                  widget.onChanged(c);
-                } catch (_) {}
-              }
-            },
-          )),
+          Container(width: 46, height: 46, decoration: BoxDecoration(
+            color: color, borderRadius: BorderRadius.circular(12),
+            boxShadow: [BoxShadow(color: color.withOpacity(0.5), blurRadius: 12)])),
+          const SizedBox(width: 12),
+          Expanded(child: Row(children: [
+            Text('#', style: TextStyle(
+                color: Colors.white.withOpacity(0.5), fontSize: 15,
+                fontFamily: 'monospace', fontWeight: FontWeight.w700)),
+            Expanded(child: TextField(
+              controller: _hexCtrl,
+              style: const TextStyle(color: Colors.white, fontSize: 15,
+                  fontFamily: 'monospace', fontWeight: FontWeight.w700),
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                filled: true, fillColor: Colors.white.withOpacity(0.06),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none)),
+              onChanged: (v) {
+                final h = v.replaceAll('#', '').trim();
+                if (h.length == 6) {
+                  try {
+                    final c = Color(int.parse('FF$h', radix: 16));
+                    setState(() => _hsv = HSVColor.fromColor(c));
+                    _emit(syncHex: false);
+                  } catch (_) {}
+                }
+              },
+            )),
+          ])),
           const SizedBox(width: 12),
           GestureDetector(
             onTap: () => Navigator.pop(ctx),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
               decoration: BoxDecoration(
-                color: _accent, borderRadius: BorderRadius.circular(8)),
+                color: _accent, borderRadius: BorderRadius.circular(10)),
               child: const Text('OK', style: TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w700)))),
+                  color: Colors.white, fontWeight: FontWeight.w800)))),
         ]),
       ]));
   }
+}
+
+// Заливка SV-квадрата: слева-направо белый→чистый оттенок, сверху-вниз
+// прозрачный→чёрный (модель HSV).
+class _SVPainter extends CustomPainter {
+  final double hue;
+  _SVPainter(this.hue);
+  @override
+  void paint(Canvas c, Size s) {
+    final r = Offset.zero & s;
+    c.drawRect(r, Paint()..shader = LinearGradient(colors: [
+      Colors.white, HSVColor.fromAHSV(1, hue, 1, 1).toColor()]).createShader(r));
+    c.drawRect(r, Paint()..shader = const LinearGradient(
+      begin: Alignment.topCenter, end: Alignment.bottomCenter,
+      colors: [Colors.transparent, Colors.black]).createShader(r));
+  }
+  @override bool shouldRepaint(_SVPainter o) => o.hue != hue;
 }
 
 class _SH extends StatelessWidget {
@@ -3259,7 +3659,7 @@ class _SR extends StatelessWidget {
         Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, color: _subTextColor(context).withOpacity(0.35))),
       ])),
       GestureDetector(onTap: onRen, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Text('✎', style: TextStyle(fontSize: 14, color: _subTextColor(context).withOpacity(0.5))))),
+          child: Icon(Icons.edit_outlined, size: 15, color: _subTextColor(context).withOpacity(0.5)))),
       GestureDetector(onTap: onDel, child: const Icon(Icons.close, size: 16, color: Colors.redAccent)),
     ]));
 }

@@ -1,17 +1,38 @@
-# vpn_new
+# Vly
 
-A new Flutter project.
+**Smart connection, always on.**
 
-## Getting Started
+Vly — кроссплатформенный клиент для быстрого и стабильного защищённого
+подключения. Приложение само подбирает оптимальные параметры соединения под
+текущие условия сети, без ручной настройки.
 
-This project is a starting point for a Flutter application.
+## Возможности
 
-A few resources to get you started if this is your first Flutter project:
+- **Адаптивный подбор соединения** — клиент пробует набор транспортных
+  профилей и автоматически выбирает самый быстрый и стабильный для текущей сети.
+- **Обучение под сеть** — для каждого типа подключения (мобильное / Wi-Fi)
+  приложение запоминает, какой профиль работает лучше, и приоритизирует его.
+- **Самовосстановление** — временно нестабильные профили уходят в паузу с
+  нарастающим таймаутом и автоматически возвращаются в работу.
+- **Мониторинг качества** — фоновая проверка соединения и мгновенное
+  переключение на резервный профиль при деградации.
+- **Обновляемые профили** — новые транспортные профили доставляются с сервера
+  (версионирование, TTL, валидация) без обновления приложения.
+- **Гибкая тема** — HSV-подбор цвета, готовые оформления, фон-фото/GIF.
+- **16 языков** интерфейса.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Стек
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **Flutter/Dart** — весь интерфейс и клиентская логика.
+- **Android/iOS** — нативная упаковка.
+
+## Разработка
+
+```bash
+flutter pub get
+flutter analyze
+flutter test
+flutter run
+```
+
+Golden-тесты интерфейса — в `test/*_golden_test.dart`.

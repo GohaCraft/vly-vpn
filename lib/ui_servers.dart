@@ -8,7 +8,7 @@ class ServersScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final vpn   = Provider.of<VpnProvider>(context);
     final light = Theme.of(context).brightness == Brightness.light;
-    return AuraBlobBg(connected: vpn.isConnected, isLight: light,
+    return VlyBlobBg(connected: vpn.isConnected, isLight: light,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: GlassAppBar(

@@ -7,7 +7,7 @@
 //            android:exported="false"/>
 // ================================================================
 
-package com.example.vpn_new
+package app.vlyvpn
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -19,10 +19,10 @@ class DisconnectReceiver : BroadcastReceiver() {
         // Отправляем команду в Flutter через MethodChannel
         // FlutterEngine живёт в MainActivity — используем глобальный канал
         try {
-            AuraVpnApp.engine?.let { engine ->
+            VlyApp.engine?.let { engine ->
                 MethodChannel(
                     engine.dartExecutor.binaryMessenger,
-                    "aura_vpn/commands"
+                    "vly_vpn/commands"
                 ).invokeMethod("disconnect", null)
             }
             // Убираем уведомление

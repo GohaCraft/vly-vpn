@@ -1,8 +1,9 @@
-﻿name: Build Aura VPN APK
+﻿name: Build Vly VPN APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'claude/**' ]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -24,6 +25,9 @@ jobs:
 
       - run: flutter pub get
 
+      - name: Run unit tests (логика обхода)
+        run: flutter test test/bypass_logic_test.dart
+
       - name: Set Gradle heap
         run: |
           echo "org.gradle.jvmargs=-Xmx6g -Xms2g -XX:MaxMetaspaceSize=2g -XX:+UseG1GC -Dfile.encoding=UTF-8" > android/gradle.properties
@@ -34,6 +38,26 @@ jobs:
           echo "android.enableJetifier=false" >> android/gradle.properties
           echo "android.native.buildOutput=verbose" >> android/gradle.properties
 
+      - name: Configure release signing (if secrets set)
+        env:
+          KEYSTORE_BASE64:   ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS:         ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD:      ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/vly.keystore
+            {
+              echo "storeFile=vly.keystore"
+              echo "storePassword=$KEYSTORE_PASSWORD"
+              echo "keyAlias=$KEY_ALIAS"
+              echo "keyPassword=$KEY_PASSWORD"
+            } > android/key.properties
+            echo "Release signing configured from secrets (stable in-place updates)."
+          else
+            echo "No KEYSTORE_BASE64 secret — falling back to debug signing."
+          fi
+
       - name: Build APK
         run: |
           export JAVA_OPTS="-Xmx6g -Xms2g"
@@ -42,6 +66,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: aura-vpn-apk
+          name: vly-vpn-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 7
+          retention-days: 30

@@ -17,8 +17,8 @@ class BypassArsenal {
     {'id': 9,  'name': 'SNI: dl.google.com',         'type': 'add_reality_sni',     'priority': 9,  'params': {'sni':'dl.google.com'}},
     {'id': 10, 'name': 'SNI: update.microsoft.com', 'type': 'add_reality_sni',     'priority': 10, 'params': {'sni':'update.microsoft.com'}},
     // ── TIER 2: CDN обход ────────────────────────────────────────────────────
-    {'id': 11, 'name': 'CF Workers CDN',             'type': 'cdn_fallback',        'priority': 11, 'params': {'url':'aura-vpn.workers.dev'}},
-    {'id': 12, 'name': 'CF Pages CDN',               'type': 'cdn_fallback',        'priority': 12, 'params': {'url':'aura-cdn.pages.dev'}},
+    {'id': 11, 'name': 'CF Workers CDN',             'type': 'cdn_fallback',        'priority': 11, 'params': {'url':'vly-vpn.workers.dev'}},
+    {'id': 12, 'name': 'CF Pages CDN',               'type': 'cdn_fallback',        'priority': 12, 'params': {'url':'vly-cdn.pages.dev'}},
     {'id': 13, 'name': 'Trojan WS 443',              'type': 'trojan_ws_fallback',  'priority': 13, 'params': {'port':443,'path':'/'}},
     {'id': 14, 'name': 'Trojan WS /api',             'type': 'trojan_ws_fallback',  'priority': 14, 'params': {'port':443,'path':'/api/v1'}},
     {'id': 15, 'name': 'Shadow WS fallback',         'type': 'shadow_fallback',     'priority': 15, 'params': {}},
@@ -94,9 +94,9 @@ class BypassArsenal {
     {'id': 79, 'name': 'WS /updates',               'type': 'change_transport',    'priority': 79, 'params': {'transport':'ws','path':'/updates'}},
     {'id': 80, 'name': 'WS /notifications',          'type': 'change_transport',    'priority': 80, 'params': {'transport':'ws','path':'/notifications'}},
     // ── TIER 9: CDN вариации ─────────────────────────────────────────────────
-    {'id': 81, 'name': 'CF Workers v2',              'type': 'cdn_fallback',        'priority': 81, 'params': {'url':'aura-vpn-proxy.workers.dev'}},
-    {'id': 82, 'name': 'CF Pages v2',                'type': 'cdn_fallback',        'priority': 82, 'params': {'url':'aura-proxy.pages.dev'}},
-    {'id': 83, 'name': 'CF Workers v3',              'type': 'cdn_fallback',        'priority': 83, 'params': {'url':'aura-bypass.workers.dev'}},
+    {'id': 81, 'name': 'CF Workers v2',              'type': 'cdn_fallback',        'priority': 81, 'params': {'url':'vly-vpn-proxy.workers.dev'}},
+    {'id': 82, 'name': 'CF Pages v2',                'type': 'cdn_fallback',        'priority': 82, 'params': {'url':'vly-proxy.pages.dev'}},
+    {'id': 83, 'name': 'CF Workers v3',              'type': 'cdn_fallback',        'priority': 83, 'params': {'url':'vly-bypass.workers.dev'}},
     {'id': 84, 'name': 'WS /api/stream',             'type': 'change_transport',    'priority': 84, 'params': {'transport':'ws','path':'/api/stream'}},
     {'id': 85, 'name': 'gRPC /stream',               'type': 'change_transport',    'priority': 85, 'params': {'transport':'grpc','service':'stream'}},
     {'id': 86, 'name': 'Port 1443',                  'type': 'change_port',         'priority': 86, 'params': {'port':1443}},
@@ -116,14 +116,13 @@ class BypassArsenal {
     {'id': 99,  'name': 'Switch node final',         'type': 'switch_node',         'priority': 99, 'params': {}},
     {'id': 100, 'name': 'Shadow final CDN',          'type': 'shadow_fallback',     'priority': 100,'params': {}},
     // ── TIER STEALTH 2026: Fragmented Reality + Whitelist bypass ─────────────
-    // Март 2026: РКН использует JA4+ fingerprint — нужна фрагментация первого TLS пакета
+    // Март 2026: провайдер использует JA4+ fingerprint — нужна фрагментация первого TLS пакета
     {'id': 101, 'name': '🔀 Fragmented Reality 1-5b', 'type': 'fragmented_reality',  'priority': 0,  'params': {'fragSize':1, 'delayMs':50,  'sni':'yandex.ru'}},
     {'id': 102, 'name': '🔀 Fragmented Reality 3b',   'type': 'fragmented_reality',  'priority': 0,  'params': {'fragSize':3, 'delayMs':50,  'sni':'ya.ru'}},
     {'id': 103, 'name': '🔀 Fragmented Reality 5b',   'type': 'fragmented_reality',  'priority': 0,  'params': {'fragSize':5, 'delayMs':50,  'sni':'vk.com'}},
     {'id': 104, 'name': '🛡 Whitelist: Yandex SNI',   'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'yandex.ru', 'tier':0}},
     {'id': 105, 'name': '🛡 Whitelist: VK SNI',       'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'vk.com',    'tier':1}},
     {'id': 106, 'name': '🛡 Whitelist: mail.ru SNI',  'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'mail.ru',   'tier':1}},
-    {'id': 107, 'name': '🚀 Hysteria2 UDP fallback',  'type': 'hysteria2_fallback',   'priority': 0, 'params': {}},
     {'id': 108, 'name': '🔀 Fragment 2b delay 30ms',  'type': 'fragmented_reality',   'priority': 0, 'params': {'fragSize':2, 'delayMs':30,  'sni':'mail.yandex.ru'}},
     {'id': 109, 'name': '🔀 Fragment 1b delay 100ms', 'type': 'fragmented_reality',   'priority': 0, 'params': {'fragSize':1, 'delayMs':100, 'sni':'userapi.com'}},
     {'id': 110, 'name': '🛡 Whitelist: MS Update',    'type': 'vless_vision_whitelist','priority': 0, 'params': {'sni':'update.microsoft.com','tier':2}},
@@ -134,24 +133,11 @@ class BypassArsenal {
     {'id': 114, 'name': '🟡 Whitelist: AWS',          'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'aws'}},
     {'id': 115, 'name': '🟡 Whitelist: Fastly',       'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'fastly'}},
     {'id': 116, 'name': '🟡 Whitelist: Akamai',       'type': 'whitelist_domain_fronting','priority': 0, 'params': {'endpoint':'akamai'}},
-    // ── TIER MIMICRY: Адаптивная мимикрия под реального пользователя ────────
-    {'id': 117, 'name': '🎭 Mimicry: Pixel 8 Pro',    'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'pixel8pro'}},
-    {'id': 118, 'name': '🎭 Mimicry: iPhone 15 Pro',  'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'iphone15pro'}},
-    {'id': 119, 'name': '🎭 Mimicry: Win11 Edge',     'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'win11edge'}},
-    {'id': 120, 'name': '🎭 Mimicry: Samsung S24',    'type': 'adaptive_mimicry',     'priority': 0, 'params': {'persona':'samsung_s24'}},
-    // ── TIER QUIC/HTTP3: Обход DPI через QUIC (04.04.2026) ──────────────────
-    // MTProxy мёртв (01.04.2026) — DPI детектит Fake-TLS по TLS fingerprint
-    // QUIC/HTTP3 — DPI ещё не умеет полноценно анализировать QUIC
-    // Источник: bypasscore.com/blog/vpn-detection-bypass-dpi-evasion (18.03.2026)
-    {'id': 121, 'name': '⚡ QUIC: Google h3',        'type': 'quic_h3_fallback',      'priority': 0, 'params': {'sni':'www.google.com','alpn':'h3'}},
-    {'id': 122, 'name': '⚡ QUIC: Cloudflare h3',     'type': 'quic_h3_fallback',      'priority': 0, 'params': {'sni':'cloudflare.com','alpn':'h3'}},
-    {'id': 123, 'name': '⚡ QUIC: MS Azure h3',       'type': 'quic_h3_fallback',      'priority': 0, 'params': {'sni':'azure.microsoft.com','alpn':'h3'}},
-    {'id': 124, 'name': '⚡ HTTP3: CDN Tunnel',       'type': 'http3_cdn_tunnel',      'priority': 0, 'params': {'cdn':'cloudflare'}},
-    {'id': 125, 'name': '⚡ HTTP3: Edge Worker',      'type': 'http3_cdn_tunnel',      'priority': 0, 'params': {'cdn':'workers'}},
-    // ── TIER RESIDENTIAL: Residential IP + Smart Timer ───────────────────────
-    {'id': 126, 'name': '🏠 Residential: EU IP',      'type': 'residential_ip',        'priority': 0, 'params': {'region':'eu'}},
-    {'id': 127, 'name': '🏠 Residential: US IP',      'type': 'residential_ip',        'priority': 0, 'params': {'region':'us'}},
-    {'id': 128, 'name': '🏠 Residential: Asia IP',    'type': 'residential_ip',        'priority': 0, 'params': {'region':'asia'}},
+    // (Убраны QUIC/HTTP3 и Residential-IP стратегии: они лишь помечали ссылку
+    //  маркером quic=/h3tunnel=/residential=, который connect-путь НИКОГДА не
+    //  читал → конфиг не менялся, попытка тратилась впустую. Смена транспорта на
+    //  QUIC вдобавок требует поддержки на сервере, а IP-тип сервера с клиента
+    //  сменить нельзя в принципе. Это был театр — удалено.)
   ];
 
   static final _rng = Random();
@@ -289,7 +275,7 @@ class BypassStrategy {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  STEALTH ENGINE 3.0  —  Anti-DPI / Anti-JA4+ / Self-Healing
-//  Март 2026: РКН использует AI-анализ TLS fingerprint (JA4+) + ТСПУ глубокий DPI
+//  Март 2026: провайдер использует AI-анализ TLS fingerprint (JA4+) + DPI глубокий DPI
 //  v3.0: race-based SNI, безопасный mux, расширенный SNI пул, защита pbk/sid,
 //        гарантированный cleanup warmUp, рандомная фрагментация, IPv6 leak fix
 // ═══════════════════════════════════════════════════════════════════════════════

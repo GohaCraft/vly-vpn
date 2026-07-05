@@ -7,36 +7,11 @@ class VpnProvider extends ChangeNotifier {
   bool get mounted => !_disposed;
 
   // ── VPN Detection Shield ───────────────────────────────────────────────────
-  // Случайный порт и пароль для SOCKS5 — каждый запуск приложения новый
-  // Это защищает от scan-based детекции (Яндекс/Минцифры методика апрель 2026)
-
-  // ── Ротация SOCKS5 порта каждые 90 секунд ────────────────────────────────
-  // Защита от /proc/net/tcp сканирования (метод детекции yourvpndead)
-  // Минцифры, Яндекс.Метрика, банковские SDK сканируют localhost порты
-  static int _currentProxyPort = 0;
-  static Timer? _portRotationTimer;
-
-  static int getActiveProxyPort() {
-    if (_currentProxyPort == 0) {
-      _currentProxyPort = 40000 + (DateTime.now().millisecondsSinceEpoch % 9999);
-    }
-    return _currentProxyPort;
-  }
-
-  static void startPortRotation(VoidCallback onRotate) {
-    _portRotationTimer?.cancel();
-    _portRotationTimer = Timer.periodic(const Duration(seconds: 90), (_) {
-      // Новый порт только если VPN не подключён (иначе разорвёт соединение)
-      _currentProxyPort = 40000 + (DateTime.now().millisecondsSinceEpoch % 9999);
-      onRotate();
-    });
-  }
-
-  static void stopPortRotation() {
-    _portRotationTimer?.cancel();
-    _portRotationTimer = null;
-  }
-
+  // Случайный SOCKS5-порт на каждый запуск приложения — против scan-based
+  // детекции (сканирование localhost-портов). Порт выбирается ОДИН раз при
+  // старте; ротация «на лету» не применяется (рвала бы активное соединение).
+  // (Убран мёртвый блок getActiveProxyPort/startPortRotation — не вызывался и
+  //  вводил в заблуждение комментарием про «ротацию каждые 90с».)
   static final int    _secureProxyPort = 10000 + (DateTime.now().millisecondsSinceEpoch % 55535);
   static final String _sessionKey      =
       (DateTime.now().millisecondsSinceEpoch ^ 0xDEADBEEF).toRadixString(36) +
@@ -58,8 +33,11 @@ class VpnProvider extends ChangeNotifier {
   bool   stealthFragment        = true;   // TLS фрагментация
   bool   stealthRealitySni      = true;   // авто-ротация Reality SNI
   bool   siberiaShield          = true;   // защита от Сибирской блокировки
+  bool   perAppBypass           = true;   // пер-сервисный обход (TG/YT/TikTok…)
   int    stealthHandshakeFails  = 0;      // счётчик провалов handshake
   String stealthStatus          = '';     // статус для UI
+  bool   _userInitiatedStop     = false;  // true = отключил пользователь (не обрыв)
+  int    _killSwitchReconnects  = 0;      // счётчик авто-реконнектов при обрыве
 
   // ── Proxy Chain (DerevVPN-style) — TUN → SOCKS5 → VPN ─────────────────────
   bool   proxyModeEnabled       = false;  // выключен по умолчанию
@@ -71,7 +49,7 @@ class VpnProvider extends ChangeNotifier {
   bool   appStoreStealth        = false;
   // Режим обхода — выбирается пользователем в настройках
   BypassMode bypassMode = BypassMode.auto;  // скрыть VPN-ключевые слова из UI
-  String stealthAppName        = 'Aura';  // нейтральное название приложения
+  String stealthAppName        = 'Vly';  // нейтральное название приложения
 
   // ── App Store Obfuscation (05.04.2026) ─────────────────────────────────────
   // Apple удалила 20+ VPN из App Store РФ. Скрываем VPN-название приложения.
@@ -84,16 +62,18 @@ class VpnProvider extends ChangeNotifier {
   Duration sessionDuration = Duration.zero;
   DateTime? _connectedAt;
   Timer?  _trafficTimer;
+  Timer?  _saveDebounce;   // дебаунс записи на диск (см. saveToDisk/saveNow)
+  Timer?  _rulesSyncTimer; // периодическая синхронизация bypass-правил с сервером
 
   // ── История подключений (v4.0) ────────────────────────────────────────────
   List<ConnectionRecord> connectionHistory = [];
 
   // ── Профили (v3.0) ────────────────────────────────────────────────────────
-  List<AuraProfile> profiles      = [];
+  List<VlyProfile> profiles      = [];
   String            activeProfileId = '';
 
   // ── Текущий профиль — удобные геттеры ─────────────────────────────────────
-  AuraProfile get _prof {
+  VlyProfile get _prof {
     if (profiles.isEmpty) { _ensureDefaultProfile(); }
     return profiles.firstWhere((p) => p.id == activeProfileId,
         orElse: () => profiles.first);
@@ -104,6 +84,8 @@ class VpnProvider extends ChangeNotifier {
   Map<String, String>   get subNames  => _prof.subNames;
   bool get killSwitch   => _prof.killSwitch;
   bool get aiEnabled    => _prof.aiEnabled;
+  bool get telemetryEnabled => _prof.telemetryEnabled;
+  AppUpdate? get updateAvailable => UpdateChecker.available;
   SplitTunnelMode get splitMode => _prof.splitMode;
   List<String>    get splitApps => _prof.splitApps;
 
@@ -244,7 +226,7 @@ class VpnProvider extends ChangeNotifier {
   String groupDisplayName(String sourceUrl) {
     if (sourceUrl == '__favourites__') return '⭐  ${S.t('favourites')}';
     if (sourceUrl == 'manual')  return 'Manual Keys';
-    if (sourceUrl == 'server')  return 'Aura Servers';
+    if (sourceUrl == 'server')  return 'Vly Servers';
     if (sourceUrl == 'other')   return 'Other';
     if (subNames.containsKey(sourceUrl)) return subNames[sourceUrl]!;
     try { return Uri.parse(sourceUrl).host.replaceAll('www.', ''); }
@@ -276,9 +258,19 @@ class VpnProvider extends ChangeNotifier {
         _failCount = 0; _isRotating = false; aiStatus = 'IDLE';
         _bypassAttempt = 0; _bypassNodeIdx = selectedIndex;
         stealthHandshakeFails = 0;
+        _killSwitchReconnects = 0;
         _cancelWd();
+        // Репутация ноды: реальный коннект = +доверие этому host.
+        if (selectedIndex < _configs.length) {
+          NodeMemory.record(_extractHost(_configs[selectedIndex].link), ok: true);
+        }
         _connectedAt = DateTime.now();
         _startTrafficTimer();
+        // Real-time мониторинг здоровья обходов — мгновенный детект отключения.
+        if (perAppBypass) {
+          BypassHealthMonitor.reset();
+          BypassHealthMonitor.start(log: _log, onServicesDown: _onBypassDown);
+        }
         final nodeName = (_configs.isNotEmpty && selectedIndex < _configs.length)
             ? _configs[selectedIndex].displayName : 'Vly';
         _sendNotification('🔒 VPN подключён', nodeName);
@@ -291,16 +283,34 @@ class VpnProvider extends ChangeNotifier {
         _cancelWd();
         _saveHistoryRecord();
         _stopTrafficTimer();
+        BypassHealthMonitor.stop();
         _dismissPersistentNotif();                       // убрать постоянное уведомление
         Future.delayed(const Duration(seconds: 2), () => _ipCheck.fetchCurrent(force: true)); // обновить IP
         _updateTile(active: false);                      // обновить тайл
         if (prev == 'CONNECTING' && !_isRotating) {
           _failCount++;
           _log('⚠ Fail #$_failCount/$maxFails');
+          // Репутация ноды: не удалось поднять туннель = −доверие этому host.
+          if (selectedIndex < _configs.length) {
+            NodeMemory.record(_extractHost(_configs[selectedIndex].link), ok: false);
+          }
           if (_failCount >= maxFails) _scheduleBypass();
         }
         if (prev == 'CONNECTED') {
-          _sendNotification('🔓 VPN отключён', 'Сессия завершена');
+          // Неожиданный обрыв (не ручное отключение). При включённом Kill Switch
+          // окно, пока туннель упал, = утечка реального IP. Минимизируем его —
+          // авто-реконнект к текущей ноде. Ограничено 3 попытками, чтобы не зациклить;
+          // если не вышло — дальше включается обычная failover-логика (_failCount).
+          if (!_userInitiatedStop && killSwitch && _configs.isNotEmpty &&
+              _killSwitchReconnects < 3 && !_isRotating) {
+            _killSwitchReconnects++;
+            _log('🛡 Kill Switch: обрыв туннеля — авто-реконнект #$_killSwitchReconnects/3');
+            Future.delayed(const Duration(milliseconds: 700), () {
+              if (!_disposed && !_userInitiatedStop && !isConnected) _connectCurrent();
+            });
+          } else {
+            _sendNotification('🔓 VPN отключён', 'Сессия завершена');
+          }
         }
       }
       _notify();
@@ -313,7 +323,10 @@ class VpnProvider extends ChangeNotifier {
     _cancelWd();
     _stopTrafficTimer();
     _autoRecheckTimer?.cancel();
+    _rulesSyncTimer?.cancel();
     _logDebounce?.cancel();
+    // Флаш отложенной записи, чтобы не потерять последние изменения настроек.
+    if (_saveDebounce?.isActive ?? false) { _saveDebounce!.cancel(); saveNow(); }
     super.dispose();
   }
 
@@ -325,6 +338,7 @@ class VpnProvider extends ChangeNotifier {
   void setStealthRealitySni(bool v) { stealthRealitySni = v; _saveStealthPrefs(); _notify(); }
   void setStealthWarmup(bool v)     { stealthWarmup     = v; _saveStealthPrefs(); _notify(); }
   void setSiberiaShield(bool v)     { siberiaShield     = v; _saveStealthPrefs(); _notify(); }
+  void setPerAppBypass(bool v)      { perAppBypass      = v; _saveStealthPrefs(); _notify(); }
 
   Future<void> _saveStealthPrefs() async {
     try {
@@ -334,6 +348,7 @@ class VpnProvider extends ChangeNotifier {
       await p.setBool('stealth_reality_sni', stealthRealitySni);
       await p.setBool('stealth_warmup',      stealthWarmup);
       await p.setBool('siberia_shield',      siberiaShield);
+      await p.setBool('per_app_bypass',      perAppBypass);
       await p.setBool('proxy_mode',          proxyModeEnabled);
       await p.setInt('proxy_port',           proxyPort);
       await p.setBool('proxy_mode',          proxyModeEnabled);
@@ -349,8 +364,7 @@ class VpnProvider extends ChangeNotifier {
       stealthRealitySni = p.getBool('stealth_reality_sni') ?? true;
       stealthWarmup     = p.getBool('stealth_warmup')      ?? true;
       siberiaShield     = p.getBool('siberia_shield')      ?? true;
-      proxyModeEnabled  = p.getBool('proxy_mode')          ?? false;
-      proxyPort         = p.getInt('proxy_port')           ?? 1080;
+      perAppBypass      = p.getBool('per_app_bypass')      ?? true;
       proxyModeEnabled  = p.getBool('proxy_mode')          ?? false;
       proxyPort         = p.getInt('proxy_port')           ?? 1080;
     } catch (_) {}
@@ -383,6 +397,11 @@ class VpnProvider extends ChangeNotifier {
     }
   }
   void setAiEnabled(bool v)    { _prof.aiEnabled  = v; saveToDisk(); _notify(); }
+  void setTelemetryEnabled(bool v) {
+    _prof.telemetryEnabled = v;
+    Telemetry.configure(enabled: v);   // мгновенно применяем (и чистим очередь при выкл)
+    saveToDisk(); _notify();
+  }
   void setKillSwitch(bool v)   { _prof.killSwitch = v; saveToDisk(); _notify(); }
 
   // Сброс конфига ноды к оригинальному состоянию из провайдера
@@ -428,9 +447,11 @@ class VpnProvider extends ChangeNotifier {
   // uploadSpeed/downloadSpeed приходят каждую секунду через onStatusChanged
   // Здесь только обновляем sessionDuration
 
+  int _sessionReinforce = 0; // сколько раз подтвердили активную руку за сессию (кэп)
   void _startTrafficTimer() {
     _trafficTimer?.cancel();
     sessionDuration = Duration.zero;
+    _sessionReinforce = 0;
     _trafficTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_disposed || !isConnected) return;
       if (_connectedAt != null) {
@@ -439,6 +460,25 @@ class VpnProvider extends ChangeNotifier {
       // Обновляем уведомление каждые 5 сек чтобы не нагружать систему
       if (sessionDuration.inSeconds % 5 == 0) {
         _updatePersistentNotif();
+      }
+      // Каждые 3 минуты — обратная связь ИИ по КАЧЕСТВУ живой сессии: устойчиво
+      // здоровая стратегия получает +доверие, деградирующая (throttle) — минус.
+      // Не только connect-проба, а реальное поведение сквозь туннель. Decay не
+      // даёт раздуть доверие за одну длинную сессию.
+      final s = sessionDuration.inSeconds;
+      // Кэп на сессию: не даём одной длинной сессии раздуть доверие (после ~6
+      // подтверждений стратегия и так надёжно «проверена в бою»).
+      if (s > 0 && s % 180 == 0 && _sessionReinforce < 6 &&
+          BypassHealthMonitor.isRunning) {
+        final bad   = BypassHealthMonitor.degradedServices.length +
+                      BypassHealthMonitor.downServices.length;
+        final total = ServiceBypassProfiles.all.length;
+        final healthy = bad < (total / 3).ceil(); // <1/3 деградировано → здорова
+        if (AiMemory.reinforceActive(healthy: healthy)) {
+          _sessionReinforce++;
+          _log(healthy ? '📈 Сессия стабильна (${s ~/ 60}м) — +доверие стратегии'
+                       : '📉 Сессия деградирует — −доверие стратегии');
+        }
       }
       _notify();
     });
@@ -522,9 +562,9 @@ class VpnProvider extends ChangeNotifier {
   // ── Notifications (v4.0) ──────────────────────────────────────────────────
   // Нативный Android notification через platform channel (без доп. пакетов)
 
-  static const _notifChannel  = MethodChannel('aura_vpn/notifications');
-  static const _tileChannel   = MethodChannel('aura_vpn/tile');
-  static const _cmdChannel    = MethodChannel('aura_vpn/commands');
+  static const _notifChannel  = MethodChannel('vly_vpn/notifications');
+  static const _tileChannel   = MethodChannel('vly_vpn/tile');
+  static const _cmdChannel    = MethodChannel('vly_vpn/commands');
   // Публичный доступ для _CustomThemeEditorState
   static const cmdChannel = _cmdChannel;
 
@@ -532,6 +572,20 @@ class VpnProvider extends ChangeNotifier {
     try {
       await _notifChannel.invokeMethod('show', {'title': title, 'body': body});
     } catch (_) {}
+  }
+
+  // Открыть системный экран VPN, где включается настоящий kill switch Android
+  // (Always-on VPN + «блокировать соединения без VPN»). Возвращает true, если
+  // открылся именно VPN-экран; false — если только общие настройки (нет экрана).
+  Future<bool> openSystemVpnSettings() async {
+    try {
+      final ok = await const MethodChannel('vly_vpn/share')
+          .invokeMethod<bool>('openVpnSettings');
+      return ok ?? false;
+    } catch (e) {
+      _log('⚠ openVpnSettings: $e');
+      return false;
+    }
   }
 
   // Постоянное уведомление пока VPN активен — с кнопкой Отключить
@@ -626,8 +680,26 @@ class VpnProvider extends ChangeNotifier {
     _ipCheck.fetchReal();
     await _loadStealthPrefs();
     // _autoConnect.load() - disabled
-    // StrategyBlacklist is in-memory only (no persistent load needed)
+    // Долговременная память ИИ: победители по классам сетей + блеклист.
+    AiMemory.load();
+    NodeMemory.load(); // репутация нод (reliability × ping) для авто-выбора
+    FrontReputation.load(); // репутация SNI-фронтов (reliability × скорость)
+    // Анонимная диагностика (opt-in): применяем сохранённый выбор пользователя.
+    Telemetry.init().then((_) => Telemetry.configure(enabled: _prof.telemetryEnabled));
+    // Проверка обновлений (sideload → авто-апдейта нет). При наличии — покажем.
+    UpdateChecker.check().then((u) { if (u != null && !_disposed) _notify(); });
+    // Серверно-обновляемый AI-каскад (blueprint §4b): грузим кэш, тянем свежую.
+    MutationRegistry.load().then((_) => MutationRegistry.syncFromServer(_log));
     _bypassRules.syncFromServer(_log).then((_) => _notify());
+    // Периодическое обновление стратегий обхода с сервера (без апдейта app).
+    // Раньше правила тянулись только один раз при старте. Теперь — раз в час,
+    // чтобы серверный «мозг» мог подкидывать свежие методы на лету.
+    _rulesSyncTimer?.cancel();
+    _rulesSyncTimer = Timer.periodic(const Duration(hours: 1), (_) {
+      if (_disposed) return;
+      _bypassRules.syncFromServer(_log).then((_) { if (!_disposed) _notify(); });
+      MutationRegistry.syncFromServer(_log); // + свежие mutation-программы
+    });
     // Синхронизируем статистику стратегий с сервером (фоново)
     // NewsAwareness.syncFromServer disabled (no server configured)
     _fetchServerNodes();
@@ -637,7 +709,7 @@ class VpnProvider extends ChangeNotifier {
 
   void _ensureDefaultProfile() {
     if (profiles.isEmpty) {
-      final def = AuraProfile(id: 'default', name: 'Default', splitMode: SplitTunnelMode.bypass);
+      final def = VlyProfile(id: 'default', name: 'Default', splitMode: SplitTunnelMode.bypass);
       profiles = [def];
       activeProfileId = def.id;
     }
@@ -646,9 +718,9 @@ class VpnProvider extends ChangeNotifier {
   Future<void> createProfile(String name) async {
     final trimmed = name.trim().isEmpty ? 'Profile' : name.trim();
     final limited = trimmed.length > 20 ? trimmed.substring(0, 20) : trimmed;
-    final p = AuraProfile(id: AuraProfile._uid(), name: limited);
+    final p = VlyProfile(id: VlyProfile._uid(), name: limited);
     profiles.add(p);
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   Future<void> switchProfile(String id) async {
@@ -661,27 +733,27 @@ class VpnProvider extends ChangeNotifier {
         .map((m) { try { return VpnConfig.fromMap(m); } catch (_) { return null; } })
         .whereType<VpnConfig>());
     if (selectedIndex >= _configs.length) selectedIndex = 0;
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   Future<void> deleteProfile(String id) async {
     if (profiles.length <= 1) return; // нельзя удалить единственный профиль
     profiles.removeWhere((p) => p.id == id);
     if (activeProfileId == id) activeProfileId = profiles.first.id;
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   Future<void> renameProfile(String id, String newName) async {
     final p = profiles.firstWhere((p) => p.id == id, orElse: () => profiles.first);
     p.name = newName.trim().isEmpty ? 'Profile' : newName.trim();
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   // ── Split Tunnel (v3.0) ──────────────────────────────────────────────────
 
   Future<void> setSplitMode(SplitTunnelMode mode) async {
     _prof.splitMode = mode;
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   Future<void> toggleSplitApp(String packageName) async {
@@ -689,7 +761,7 @@ class VpnProvider extends ChangeNotifier {
     if (list.contains(packageName)) list.remove(packageName);
     else list.add(packageName);
     _prof.splitApps = list;
-    await saveToDisk(); _notify();
+    await saveNow(); _notify();
   }
 
   List<String>? _splitArgsForConnect() {
@@ -715,7 +787,7 @@ class VpnProvider extends ChangeNotifier {
     if (data == null) return false;
     try {
       profiles = (data['profiles'] as List)
-          .map((j) => AuraProfile.fromJson(j as Map<String, dynamic>))
+          .map((j) => VlyProfile.fromJson(j as Map<String, dynamic>))
           .toList();
       if (profiles.isEmpty) { _ensureDefaultProfile(); }
       activeProfileId = data['activeId'] ?? profiles.first.id;
@@ -726,7 +798,7 @@ class VpnProvider extends ChangeNotifier {
           .map((m) { try { return VpnConfig.fromMap(m); } catch (_) { return null; } })
           .whereType<VpnConfig>().toList();
       if (selectedIndex >= _configs.length) selectedIndex = 0;
-      await saveToDisk(); _notify();
+      await saveNow(); _notify();
       return true;
     } catch (_) { return false; }
   }
@@ -756,6 +828,30 @@ class VpnProvider extends ChangeNotifier {
   }
 
   void _cancelWd() { _watchdog?.cancel(); _watchdog = null; }
+
+  // Реакция на МГНОВЕННЫЙ детект отключения обхода(ов) от HealthMonitor.
+  void _onBypassDown(List<String> downIds) {
+    if (_disposed) return;
+    final total   = ServiceBypassProfiles.all.length;
+    final downAll = BypassHealthMonitor.downServices.length;
+    stealthStatus = '🔴 Обход недоступен: ${downIds.join(", ")}';
+    _notify();
+    // Один сервис мёртв — мог быть точечно прикрыт его профиль. Но если упало
+    // >= половины сервисов — деградировал сам туннель/обход → мгновенный failover,
+    // не дожидаясь полного обрыва соединения.
+    if (downAll >= (total / 2).ceil() && !_isRotating) {
+      _log('🔴 Массовое падение обходов ($downAll/$total) → немедленный failover');
+      // End-to-end сигнал: активная стратегия прошла TLS-пробу, но сквозь живой
+      // туннель по факту не держит связь — наказываем её, чтобы ИИ опустил её
+      // в рейтинге. В грейс-окне (шум сразу после коннекта) наказание пропустится.
+      final penalized = AiMemory.penalizeActive();
+      _log(penalized
+          ? '📉 Активная стратегия наказана (end-to-end провал)'
+          : '⏳ Провал в грейс-окне — стратегию не наказываем (вероятно, сеть)');
+      stealthHandshakeFails = 3; // форсируем путь обхода
+      _scheduleBypass();
+    }
+  }
 
   void _scheduleBypass() {
     if (_isRotating) return;
@@ -847,7 +943,7 @@ class VpnProvider extends ChangeNotifier {
     }
     _notify();
 
-    // Каждые 5 попыток — cooldown (даём РКН "остыть")
+    // Каждые 5 попыток — cooldown (даём провайдер "остыть")
     if (_bypassAttempt > 0 && _bypassAttempt % 5 == 0) {
       stealthStatus = '⏳ Cooldown 30s';
       aiStatus      = 'COOLDOWN';
@@ -859,7 +955,7 @@ class VpnProvider extends ChangeNotifier {
         _isRotating   = false;
         aiStatus      = 'FAILED';
         stealthStatus = '';
-        _log('🤖 ${AuraErrorCode.e1030.code}: bypass loop limit');
+        _log('🤖 ${VlyErrorCode.e1030.code}: bypass loop limit');
         _notify(); return;
       }
     }
@@ -898,41 +994,15 @@ class VpnProvider extends ChangeNotifier {
   }
 
 
-  final Map<String, String> _configCache = {};
-  String? _getCachedConfig(String link) => _configCache[link.split('#').first];
-  void _cacheConfig(String link, String config) {
-    _configCache[link.split('#').first] = config;
-    if (_configCache.length > 20) _configCache.remove(_configCache.keys.first);
-  }
+  // (Удалён _configCache: кэш никогда не заполнялся — _cacheConfig не вызывался,
+  //  поэтому _getCachedConfig всегда возвращал null. Мёртвая оптимизация.)
 
-  // ЗАДАЧА 10: Предиктивное авто-переключение
-  // Мониторим latency каждые 5с — переключаемся ДО разрыва
-  // Как у Cloudflare WARP: переключение на лучшую ноду проактивно
-  Timer? _predictiveTimer;
-  int _lastGoodPing = 9999;
-
-  void _startPredictiveMonitor() {
-    _predictiveTimer?.cancel();
-    _predictiveTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      if (!isConnected || selectedIndex >= _configs.length) return;
-      final cur = _configs[selectedIndex];
-      final ms  = await VpnConfig.tcpPing(cur.link).timeout(
-          const Duration(seconds: 2), onTimeout: () => 9999);
-      
-      // Если ping ухудшился в 3+ раза — начинаем искать лучшую ноду
-      if (ms > _lastGoodPing * 3 && ms < 9999) {
-        _log('⚡ Предиктивное: пинг вырос ${_lastGoodPing}ms → ${ms}ms, ищем лучшее...');
-        unawaited(_autoSelectBest(reconnect: true));
-      } else if (ms < 9999) {
-        _lastGoodPing = ms;
-      }
-    });
-  }
-
-  void _stopPredictiveMonitor() {
-    _predictiveTimer?.cancel();
-    _predictiveTimer = null;
-  }
+  // (Удалён «предиктивный авто-переключатель» ЗАДАЧА 10: был полностью написан,
+  //  но НИКОГДА не запускался (_startPredictiveMonitor не вызывался нигде) —
+  //  заявлял фичу «переключаемся до разрыва», которой по факту не было.
+  //  Проактивное переключение нод — хорошая фича, но её надо делать осознанно:
+  //  с пользовательским тумблером и тестами на устройстве, а не молча switch'ать
+  //  сессию по флуктуации пинга. Кандидат в фазу «логика ИИ».)
 
   Future<void> _autoNext() async {
     if (_configs.isEmpty) { _isRotating = false; return; }
@@ -957,7 +1027,7 @@ class VpnProvider extends ChangeNotifier {
   }
 
 
-  // ═══ Security Patches v7.0 — ТСПУ невидимость ════════════════════════════
+  // ═══ Security Patches v7.0 — DPI невидимость ════════════════════════════
   static String _applySecurityPatches(String cfg) {
     try {
       final j = jsonDecode(cfg) as Map<String, dynamic>;
@@ -965,7 +1035,7 @@ class VpnProvider extends ChangeNotifier {
       // 1. Нет логов на диск — /proc/net leak защита
       j['log'] = {'loglevel': 'none', 'access': '', 'error': ''};
 
-      // 2. Sniffing выключен — ТСПУ не читает домены через xray
+      // 2. Sniffing выключен — DPI не читает домены через xray
       if (j['inbounds'] is List) {
         for (final ib in j['inbounds'] as List) {
           if (ib is Map) ib['sniffing'] = {'enabled': false};
@@ -988,7 +1058,7 @@ class VpnProvider extends ChangeNotifier {
             }
           }
           // tcpFastOpen + domainStrategy
-          (ss as Map)['sockopt'] = {
+          ss['sockopt'] = {
             'tcpFastOpen': true,
             'domainStrategy': 'UseIPv4v6',
           };
@@ -1070,11 +1140,18 @@ class VpnProvider extends ChangeNotifier {
       }
 
       return jsonEncode(j);
-    } catch (_) { return cfg; }
+    } catch (e, st) {
+      // Патч не применился → защита (anti-WebRTC/telemetry/API-dump) тихо не
+      // работает. Возвращаем исходный конфиг, чтобы подключение не сорвалось,
+      // но фиксируем причину, иначе провал невидим при диагностике.
+      CrashReporter.record(e, st);
+      return cfg;
+    }
   }
 
   Future<void> _connectWith(VpnConfig cfg) async {
     _log('⚡ ${cfg.displayName}');
+    _userInitiatedStop = false; // это попытка подключения, не ручное отключение
     try {
       // ── БЫСТРЫЙ ПУТЬ: макс 5 сек до startV2Ray ────────────────────────────
       // FIX: ForegroundServiceDidNotStartInTimeException — Android убивает
@@ -1088,6 +1165,7 @@ class VpnProvider extends ChangeNotifier {
       // Извлекаем параметры из AI-суффиксов перед очисткой
       String? _aiSni;
       String? _aiMode;
+      String  _aiGrpcSvc = 'GrpcService';
       if (_rawLink.contains('#whitelist_df=')) {
         final after = _rawLink.split('#whitelist_df=').last;
         _aiSni = Uri.decodeComponent(after.split('&').first);
@@ -1095,10 +1173,17 @@ class VpnProvider extends ChangeNotifier {
         final after = _rawLink.split('#xhttp_sni=').last;
         _aiSni = Uri.decodeComponent(after.split('&').first);
         _aiMode = 'xhttp';
+      } else if (_rawLink.contains('#vision_sni=')) {
+        final after = _rawLink.split('#vision_sni=').last;
+        _aiSni = Uri.decodeComponent(after.split('&').first);
+        _aiMode = 'vision';
       } else if (_rawLink.contains('#grpc_sni=')) {
         final after = _rawLink.split('#grpc_sni=').last;
         _aiSni = Uri.decodeComponent(after.split('&').first);
         _aiMode = 'grpc';
+        if (after.contains('svc=')) {
+          _aiGrpcSvc = Uri.decodeComponent(after.split('svc=').last.split('&').first);
+        }
       } else if (_rawLink.contains('#shadowtls_v3=')) {
         final after = _rawLink.split('#shadowtls_v3=').last;
         _aiSni = Uri.decodeComponent(after.split('&').first);
@@ -1117,12 +1202,13 @@ class VpnProvider extends ChangeNotifier {
           .split('#fragment=').first
           .split('#hy2_fallback').first
           .split('#xhttp_sni=').first
+          .split('#vision_sni=').first
           .split('#grpc_sni=').first
           .split('#shadowtls_v3=').first;
 
 
       // ── HYSTERIA2 AUTO-DETECT: QUIC/UDP обход DPI ────────────────────────
-      // ТСПУ не умеет анализировать QUIC трафик (март 2026)
+      // DPI не умеет анализировать QUIC трафик (март 2026)
       if (finalLink.startsWith('hy2://') || finalLink.startsWith('hysteria2://')) {
         _log('⚡ Hysteria2 QUIC/UDP — DPI bypass');
         try {
@@ -1180,7 +1266,24 @@ class VpnProvider extends ChangeNotifier {
         finalLink = StealthEngine.injectRealityWithSni(finalLink, sni);
       } else if (_aiSni != null) {
         // AI выбрал SNI но stealth mode выключен — применяем напрямую
-        finalLink = StealthEngine.injectRealityWithSni(finalLink, _aiSni!);
+        finalLink = StealthEngine.injectRealityWithSni(finalLink, _aiSni);
+      }
+
+      // Honest transport: режим gRPC реально переключает транспорт на type=grpc.
+      // Раньше стратегия gRPC меняла только SNI — parseFromURL строил исходный
+      // type=tcp. Теперь инжектим type=grpc&serviceName в ссылку, и v2ray строит
+      // настоящий gRPC-стрим. Только vless/trojan (vmess base64 — пропускаем).
+      if (_aiMode == 'grpc' &&
+          (finalLink.startsWith('vless://') || finalLink.startsWith('trojan://'))) {
+        try {
+          final u = Uri.parse(finalLink);
+          final q = Map<String, String>.from(u.queryParameters);
+          q['type']        = 'grpc';
+          q['serviceName'] = _aiGrpcSvc;
+          q['mode']        = q['mode'] ?? 'gun';
+          finalLink = u.replace(queryParameters: q).toString();
+          _log('📡 gRPC honest transport (svc=$_aiGrpcSvc)');
+        } catch (e) { _log('⚠ gRPC inject fail: $e'); }
       }
 
       final patchedCfg = VpnConfig(
@@ -1191,8 +1294,27 @@ class VpnProvider extends ChangeNotifier {
       );
 
       // Шаг 2: Генерируем конфиг (мгновенно)
-      // ЗАДАЧА 11: Проверяем кэш перед парсингом
-      String configStr = _getCachedConfig(patchedCfg.link) ?? '';
+      String configStr = '';
+
+      // Honest transport: режим xHTTP строит РЕАЛЬНЫЙ xHTTP-конфиг через builder.
+      // Раньше стратегия xHTTP меняла только SNI — транспорт оставался type=tcp
+      // (parseFromURL), т.е. обход был фиктивным. Теперь генерируем настоящий
+      // xHTTP outbound. При любой неудаче — тихий фолбэк на стандартный путь ниже.
+      if (_aiMode == 'xhttp') {
+        final built = StealthEngine.buildHonestXhttp(patchedCfg.link, sni: _aiSni);
+        if (built != null && built.isNotEmpty) {
+          configStr = built;
+          _log('🌐 xHTTP honest config (real transport)');
+        }
+      } else if (_aiMode == 'vision') {
+        // VLESS+Reality+Vision из чистого шаблона (если в ноде есть pbk/sid)
+        final built = StealthEngine.buildHonestVision(patchedCfg.link, sni: _aiSni);
+        if (built != null && built.isNotEmpty) {
+          configStr = built;
+          _log('🛡 VLESS+Vision honest config (clean reality template)');
+        }
+      }
+
       if (configStr.isEmpty) {
         final V2RayURL parsed = FlutterV2ray.parseFromURL(patchedCfg.link);
         configStr = parsed.getFullConfiguration();
@@ -1227,7 +1349,17 @@ class VpnProvider extends ChangeNotifier {
         final jRoute = jsonDecode(configStr) as Map<String, dynamic>;
         final existingRules = (jRoute['routing']?['rules'] as List?)?.length ?? 0;
         if (existingRules <= 1) {
-          jRoute['routing'] = _bypassRules.buildRussiaRoutingRules();
+          final route = _bypassRules.buildRussiaRoutingRules();
+          // Пер-сервисный обход: точные правила для TG/YouTube/TikTok/… ставим
+          // в начало (приоритет), чтобы трафик этих сервисов гарантированно шёл
+          // через VPN с нужным обходом. Форки Telegram покрыты автоматически.
+          if (perAppBypass) {
+            final rules = (route['rules'] as List?)?.cast<dynamic>() ?? <dynamic>[];
+            rules.insertAll(0, ServiceBypassProfiles.buildRoutingRules());
+            route['rules'] = rules;
+            _log('📱 Per-app bypass: ${ServiceBypassProfiles.all.length} сервисов');
+          }
+          jRoute['routing'] = route;
           final obs = jRoute['outbounds'] as List? ?? [];
           if (!obs.any((o) => o is Map && o['tag'] == 'direct')) {
             obs.add({'tag': 'direct', 'protocol': 'freedom', 'settings': {}});
@@ -1237,7 +1369,11 @@ class VpnProvider extends ChangeNotifier {
           }
           configStr = jsonEncode(jRoute);
         }
-      } catch (_) {}
+      } catch (e) {
+        // Smart routing не применился → трафик пойдёт без RU-правил обхода.
+        // Не критично для самого коннекта, но диагностически важно знать.
+        _log('⚠️ smart routing skip: $e');
+      }
 
       // Telegram Protocol (JSON, мгновенно)
       final host = _extractHost(cfg.link);
@@ -1265,12 +1401,19 @@ class VpnProvider extends ChangeNotifier {
       if (!granted) { _log('✗ Permission denied'); _isRotating = false; return; }
 
       // Шаг 6: ЗАПУСКАЕМ V2RAY — Android требует вызова внутри 5 сек
+      // proxyOnly=true означает «только локальный прокси, БЕЗ системного VPN-туннеля»
+      // (из доков flutter_v2ray). Раньше тут было proxyOnly: killSwitch — это была
+      // ИНВЕРСИЯ: включение kill switch отключало перехват всего трафика, т.е. давало
+      // самый незащищённый режим. Для full-tunnel VPN (и для любой kill-switch семантики,
+      // где TUN блокирует трафик при падении) нужен системный туннель → proxyOnly=false.
+      // Прокси-режим — отдельная осознанная опция пользователя (proxyModeEnabled —
+      // это цепочка TUN→SOCKS5→VPN, всё равно с туннелем, поэтому тоже не proxyOnly).
       await _v2ray.startV2Ray(
         remark:        cfg.displayName,
         config:        configStr,
         blockedApps:   _splitArgsForConnect(),
         bypassSubnets: null,
-        proxyOnly:     killSwitch,
+        proxyOnly:     false,
       );
 
       stealthHandshakeFails = 0;
@@ -1286,17 +1429,17 @@ class VpnProvider extends ChangeNotifier {
       status = 'ERROR';
       stealthStatus = '';
 
-      // TspuCountermeasures2026: умная классификация ошибки
-      final blockType = TspuCountermeasures2026.classifyError(e.toString());
+      // NetworkCountermeasures2026: умная классификация ошибки
+      final blockType = NetworkCountermeasures2026.classifyError(e.toString());
       final errStr = e.toString().toLowerCase();
       final isBlock = blockType != BlockType.timeout ||
                       errStr.contains('reset') || errStr.contains('timeout') ||
                       errStr.contains('refused') || errStr.contains('connection');
 
-      // Логируем тип для Dev Dashboard
+      // Логируем определённый тип блокировки для Dev Dashboard. Реальный выбор
+      // стратегии дальше делает адаптивный бандит в AiMemory/каскаде.
       if (blockType != BlockType.timeout) {
-        final prio = TspuCountermeasures2026.prioritizedStrategies(blockType).take(3).join(',');
-        _log('🔍 Тип блокировки: ${blockType.name} → приоритет стратегий: $prio');
+        _log('🔍 Тип блокировки: ${blockType.name}');
       }
 
       if (isBlock) {
@@ -1338,6 +1481,11 @@ class VpnProvider extends ChangeNotifier {
         if (stealthMode && stealthRealitySni) {
           unawaited(StealthEngine.pickLiveSni());
         }
+        // Авто-discovery рабочих фронтов белого списка — переоткрываем заранее,
+        // чтобы следующий коннект/ротация взяли уже измеренный живой фронт.
+        if (stealthMode) {
+          unawaited(WhitelistBypassEngine.autoRediscover(log: _log));
+        }
       } catch (_) {}
     });
   }
@@ -1345,6 +1493,7 @@ class VpnProvider extends ChangeNotifier {
   Future<void> toggle() async {
     if (isConnected || status == 'CONNECTING') {
       // Принудительно останавливаем всё — bypass, AI, rotation
+      _userInitiatedStop = true; // отключил пользователь → не авто-реконнектить
       _isRotating = false;
       _aiAgent.stop();   // останавливаем AI bypass если висит
       _cancelWd();
@@ -1466,7 +1615,7 @@ class VpnProvider extends ChangeNotifier {
     if (idx < 0 || idx >= _configs.length) return;
     _configs[idx].resetToOriginal();
     _log('↩ "${_configs[idx].displayName}" — сброс к оригинальному ключу провайдера');
-    saveToDisk();
+    saveNow();
     _notify();
   }
 
@@ -1509,7 +1658,7 @@ class VpnProvider extends ChangeNotifier {
     _log('📡 Загружаю: $u');
     _notify();
     await _fetchSub(u);
-    saveToDisk();
+    saveNow();
     _notify();
   }
 
@@ -1530,7 +1679,7 @@ class VpnProvider extends ChangeNotifier {
     for (final url in subLinks) await _fetchSub(url);
     status = _configs.isEmpty ? 'OFFLINE' : 'UPDATED';
     if (selectedIndex >= _configs.length) selectedIndex = 0;
-    _log('✔ ${_configs.length} nodes'); _notify(); saveToDisk();
+    _log('✔ ${_configs.length} nodes'); _notify(); saveNow();
   }
 
   Future<void> _fetchSub(String url) async {
@@ -1545,23 +1694,65 @@ class VpnProvider extends ChangeNotifier {
         raw = utf8.decode(base64.decode(pad == 0 ? clean : clean + '=' * (4 - pad)));
       } catch (_) {}
       final gname = _groupNameFromUrl(url);
-      int added = 0;
+
+      // Парсим свежие ноды подписки в отдельный список.
+      final fresh = <VpnConfig>[];
+      final seen  = <String>{};
+      // Ссылки из ДРУГИХ источников — не дублируем их в этой подписке.
+      final otherLinks = _configs
+          .where((c) => c.sourceUrl != url)
+          .map((c) => c.link).toSet();
+      // Строгая валидация: строка = нода ТОЛЬКО если начинается с известной
+      // VPN-схемы (VpnConfig.isSupportedNodeLink). Иначе подписка, вернувшая
+      // HTML/капчу/Happ-crypt, плодила мусорные «ноды» вроде "<SCRIPT>…".
       for (final line in raw.split(RegExp(r'[\n\r]+'))) {
         final l = line.trim();
-        if (!l.contains('://')) continue;
-        if (_configs.any((c) => c.link == l)) continue;
-        String name = 'Node';
+        final lower = l.toLowerCase();
+        if (!VpnConfig.isSupportedNodeLink(l)) continue; // не конфиг
+        if (otherLinks.contains(l) || !seen.add(l)) continue; // дубль (другой источник / внутри)
+        String name = '';
         if (l.contains('#')) {
           try {
             final n = Uri.decodeFull(l.split('#').last).replaceAll('+', ' ').trim();
             if (n.isNotEmpty) name = n;
           } catch (_) {}
         }
-        if (l.startsWith('hy2://') || l.startsWith('hysteria2://')) name = '⚡ $name';
-        _configs.add(VpnConfig(name: name, link: l, groupName: gname, sourceUrl: url));
-        added++;
+        // Санитизация имени (убирает управляющие символы/<>, режет длину).
+        name = VpnConfig.sanitizeNodeName(name);
+        if (name.isEmpty) {
+          // Нет метки — осмысленное имя из хоста вместо безликого "Node".
+          final host = _extractHost(l);
+          name = host.isNotEmpty ? host : '$gname ${fresh.length + 1}';
+        }
+        if (lower.startsWith('hy2://') || lower.startsWith('hysteria2://')) name = '⚡ $name';
+        fresh.add(VpnConfig(name: name, link: l, groupName: gname, sourceUrl: url));
       }
-      _log('✔ $gname +$added');
+      if (fresh.isEmpty) {
+        _log('✔ $gname +0 (в ответе нет валидных нод — возможно, подписка вернула '
+             'страницу/капчу, а не список; список не тронут)');
+        return;
+      }
+
+      // ОБНОВЛЕНИЕ = СИНХРОНИЗАЦИЯ (replace), а не append. Иначе при ротации нод
+      // провайдером старые мёртвые ноды копятся в списке навсегда. Сохраняем
+      // пользовательские пометки (избранное/кастомное имя) по совпадению ссылки.
+      // Ноды из других источников и ручные (другой sourceUrl) не трогаем.
+      final oldOfThisSrc = {
+        for (final c in _configs.where((c) => c.sourceUrl == url)) c.link: c
+      };
+      for (final f in fresh) {
+        final prev = oldOfThisSrc[f.link];
+        if (prev != null) {
+          f.isFavourite = prev.isFavourite;
+          if (prev.customName.isNotEmpty) f.customName = prev.customName;
+        }
+      }
+      final before = oldOfThisSrc.length;
+      _configs.removeWhere((c) => c.sourceUrl == url);
+      _configs.addAll(fresh);
+      // Корректируем selectedIndex, чтобы не указывал мимо после replace.
+      if (selectedIndex >= _configs.length) selectedIndex = _configs.isEmpty ? 0 : _configs.length - 1;
+      _log('✔ $gname: ${fresh.length} нод (было $before, синхронизировано)');
     } on TimeoutException { _log('✗ Timeout: $url'); }
     catch (e) { _log('✗ Fetch: $e'); }
   }
@@ -1574,12 +1765,12 @@ class VpnProvider extends ChangeNotifier {
       int added = 0;
       for (final l in nodeLinks) {
         if (!l.contains('://') || _configs.any((c) => c.link == l)) continue;
-        String name = 'Aura Node';
+        String name = 'Vly Node';
         if (l.contains('#')) {
           try { name = Uri.decodeFull(l.split('#').last).replaceAll('+', ' ').trim(); } catch (_) {}
         }
         _configs.add(VpnConfig(name: name, link: l,
-            groupName: 'Aura Servers', sourceUrl: 'server'));
+            groupName: 'Vly Servers', sourceUrl: 'server'));
         added++;
       }
       if (added > 0) { _log('✔ +$added server nodes (Self-Healing)'); saveToDisk(); _notify(); }
@@ -1602,12 +1793,12 @@ class VpnProvider extends ChangeNotifier {
         for (final line in raw.split(RegExp(r'[\n\r]+'))) {
           final l = line.trim();
           if (!l.contains('://') || _configs.any((c) => c.link == l)) continue;
-          String name = 'Aura Node';
+          String name = 'Vly Node';
           if (l.contains('#')) {
             try { name = Uri.decodeFull(l.split('#').last).replaceAll('+', ' ').trim(); } catch (_) {}
           }
           _configs.add(VpnConfig(name: name, link: l,
-              groupName: 'Aura Servers', sourceUrl: 'server'));
+              groupName: 'Vly Servers', sourceUrl: 'server'));
           added++;
         }
         if (added > 0) { _log('✔ +$added server nodes'); saveToDisk(); _notify(); }
@@ -1617,12 +1808,15 @@ class VpnProvider extends ChangeNotifier {
 
   // ── Ping (TCP, parallel 8) ────────────────────────────────────────────────
 
-  Future<void> pingNode(int i) async {
+  // silent=true — не дёргать _notify() на каждую ноду (для batch-пинга в pingAll:
+  // раньше при пинге N нод было ~2N полных перерисовок дерева — джанк. Теперь
+  // pingAll делает один _notify() на батч).
+  Future<void> pingNode(int i, {bool silent = false}) async {
     if (_disposed) return;
     if (i < 0 || i >= _configs.length) return;
     final cfg = _configs[i];
     if (cfg.isPinging) return;
-    cfg.isPinging = true; _notify();
+    cfg.isPinging = true; if (!silent) _notify();
     try {
       final ms = await VpnConfig.tcpPing(cfg.link);
       if (_disposed) return; // проверяем после await — провайдер мог быть удалён
@@ -1635,7 +1829,7 @@ class VpnProvider extends ChangeNotifier {
       cfg.ping = 'ERR'; cfg.pingMs = 9999;
     }
     cfg.isPinging = false;
-    if (!_disposed) _notify();
+    if (!_disposed && !silent) _notify();
   }
 
   Future<void> pingAll() async {
@@ -1647,7 +1841,8 @@ class VpnProvider extends ChangeNotifier {
     for (int i = 0; i < total; i += 32) {
       if (_disposed) { isPingAllRunning = false; _notify(); return; }
       final batch = (i + 32 <= total) ? 32 : total - i; // 32 ноды параллельно
-      await Future.wait(List.generate(batch, (j) => pingNode(i + j)));
+      await Future.wait(List.generate(batch, (j) => pingNode(i + j, silent: true)));
+      if (!_disposed) _notify(); // один раз на батч вместо ~2 на ноду
     }
     isPingAllRunning = false;
     sortByPing();
@@ -1726,17 +1921,21 @@ class VpnProvider extends ChangeNotifier {
       for (int i = 0; i < total; i += 8) {
         if (_disposed || !isAutoMode) break;
         final batch = (i + 8 <= total) ? 8 : total - i;
-        await Future.wait(List.generate(batch, (j) => pingNode(i + j)));
+        await Future.wait(List.generate(batch, (j) => pingNode(i + j, silent: true)));
         autoStatus = 'Пингую… ${((i + batch) / total * 100).toInt()}%';
-        _notify();
+        _notify(); // один раз на батч (pingNode silent — без двойного notify на ноду)
       }
 
       if (!isAutoMode) { isAutoRunning = false; _notify(); return; }
 
+      // Ранжируем не по чистому пингу, а по репутации × скорость: надёжная нода
+      // на 60мс медленнее лучше «быстрой», чей туннель стабильно режут. Скор
+      // выше = лучше. Неизученные ноды опираются на пинг (нейтральная надёжность).
       final alive = _configs
           .where((c) => c.pingMs > 0 && c.pingMs < 9000)
           .toList()
-        ..sort((a, b) => a.pingMs.compareTo(b.pingMs));
+        ..sort((a, b) => NodeMemory.score(_extractHost(b.link), b.pingMs)
+            .compareTo(NodeMemory.score(_extractHost(a.link), a.pingMs)));
 
       if (alive.isEmpty) {
         isAutoRunning = false;
@@ -1794,48 +1993,38 @@ class VpnProvider extends ChangeNotifier {
       return;
     }
 
+    if (_configs.isEmpty || selectedIndex >= _configs.length) {
+      whitelistBypassStatus = 'FAILED';
+      _log('✗ Нет активной ноды для обхода');
+      _notify();
+      await Future.delayed(const Duration(seconds: 2));
+      whitelistBypassStatus = 'IDLE';
+      _notify();
+      return;
+    }
+
     whitelistBypassStatus = 'ACTIVATING';
     _notify();
     _log('🌐 Активируем обход белых списков...');
 
     try {
-      // Шаг 1 — применяем CDN стратегию к текущей ноде
-      if (_configs.isEmpty) {
-        whitelistBypassStatus = 'FAILED';
-        _log('✗ Нет нод для обхода');
-        _notify();
-        await Future.delayed(const Duration(seconds: 2));
-        whitelistBypassStatus = 'IDLE';
-        _notify();
-        return;
-      }
-
-      // Патчим текущую конфигурацию под CDN обход
-      if (selectedIndex >= _configs.length) {
-        whitelistBypassActive = false;
-        whitelistBypassStatus = 'IDLE';
-        _log('✗ Нет активной ноды для обхода');
-        _notify(); return;
-      }
-      final cur  = _configs[selectedIndex];
-      // Модифицируем link: меняем порт на 443 и добавляем WS параметры
-      String patchedLink = cur.link;
+      // Берём ИЗМЕРЕННЫЙ лучший whitelist-фронт: движок проверяет живость фронтов
+      // в текущей сети и ранжирует по задержке. Раньше кнопка жёстко зашивала
+      // speed.cloudflare.com + слепо форсила ws/tls/443 — это игнорировало
+      // измерение и РВАЛО Reality-ноды (сервер не ждёт ws). Теперь SNI-фронт
+      // накладывается суффиксом #whitelist_df=, который connect-путь применяет
+      // корректно под каждый протокол (в т.ч. Reality/Vision), не ломая транспорт.
+      String sni;
       try {
-        final uri = Uri.parse(patchedLink);
-        // Меняем порт на 443 и добавляем параметры CDN
-        final newParams = Map<String, String>.from(uri.queryParameters)
-          ..['type']     = 'ws'
-          ..['security'] = 'tls'
-          ..['sni']      = 'speed.cloudflare.com'
-          ..['path']     = '%2Fvpn';
-        patchedLink = uri.replace(port: 443, queryParameters: newParams).toString();
-      } catch (_) {
-        // Если не удалось распарсить — используем оригинал
-        patchedLink = cur.link;
-      }
+        sni = await WhitelistBypassEngine.getBestSni()
+            .timeout(const Duration(seconds: 4), onTimeout: () => 'vk.com');
+      } catch (_) { sni = 'vk.com'; }
+
+      final cur  = _configs[selectedIndex];
+      final base = cur.link.split('#whitelist_df=').first;
       final patched = VpnConfig(
         name:       '${cur.name} [WL]',
-        link:       patchedLink,
+        link:       '$base#whitelist_df=${Uri.encodeComponent(sni)}',
         customName: '',
         groupName:  cur.groupName,
         sourceUrl:  cur.sourceUrl,
@@ -1845,12 +2034,17 @@ class VpnProvider extends ChangeNotifier {
 
       whitelistBypassActive = true;
       whitelistBypassStatus = 'ACTIVE';
-      _log('✅ Обход белых списков: АКТИВЕН (порт 443, WS, CDN SNI)');
+      _log('✅ Обход белых списков: SNI-фронт «$sni» (измерен движком)');
       _notify();
 
-      // Реконнект с пропатченным конфигом
+      // Реконнект с наложением whitelist_df. НЕ через _reconnect (он срезает
+      // суффикс whitelist_df), а напрямую через _connectWith, который его читает.
       if (isConnected) {
-        await _reconnect(patched);
+        _isRotating = true; _notify();
+        try { await _v2ray.stopV2Ray(); } catch (_) {}
+        await Future.delayed(const Duration(milliseconds: 350));
+        if (!_disposed) await _connectWith(patched);
+        _isRotating = false; _notify();
       }
     } catch (e) {
       whitelistBypassActive = false;
@@ -1874,7 +2068,7 @@ class VpnProvider extends ChangeNotifier {
 
   // Статичный обфускатор для хранилища — не настоящее шифрование,
   // но защищает от случайного чтения через adb backup / file manager
-  static const _storageKey = 'AuraVPN\$t0r4g3K3y2026';
+  static const _storageKey = 'VlyVPN\$t0r4g3K3y2026';
   static String _obfuscate(String json) {
     final bytes = utf8.encode(json);
     final key   = utf8.encode(_storageKey);
@@ -1896,6 +2090,9 @@ class VpnProvider extends ChangeNotifier {
 
   // Установить режим обхода (вызывается из UI)
   Future<void> setBypassMode(BypassMode mode) async {
+    // Нерабочий на текущем ядре режим (Hysteria2/ShadowTLS) не выставляем —
+    // коэрсим в auto, чтобы не оставить пользователя со сломанным выбором.
+    if (!mode.isAvailable) mode = BypassMode.auto;
     bypassMode = mode;
     _aiAgent.bypassMode = mode;
     final p = await SharedPreferences.getInstance();
@@ -1904,32 +2101,58 @@ class VpnProvider extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> saveToDisk() async {
+  // ── Персистенция (дебаунс для производительности) ─────────────────────────
+  // saveToDisk() раньше сериализовал ВСЕ ноды+профили, обфусцировал JSON и писал
+  // в SharedPreferences на КАЖДОМ сеттере/тоггле (десятки вызовов). Быстрые
+  // изменения = повторная тяжёлая сериализация всего. Теперь saveToDisk()
+  // дебаунсит (коалесцирует burst в одну запись через 600мс), а saveNow()
+  // пишет немедленно — для мутаций данных (импорт/удаление/сброс нод).
+  void saveToDisk() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 600), saveNow);
+  }
+
+  Future<void> saveNow() async {
+    _saveDebounce?.cancel();
+    _saveDebounce = null;
+    final p = await SharedPreferences.getInstance();
+    // Профили (ноды/конфиги) — критичные данные. Сохраняем их изолированно от
+    // остальных настроек: ошибка сериализации одного профиля не должна
+    // заблокировать запись флагов, и наоборот — иначе теряем всё разом.
     try {
       _prof.configsJson = _configs.map((c) => c.toMap()).toList();
-      final p    = await SharedPreferences.getInstance();
       final json = jsonEncode(profiles.map((x) => x.toJson()).toList());
-      await p.setString('aura_profiles',       _obfuscate(json));
-      await p.setString('aura_active_profile',  activeProfileId);
-      await p.setInt('selected_index',          selectedIndex);
-      await p.setBool('stealth_mode',           stealthMode);
-      await p.setBool('stealth_fragment',       stealthFragment);
-      await p.setBool('stealth_reality_sni',    stealthRealitySni);
-      await p.setBool('stealth_warmup',         stealthWarmup);
-    } catch (e) { _log('✗ Save: $e'); }
+      await p.setString('vly_profiles',      _obfuscate(json));
+      await p.setString('vly_active_profile', activeProfileId);
+    } catch (e) { _log('✗ Save profiles: $e'); }
+    try {
+      await p.setInt('selected_index',       selectedIndex);
+      await p.setBool('stealth_mode',        stealthMode);
+      await p.setBool('stealth_fragment',    stealthFragment);
+      await p.setBool('stealth_reality_sni', stealthRealitySni);
+      await p.setBool('stealth_warmup',      stealthWarmup);
+    } catch (e) { _log('✗ Save settings: $e'); }
   }
 
   Future<void> loadFromDisk() async {
     try {
       final p = await SharedPreferences.getInstance();
-      final profilesRaw = _deobfuscate(p.getString('aura_profiles'));
-      if (profilesRaw != null) {
-        profiles = (jsonDecode(profilesRaw) as List)
-            .map((j) => AuraProfile.fromJson(j as Map<String, dynamic>))
-            .toList();
+      // Профили парсим изолированно: повреждённый/подменённый блоб не должен
+      // сорвать всю загрузку и оставить приложение без активного профиля
+      // (иначе последующий profiles.first крашит старт).
+      try {
+        final profilesRaw = _deobfuscate(p.getString('vly_profiles'));
+        if (profilesRaw != null) {
+          profiles = (jsonDecode(profilesRaw) as List)
+              .map((j) => VlyProfile.fromJson(j as Map<String, dynamic>))
+              .toList();
+        }
+      } catch (e) {
+        _log('✗ Профили повреждены — восстанавливаю дефолт: $e');
+        profiles = [];
       }
       _ensureDefaultProfile();
-      activeProfileId = p.getString('aura_active_profile') ?? profiles.first.id;
+      activeProfileId = p.getString('vly_active_profile') ?? profiles.first.id;
       if (!profiles.any((x) => x.id == activeProfileId)) {
         activeProfileId = profiles.first.id;
       }

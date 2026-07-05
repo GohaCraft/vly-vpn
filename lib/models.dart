@@ -2,6 +2,24 @@
 part of 'main.dart';
 
 class VpnConfig {
+  // Схемы, которые считаем валидной нодой в подписке. Если строка не начинается
+  // с одной из них — это не конфиг (HTML/капча/Happ-crypt), пропускаем.
+  static const kSupportedSchemes = [
+    'vless://', 'vmess://', 'trojan://', 'ss://', 'ssr://',
+    'hysteria2://', 'hy2://', 'hysteria://', 'wireguard://',
+    'shadowtls://', 'tuic://', 'juicity://', 'naive+https://',
+  ];
+  static bool isSupportedNodeLink(String l) =>
+      kSupportedSchemes.any((p) => l.toLowerCase().startsWith(p));
+
+  // Санитизация имени ноды: убираем управляющие символы и <>, режем длину —
+  // чтобы HTML-инъекция из метки подписки (#...) не отображалась как имя.
+  static String sanitizeNodeName(String name) {
+    var n = name.replaceAll(RegExp(r'[\x00-\x1f<>]'), '').trim();
+    if (n.length > 48) n = '${n.substring(0, 48)}…';
+    return n;
+  }
+
   String name;
   String customName;
   String link;
